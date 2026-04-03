@@ -11,6 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import RecycleAnimation from '../components/RecycleAnimation';
 
 const { width } = Dimensions.get('window');
 
@@ -60,22 +61,26 @@ export default function OnboardingScreen() {
     navigation.navigate('Login');
   };
 
-  const renderSlide = ({ item }: { item: typeof slides[0] }) => (
-    <View style={[styles.slide, { width }]}>
-      {/* Illustration */}
-      <View style={[styles.illustrationContainer, { backgroundColor: item.bgColor }]}>
+ const renderSlide = ({ item }: { item: typeof slides[0] }) => (
+  <View style={[styles.slide, { width }]}>
+    {/* Illustration */}
+    <View style={[styles.illustrationContainer, { backgroundColor: item.bgColor }]}>
+      {item.id === '1' ? (
+        <RecycleAnimation />
+      ) : (
         <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
           <Text style={styles.emoji}>{item.illustration}</Text>
         </View>
-      </View>
-
-      {/* Text */}
-      <View style={styles.textContainer}>
-        <Text style={styles.title}>{t(item.titleKey)}</Text>
-        <Text style={styles.subtitle}>{t(item.subtitleKey)}</Text>
-      </View>
+      )}
     </View>
-  );
+
+    {/* Text */}
+    <View style={styles.textContainer}>
+      <Text style={styles.title}>{t(item.titleKey)}</Text>
+      <Text style={styles.subtitle}>{t(item.subtitleKey)}</Text>
+    </View>
+  </View>
+);
 
   return (
     <View style={styles.container}>

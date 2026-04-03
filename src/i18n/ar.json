@@ -19,5 +19,38 @@
     },
     "next": "التالي",
     "getStarted": "ابدأ الآن"
+  },
+  "auth": {
+    "fields": {
+      "name": "الاسم الكامل",
+      "phone": "رقم الهاتف",
+      "email": "البريد الإلكتروني",
+      "password": "كلمة المرور"
+    },
+    "placeholders": {
+      "name": "أدخل اسمك الكامل",
+      "phone": "مثال: 0599123456",
+      "email": "example@email.com",
+      "password": "8 أحرف على الأقل"
+    },
+    "errors": {
+      "nameRequired": "الاسم مطلوب",
+      "phoneInvalid": "يرجى إدخال رقم هاتف صحيح",
+      "emailInvalid": "يرجى إدخال بريد إلكتروني صحيح",
+      "passwordShort": "كلمة المرور يجب أن تكون 8 أحرف على الأقل"
+    },
+    "signUp": {
+      "title": "إنشاء حساب",
+      "subtitle": "انضم إلى LeftO وابدأ في توفير الطعام الجيد",
+      "button": "إنشاء حساب",
+      "haveAccount": "لديك حساب بالفعل؟"
+    },
+    "signIn": {
+      "title": "تسجيل الدخول",
+      "subtitle": "مرحباً بعودتك!",
+      "button": "تسجيل الدخول",
+      "noAccount": "ليس لديك حساب؟",
+      "forgotPassword": "نسيت كلمة المرور؟"
+    }
   }
 }

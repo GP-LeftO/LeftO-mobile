@@ -19,5 +19,38 @@
     },
     "next": "Next",
     "getStarted": "Get Started"
+  },
+  "auth": {
+    "fields": {
+      "name": "Full Name",
+      "phone": "Phone Number",
+      "email": "Email Address",
+      "password": "Password"
+    },
+    "placeholders": {
+      "name": "Enter your full name",
+      "phone": "e.g. 0599123456",
+      "email": "example@email.com",
+      "password": "At least 8 characters"
+    },
+    "errors": {
+      "nameRequired": "Name is required",
+      "phoneInvalid": "Please enter a valid phone number",
+      "emailInvalid": "Please enter a valid email address",
+      "passwordShort": "Password must be at least 8 characters"
+    },
+    "signUp": {
+      "title": "Create Account",
+      "subtitle": "Join LeftO and start saving good food",
+      "button": "Sign Up",
+      "haveAccount": "Already have an account?"
+    },
+    "signIn": {
+      "title": "Sign In",
+      "subtitle": "Welcome back!",
+      "button": "Sign In",
+      "noAccount": "Don't have an account?",
+      "forgotPassword": "Forgot Password?"
+    }
   }
 }
