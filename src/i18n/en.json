@@ -3,5 +3,21 @@
   "home": "Home",
   "orders": "Orders",
   "profile": "Profile",
-  "login": "Login"
+  "login": "Login",
+  "onboarding": {
+    "slide1": {
+      "title": "Good food goes to waste",
+      "subtitle": "Every day, restaurants throw away perfectly good food. It doesn't have to be this way."
+    },
+    "slide2": {
+      "title": "Share it with your community",
+      "subtitle": "Buy surplus food from your favorite restaurants at a reduced price. Win for you, win for them."
+    },
+    "slide3": {
+      "title": "Donate and make an impact",
+      "subtitle": "Support verified local charities. Your contribution feeds someone in need — with full trust."
+    },
+    "next": "Next",
+    "getStarted": "Get Started"
+  }
 }
