@@ -50,7 +50,10 @@
       "subtitle": "Welcome back!",
       "button": "Sign In",
       "noAccount": "Don't have an account?",
-      "forgotPassword": "Forgot Password?"
+      "forgotPassword": "Forgot Password?",
+      "tagline": "Too good to waste, too good not to share"
     }
-  }
+  },
+  "fillAll": "Please fill in all fields"
+  
 }
