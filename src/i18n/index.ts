@@ -1,112 +1,15 @@
 import { I18nManager } from "react-native";
 import * as Localization from "expo-localization";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import en from "./en.json";
+import ar from "./ar.json";
 
 export type Language = "en" | "ar";
+export type Translations = typeof en;
 
-const translations = {
-  en: {
-    splash: {
-      tagline: "Too good to waste",
-    },
-    onboarding: [
-      {
-        title: "Too good to waste",
-        subtitle: "Discover surplus food from local stores at discounted prices",
-      },
-      {
-        title: "Save money, help the planet",
-        subtitle: "Reduce food waste and track your impact",
-      },
-      {
-        title: "Share with others",
-        subtitle: "Donate meals to local charities easily",
-      },
-      {
-        title: "Join the community",
-        subtitle: "Buyers, sellers, and charities working together",
-      },
-    ],
-    skip: "Skip",
-    next: "Next",
-    getStarted: "Get Started",
-    roleSelection: {
-      title: "How will you use LeftO?",
-      subtitle: "Choose your role to get started",
-    },
-    roles: {
-      buyer: {
-        label: "Buyer",
-        description: "Find affordable food near you",
-      },
-      seller: {
-        label: "Seller",
-        description: "Sell surplus and reduce waste",
-      },
-      charity: {
-        label: "Charity",
-        description: "Receive and distribute donations",
-      },
-    },
-    getStartedScreen: {
-      title: "Ready to make a difference?",
-      subtitle: "Join thousands of people fighting food waste together",
-      createAccount: "Create Account",
-      signIn: "Sign In",
-    },
-  },
-  ar: {
-    splash: {
-      tagline: "لا يجب أن يُهدر الطعام",
-    },
-    onboarding: [
-      {
-        title: "لا يجب أن يُهدر الطعام",
-        subtitle: "اكتشف الطعام الفائض من المحلات المحلية بأسعار مخفضة",
-      },
-      {
-        title: "وفّر المال وساعد الكوكب",
-        subtitle: "قلل هدر الطعام وتتبع تأثيرك الإيجابي",
-      },
-      {
-        title: "شارك مع الآخرين",
-        subtitle: "تبرع بالوجبات للجمعيات الخيرية المحلية بسهولة",
-      },
-      {
-        title: "انضم إلى المجتمع",
-        subtitle: "مشترون وبائعون وجمعيات خيرية يعملون معاً",
-      },
-    ],
-    skip: "تخطّ",
-    next: "التالي",
-    getStarted: "ابدأ الآن",
-    roleSelection: {
-      title: "كيف ستستخدم LeftO؟",
-      subtitle: "اختر دورك للبدء",
-    },
-    roles: {
-      buyer: {
-        label: "مشترٍ",
-        description: "اعثر على طعام بأسعار معقولة بالقرب منك",
-      },
-      seller: {
-        label: "بائع",
-        description: "بع الفائض وقلل الهدر",
-      },
-      charity: {
-        label: "جمعية خيرية",
-        description: "استقبل التبرعات ووزّعها",
-      },
-    },
-    getStartedScreen: {
-      title: "هل أنت مستعد للتغيير؟",
-      subtitle: "انضم إلى آلاف الأشخاص في مكافحة هدر الطعام معاً",
-      createAccount: "إنشاء حساب",
-      signIn: "تسجيل الدخول",
-    },
-  },
-};
-
-export type Translations = typeof translations.en;
+const translations: Record<Language, Translations> = { en, ar };
+const LANGUAGE_KEY = "@lefto_language";
 
 let currentLanguage: Language = "en";
 
@@ -114,14 +17,35 @@ export function initLanguage(): Language {
   const locale = Localization.getLocales()[0]?.languageCode ?? "en";
   const lang: Language = locale === "ar" ? "ar" : "en";
   currentLanguage = lang;
-
-  const shouldBeRTL = lang === "ar";
-  if (I18nManager.isRTL !== shouldBeRTL) {
-    I18nManager.allowRTL(shouldBeRTL);
-    I18nManager.forceRTL(shouldBeRTL);
-  }
-
+  applyRTL(lang);
   return lang;
+}
+
+export function setLanguage(lang: Language): void {
+  currentLanguage = lang;
+  applyRTL(lang);
+}
+
+export async function setLanguageAsync(lang: Language): Promise<void> {
+  currentLanguage = lang;
+  applyRTL(lang);
+  try {
+    await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  } catch {}
+}
+
+export async function restoreLanguage(): Promise<Language | null> {
+  try {
+    const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
+    if (saved === "en" || saved === "ar") {
+      currentLanguage = saved;
+      applyRTL(saved);
+      return saved;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function getLanguage(): Language {
@@ -134,4 +58,12 @@ export function t(): Translations {
 
 export function isRTL(): boolean {
   return currentLanguage === "ar";
+}
+
+function applyRTL(lang: Language): void {
+  const shouldBeRTL = lang === "ar";
+  if (I18nManager.isRTL !== shouldBeRTL) {
+    I18nManager.allowRTL(shouldBeRTL);
+    I18nManager.forceRTL(shouldBeRTL);
+  }
 }

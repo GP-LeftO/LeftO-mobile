@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../theme";
 import LeftOLogo from "../components/LeftOLogo";
+import { useAuth } from "../hooks/useAuth";
 
 const CATEGORIES = [
   { label: "All", icon: "grid" },
@@ -27,10 +28,20 @@ const MOCK_STORES = [
   { id: "4", name: "City Restaurant", type: "Surprise Bag", price: "₪18", original: "₪42", time: "8–10 PM", left: 4, distance: "0.7 km", rating: 4.9 },
 ];
 
-export default function HomeScreen() {
+interface HomeScreenProps {
+  onLogout?: () => void;
+}
+
+export default function HomeScreen({ onLogout }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const [activeCategory, setActiveCategory] = React.useState("All");
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    onLogout?.();
+  };
 
   return (
     <View style={styles.container}>
@@ -42,7 +53,12 @@ export default function HomeScreen() {
             <Feather name="map-pin" size={13} color={Colors.primaryOrange} /> Nablus, Palestine
           </Text>
         </View>
-        <LeftOLogo size="sm" showText={false} />
+        <View style={styles.headerRight}>
+          <LeftOLogo size="sm" showText={false} />
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+            <Feather name="log-out" size={18} color={Colors.grayMedium} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -177,6 +193,13 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 20, fontWeight: "800", color: Colors.grayDark, letterSpacing: -0.3 },
   location: { fontSize: 13, color: Colors.grayMedium, marginTop: 2 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
+  logoutBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.white,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
 
   scroll: { paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: Spacing.md },
 

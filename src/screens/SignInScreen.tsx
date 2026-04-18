@@ -1,280 +1,283 @@
 import React, { useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  KeyboardAvoidingView,
+  StyleSheet, Text, View, TextInput,
+  TouchableOpacity, Platform, KeyboardAvoidingView, ScrollView,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import LeftOLogo from "../components/LeftOLogo";
 import Button from "../components/Button";
 import { Colors, Spacing } from "../theme";
+import { isRTL } from "../i18n";
+import { useAuth } from "../hooks/useAuth";
+
+export type PostLoginRoute =
+  | "buyer-home"
+  | "seller-setup"
+  | "seller-dashboard"
+  | "charity-dashboard"
+  | "under-review"
+  | "rejected";
 
 interface SignInScreenProps {
-  onSignIn?: () => void;
-  onGoToSignUp?: () => void;
+  onSuccess?: (route: PostLoginRoute) => void;
+  onBack?: () => void;
+  onRegister?: () => void;
   navigation?: any;
 }
 
-export default function SignInScreen({ onSignIn, onGoToSignUp, navigation }: SignInScreenProps) {
-  const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+const COUNTRY_CODES = [
+  { code: "970", flag: "🇵🇸" },
+  { code: "972", flag: "🇮🇱" },
+];
 
+export default function SignInScreen({ onSuccess, onBack, onRegister, navigation }: SignInScreenProps) {
+  const insets = useSafeAreaInsets();
+  const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
 
+  const { login, loginState } = useAuth();
+
+  const [selectedCode, setSelectedCode] = useState(COUNTRY_CODES[0]);
+  const [showPicker, setShowPicker] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const validate = () => {
-    const newErrors: Record<string, string> = {};
-    if (!email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Enter a valid email";
-    if (!password) newErrors.password = "Password is required";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e: Record<string, string> = {};
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10)
+      e.phone = rtl ? "يرجى إدخال رقم هاتف صحيح (10 أرقام)" : "Please enter a valid 10-digit phone number";
+    if (!password)
+      e.password = rtl ? "يرجى إدخال كلمة المرور" : "Please enter your password";
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const handleSignIn = () => {
-    if (validate()) {
-      if (onSignIn) onSignIn();
-      else if (navigation) navigation.replace("Main");
-    }
+  const resolveRoute = (
+    role: string,
+    sellerStatus: string | null,
+    charityStatus: string | null
+  ): PostLoginRoute => {
+    if (role === "BUYER") return "buyer-home";
+    const status = role === "SELLER" ? sellerStatus : charityStatus;
+    if (status === "APPROVED") return role === "SELLER" ? "seller-dashboard" : "charity-dashboard";
+    if (status === "REJECTED") return "rejected";
+    if (status === "PENDING") return "under-review";
+    return role === "SELLER" ? "seller-setup" : "under-review";
+  };
+
+  const handleSignIn = async () => {
+    if (!validate()) return;
+    const fullPhone = phone.replace(/\D/g, "");
+    try {
+      const result = await login(fullPhone, password);
+      const route = resolveRoute(result.user.role, result.sellerStatus, result.charityStatus);
+      if (onSuccess) onSuccess(route);
+    } catch {}
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardView}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      {/* Floating background shapes */}
-      <View style={styles.bgContainer} pointerEvents="none">
-        <View style={[styles.blob, styles.blob1]} />
-        <View style={[styles.blob, styles.blob2]} />
-        <View style={[styles.blob, styles.blob3]} />
-        <View style={[styles.blob, styles.blob4]} />
-        <View style={[styles.blob, styles.blob5]} />
-      </View>
-
+    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: topPadding + 12, paddingBottom: bottomPadding + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingTop: topPadding + 12, paddingBottom: bottomPadding + 24 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInDown.delay(50).duration(500).springify()} style={styles.logoRow}>
-          <LeftOLogo size="sm" />
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8} disabled={loginState.loading}>
+            <Feather name="arrow-left" size={20} color={Colors.grayDark} />
+          </TouchableOpacity>
+        </View>
+
+        <Animated.View entering={FadeInDown.delay(100).duration(500).springify()} style={[styles.titleBlock, rtl && styles.titleBlockRTL]}>
+          <View style={styles.iconWrap}>
+            <Feather name="log-in" size={28} color={Colors.primaryOrange} />
+          </View>
+          <Text style={[styles.title, rtl && styles.rtl]}>
+            {rtl ? "أهلاً بعودتك" : "Welcome back"}
+          </Text>
+          <Text style={[styles.subtitle, rtl && styles.rtl]}>
+            {rtl ? "أدخل رقم هاتفك وكلمة المرور للمتابعة" : "Enter your phone number and password to continue"}
+          </Text>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(150).duration(500).springify()} style={styles.titleBlock}>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to continue fighting food waste</Text>
-        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.form}>
 
-        <Animated.View entering={FadeInDown.delay(250).duration(500).springify()} style={styles.form}>
-          <View style={styles.fieldWrapper}>
-            <Text style={styles.label}>Email</Text>
-            <InputField
-              value={email}
-              onChangeText={(v) => { setEmail(v); setErrors((e) => ({ ...e, email: "" })); }}
-              placeholder="hello@lefto.com"
-              keyboardType="email-address"
-              autoComplete="email"
-              autoCapitalize="none"
-              error={errors.email}
-              icon="mail"
-            />
+          {/* Phone */}
+          <View style={styles.fieldWrap}>
+            <Text style={[styles.label, rtl && styles.rtl]}>{rtl ? "رقم الهاتف" : "Phone Number"}</Text>
+            <TouchableOpacity
+              style={[styles.countryBtn, rtl && styles.rtlRow]}
+              onPress={() => setShowPicker(!showPicker)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.flag}>{selectedCode.flag}</Text>
+              <Text style={styles.codeText}>{selectedCode.code}</Text>
+              <Feather name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={Colors.grayMedium} />
+            </TouchableOpacity>
+            {showPicker && (
+              <View style={styles.picker}>
+                {COUNTRY_CODES.map((c) => (
+                  <TouchableOpacity
+                    key={c.code}
+                    style={[styles.pickerItem, selectedCode.code === c.code && styles.pickerItemActive]}
+                    onPress={() => { setSelectedCode(c); setShowPicker(false); }}
+                  >
+                    <Text style={styles.flag}>{c.flag}</Text>
+                    <Text style={styles.codeText}>{c.code}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <View style={[styles.inputRow, phoneFocused && styles.inputFocused, !!errors.phone && styles.inputError]}>
+              <Feather name="phone" size={18} color={phoneFocused ? Colors.primaryOrange : Colors.grayMedium} />
+              <TextInput
+                style={[styles.input, rtl && styles.rtl]}
+                value={phone}
+                onChangeText={(v) => { setPhone(v); setErrors((e) => ({ ...e, phone: "" })); }}
+                placeholder="0590000000"
+                placeholderTextColor={Colors.grayMedium}
+                keyboardType="phone-pad"
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
+                maxLength={15}
+                textAlign={rtl ? "right" : "left"}
+                editable={!loginState.loading}
+              />
+            </View>
+            {!!errors.phone && <Text style={[styles.errorText, rtl && styles.rtl]}>{errors.phone}</Text>}
           </View>
 
-          <View style={styles.fieldWrapper}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Password</Text>
-              <TouchableOpacity testID="forgot-password">
-                <Text style={styles.forgotText}>Forgot password?</Text>
+          {/* Password */}
+          <View style={styles.fieldWrap}>
+            <Text style={[styles.label, rtl && styles.rtl]}>{rtl ? "كلمة المرور" : "Password"}</Text>
+            <View style={[styles.inputRow, passwordFocused && styles.inputFocused, !!errors.password && styles.inputError]}>
+              <Feather name="lock" size={18} color={passwordFocused ? Colors.primaryOrange : Colors.grayMedium} />
+              <TextInput
+                style={[styles.input, rtl && styles.rtl]}
+                value={password}
+                onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: "" })); }}
+                placeholder={rtl ? "أدخل كلمة المرور" : "Enter your password"}
+                placeholderTextColor={Colors.grayMedium}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+                textAlign={rtl ? "right" : "left"}
+                editable={!loginState.loading}
+              />
+              <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Feather name={showPassword ? "eye-off" : "eye"} size={18} color={Colors.grayMedium} />
               </TouchableOpacity>
             </View>
-            <InputField
-              value={password}
-              onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: "" })); }}
-              placeholder="Your password"
-              secureTextEntry={!showPassword}
-              autoComplete="current-password"
-              error={errors.password}
-              icon="lock"
-              rightIcon={showPassword ? "eye-off" : "eye"}
-              onRightIconPress={() => setShowPassword((p) => !p)}
-            />
+            {!!errors.password && <Text style={[styles.errorText, rtl && styles.rtl]}>{errors.password}</Text>}
           </View>
 
+          {/* API error */}
+          {!!loginState.error && (
+            <View style={styles.apiErrorBox}>
+              <Feather name="alert-circle" size={16} color="#ef4444" />
+              <Text style={[styles.apiErrorText, rtl && styles.rtl]}>{loginState.error}</Text>
+            </View>
+          )}
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(320).duration(500).springify()}>
           <Button
-            label="Sign In"
+            label={rtl ? "تسجيل الدخول" : "Sign In"}
             onPress={handleSignIn}
             variant="primary"
-            style={styles.submitButton}
-            testID="signin-submit"
+            loading={loginState.loading}
+            testID="sign-in-btn"
           />
+        </Animated.View>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.divider} />
-          </View>
-
-          <TouchableOpacity onPress={() => { if (onGoToSignUp) onGoToSignUp(); else if (navigation) navigation.navigate("SignUp"); }} style={styles.switchRow} testID="go-to-signup">
-            <Text style={styles.switchText}>Don't have an account? </Text>
-            <Text style={styles.switchLink}>Create one</Text>
+        <Animated.View entering={FadeInDown.delay(400).duration(500).springify()} style={styles.registerRow}>
+          <Text style={styles.registerLabel}>{rtl ? "ليس لديك حساب؟" : "Don't have an account?"}</Text>
+          <TouchableOpacity onPress={onRegister} disabled={loginState.loading}>
+            <Text style={styles.registerLink}>{rtl ? "سجّل الآن" : "Register"}</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        <Animated.View
-          entering={FadeInDown.delay(400).duration(500).springify()}
-          style={styles.termsBlock}
-        >
-          <Text style={styles.termsText}>
-            By continuing, you agree to our{" "}
-            <Text style={styles.termsLink}>Terms of Service</Text>
-            {" "}and{" "}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
-          </Text>
-        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-interface InputFieldProps {
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder?: string;
-  secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address";
-  autoComplete?: any;
-  autoCapitalize?: "none" | "sentences";
-  error?: string;
-  icon: keyof typeof Feather.glyphMap;
-  rightIcon?: keyof typeof Feather.glyphMap;
-  onRightIconPress?: () => void;
-}
-
-function InputField({
-  value, onChangeText, placeholder, secureTextEntry,
-  keyboardType = "default", autoComplete, autoCapitalize = "sentences",
-  error, icon, rightIcon, onRightIconPress,
-}: InputFieldProps) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <>
-      <View style={[styles.inputRow, focused && styles.inputFocused, !!error && styles.inputError]}>
-        <Feather
-          name={icon}
-          size={18}
-          color={focused ? Colors.primaryOrange : Colors.grayMedium}
-          style={styles.inputIcon}
-        />
-        <TextInput
-          style={styles.input}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={Colors.grayMedium}
-          secureTextEntry={secureTextEntry}
-          keyboardType={keyboardType}
-          autoComplete={autoComplete}
-          autoCapitalize={autoCapitalize}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-        {rightIcon && (
-          <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
-            <Feather name={rightIcon} size={18} color={Colors.grayMedium} />
-          </TouchableOpacity>
-        )}
-      </View>
-      {!!error && <Text style={styles.errorText}>{error}</Text>}
-    </>
-  );
-}
-
 const styles = StyleSheet.create({
   keyboardView: { flex: 1, backgroundColor: Colors.background },
-  bgContainer: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  scroll: { paddingHorizontal: Spacing.xl, gap: Spacing.lg },
+  rtl: { textAlign: "right" },
+  rtlRow: { flexDirection: "row-reverse" },
 
-  blob: { position: "absolute", borderRadius: 999 },
-  blob1: {
-    width: 260, height: 260,
-    top: -80, left: -80,
-    backgroundColor: Colors.primaryOrange,
-    opacity: 0.09,
-  },
-  blob2: {
-    width: 160, height: 160,
-    top: 100, right: -50,
-    backgroundColor: Colors.greenMain,
-    opacity: 0.07,
-  },
-  blob3: {
-    width: 110, height: 110,
-    top: 340, left: 30,
-    backgroundColor: Colors.orangeLight,
-    opacity: 0.55,
-  },
-  blob4: {
-    width: 200, height: 200,
-    bottom: 100, right: -70,
-    backgroundColor: Colors.primaryOrange,
-    opacity: 0.08,
-  },
-  blob5: {
-    width: 80, height: 80,
-    bottom: 200, left: -10,
-    backgroundColor: Colors.greenLight,
-    opacity: 0.65,
-  },
-
-  container: { flex: 1 },
-  scrollContent: { paddingHorizontal: Spacing.xl, gap: Spacing.xl },
-  logoRow: { alignItems: "flex-start" },
-  titleBlock: { gap: Spacing.xs },
-  title: { fontSize: 30, fontWeight: "800", color: Colors.grayDark, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: Colors.grayMedium, lineHeight: 22 },
-  form: { gap: Spacing.md },
-  fieldWrapper: { gap: 6 },
-  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  label: { fontSize: 14, fontWeight: "600", color: Colors.grayDark },
-  forgotText: { fontSize: 13, fontWeight: "600", color: Colors.primaryOrange },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  headerRow: { flexDirection: "row", alignItems: "center" },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: Colors.white,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.grayLight,
-    paddingHorizontal: Spacing.md,
-    height: 54,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+
+  titleBlock: { gap: Spacing.sm, alignItems: "flex-start" },
+  titleBlockRTL: { alignItems: "flex-end" },
+  iconWrap: {
+    width: 56, height: 56, borderRadius: 16,
+    backgroundColor: Colors.orangeLight,
+    alignItems: "center", justifyContent: "center", marginBottom: 4,
+  },
+  title: { fontSize: 26, fontWeight: "800", color: Colors.grayDark, letterSpacing: -0.5, width: "100%" },
+  subtitle: { fontSize: 15, color: Colors.grayMedium, lineHeight: 22, width: "100%" },
+
+  form: { gap: Spacing.md },
+  fieldWrap: { gap: 6 },
+  label: { fontSize: 14, fontWeight: "600", color: Colors.grayDark },
+
+  countryBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.grayLight,
+    paddingHorizontal: Spacing.md, paddingVertical: 14, marginBottom: 6,
+  },
+  picker: {
+    backgroundColor: Colors.white, borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    overflow: "hidden", marginBottom: 6,
+  },
+  pickerItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: Spacing.md, paddingVertical: 14,
+  },
+  pickerItemActive: { backgroundColor: Colors.orangeLight },
+  flag: { fontSize: 22 },
+  codeText: { flex: 1, fontSize: 16, fontWeight: "600", color: Colors.grayDark },
+
+  inputRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.white,
+    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.grayLight,
+    paddingHorizontal: Spacing.md, height: 54,
   },
   inputFocused: { borderColor: Colors.primaryOrange },
   inputError: { borderColor: "#ef4444" },
-  inputIcon: { marginRight: Spacing.sm },
   input: { flex: 1, fontSize: 15, color: Colors.grayDark },
-  rightIcon: { padding: 4 },
-  errorText: { fontSize: 12, color: "#ef4444", marginTop: 2 },
-  submitButton: { marginTop: Spacing.sm },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  divider: { flex: 1, height: 1, backgroundColor: Colors.grayLight },
-  dividerText: { fontSize: 13, color: Colors.grayMedium, fontWeight: "500" },
-  switchRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
-  switchText: { fontSize: 14, color: Colors.grayMedium },
-  switchLink: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
-  termsBlock: { alignItems: "center" },
-  termsText: { fontSize: 12, color: Colors.grayMedium, textAlign: "center", lineHeight: 18 },
-  termsLink: { color: Colors.primaryOrange, fontWeight: "600" },
+  errorText: { fontSize: 13, color: "#ef4444" },
+
+  apiErrorBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: "#fef2f2", borderRadius: 12, padding: Spacing.md,
+    borderWidth: 1, borderColor: "#fecaca",
+  },
+  apiErrorText: { flex: 1, fontSize: 13, color: "#dc2626", lineHeight: 18 },
+
+  registerRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
+  registerLabel: { fontSize: 14, color: Colors.grayMedium },
+  registerLink: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
 });

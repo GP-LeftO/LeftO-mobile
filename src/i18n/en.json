@@ -4,56 +4,21 @@
   "orders": "Orders",
   "profile": "Profile",
   "login": "Login",
-  "onboarding": {
-    "slide1": {
-      "title": "Good food goes to waste",
-      "subtitle": "Every day, restaurants throw away perfectly good food. It doesn't have to be this way."
-    },
-    "slide2": {
-      "title": "Share it with your community",
-      "subtitle": "Buy surplus food from your favorite restaurants at a reduced price. Win for you, win for them."
-    },
-    "slide3": {
-      "title": "Donate and make an impact",
-      "subtitle": "Support verified local charities. Your contribution feeds someone in need — with full trust."
-    },
-    "next": "Next",
-    "getStarted": "Get Started"
-  },
+  "skip": "Skip",
+  "next": "Next",
+  "getStarted": "Get Started",
+  "onboarding": [
+    { "title": "Good food goes to waste", "subtitle": "Every day, restaurants throw away perfectly good food. It doesn't have to be this way." },
+    { "title": "Share it with your community", "subtitle": "Buy surplus food from your favorite restaurants at a reduced price. Win for you, win for them." },
+    { "title": "Donate and make an impact", "subtitle": "Support verified local charities. Your contribution feeds someone in need — with full trust." },
+    { "title": "Join the community", "subtitle": "Buyers, sellers, and charities working together to reduce food waste." }
+  ],
   "auth": {
-    "fields": {
-      "name": "Full Name",
-      "phone": "Phone Number",
-      "email": "Email Address",
-      "password": "Password"
-    },
-    "placeholders": {
-      "name": "Enter your full name",
-      "phone": "e.g. 0599123456",
-      "email": "example@email.com",
-      "password": "At least 8 characters"
-    },
-    "errors": {
-      "nameRequired": "Name is required",
-      "phoneInvalid": "Please enter a valid phone number",
-      "emailInvalid": "Please enter a valid email address",
-      "passwordShort": "Password must be at least 8 characters"
-    },
-    "signUp": {
-      "title": "Create Account",
-      "subtitle": "Join LeftO and start saving good food",
-      "button": "Sign Up",
-      "haveAccount": "Already have an account?"
-    },
-    "signIn": {
-      "title": "Sign In",
-      "subtitle": "Welcome back!",
-      "button": "Sign In",
-      "noAccount": "Don't have an account?",
-      "forgotPassword": "Forgot Password?",
-      "tagline": "Too good to waste, too good not to share"
-    }
+    "fields": { "name": "Full Name", "phone": "Phone Number", "email": "Email Address", "password": "Password" },
+    "placeholders": { "name": "Enter your full name", "phone": "e.g. 0599123456", "email": "example@email.com", "password": "At least 8 characters" },
+    "errors": { "nameRequired": "Name is required", "phoneInvalid": "Please enter a valid phone number", "emailInvalid": "Please enter a valid email address", "passwordShort": "Password must be at least 8 characters" },
+    "signUp": { "title": "Create Account", "subtitle": "Join LeftO and start saving good food", "button": "Sign Up", "haveAccount": "Already have an account?" },
+    "signIn": { "title": "Sign In", "subtitle": "Welcome back!", "button": "Sign In", "noAccount": "Don't have an account?", "forgotPassword": "Forgot Password?", "tagline": "Too good to waste, too good not to share" }
   },
   "fillAll": "Please fill in all fields"
-  
 }

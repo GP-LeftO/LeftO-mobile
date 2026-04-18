@@ -6,8 +6,6 @@ import Animated, {
   withSpring,
   withTiming,
   withDelay,
-  withRepeat,
-  withSequence,
   Easing,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -87,41 +85,31 @@ function AnimatedArrowO() {
   );
 }
 
-function GlowShadow() {
-  const glowOpacity = useSharedValue(0.35);
-  const glowScale = useSharedValue(1);
+function LoadingBar() {
+  const progress = useSharedValue(0);
+  const opacity = useSharedValue(0);
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [{ scaleX: glowScale.value }],
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${progress.value * 100}%`,
+  }));
+
+  const wrapStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
   }));
 
   useEffect(() => {
-    glowOpacity.value = withDelay(
-      800,
-      withRepeat(
-        withSequence(
-          withTiming(0.8, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.35, { duration: 1500, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        true
-      )
-    );
-    glowScale.value = withDelay(
-      800,
-      withRepeat(
-        withSequence(
-          withTiming(1.1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        true
-      )
+    opacity.value = withDelay(600, withTiming(1, { duration: 300 }));
+    progress.value = withDelay(
+      650,
+      withTiming(1, { duration: 1800, easing: Easing.out(Easing.cubic) })
     );
   }, []);
 
-  return <Animated.View style={[styles.glow, glowStyle]} />;
+  return (
+    <Animated.View style={[styles.loadingTrack, wrapStyle]}>
+      <Animated.View style={[styles.loadingFill, barStyle]} />
+    </Animated.View>
+  );
 }
 
 function TaglineRow() {
@@ -191,7 +179,7 @@ export default function SplashScreen({ onComplete, navigation }: SplashScreenPro
           <AnimatedArrowO />
         </View>
 
-        <GlowShadow />
+        <LoadingBar />
 
         <TaglineRow />
       </View>
@@ -237,23 +225,34 @@ const styles = StyleSheet.create({
     color: "#222220",
     letterSpacing: -0.5,
   },
-  glow: {
+  loadingTrack: {
     width: width * 0.52,
-    height: 12,
-    borderRadius: 10,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#E8E8E4",
+    marginTop: 4,
+    overflow: "hidden",
+  },
+  loadingFill: {
+    height: "100%",
+    borderRadius: 2,
     backgroundColor: "#DE985A",
-    marginTop: -2,
     shadowColor: "#DE985A",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 14,
-    elevation: 6,
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 2,
   },
   taglineRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginTop: 4,
+    marginTop: 10,
+    shadowColor: "#DE985A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
   },
   taglineDot: {
     width: 4,
