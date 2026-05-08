@@ -1,23 +1,73 @@
 {
-  "welcome": "Welcome",
-  "home": "Home",
-  "orders": "Orders",
-  "profile": "Profile",
-  "login": "Login",
-  "onboarding": {
-    "slide1": {
-      "title": "Good food goes to waste",
-      "subtitle": "Every day, restaurants throw away perfectly good food. It doesn't have to be this way."
+  "splash": {
+    "tagline": "Too good to waste"
+  },
+  "onboarding": [
+    {
+      "title": "Too good to waste",
+      "subtitle": "Discover surplus food from local stores at discounted prices"
     },
-    "slide2": {
-      "title": "Share it with your community",
-      "subtitle": "Buy surplus food from your favorite restaurants at a reduced price. Win for you, win for them."
+    {
+      "title": "Save money, help the planet",
+      "subtitle": "Reduce food waste and track your impact"
     },
-    "slide3": {
-      "title": "Donate and make an impact",
-      "subtitle": "Support verified local charities. Your contribution feeds someone in need — with full trust."
+    {
+      "title": "Share with others",
+      "subtitle": "Donate meals to local charities easily"
     },
-    "next": "Next",
-    "getStarted": "Get Started"
+    {
+      "title": "Join the community",
+      "subtitle": "Buyers, sellers, and charities working together"
+    }
+  ],
+  "skip": "Skip",
+  "next": "Next",
+  "getStarted": "Get Started",
+  "roleSelection": {
+    "title": "How will you use LeftO?",
+    "subtitle": "Choose your role to get started"
+  },
+  "roles": {
+    "buyer": {
+      "label": "Buyer",
+      "description": "Find affordable food near you"
+    },
+    "seller": {
+      "label": "Seller",
+      "description": "Sell surplus and reduce waste"
+    },
+    "charity": {
+      "label": "Charity",
+      "description": "Receive and distribute donations"
+    }
+  },
+  "getStartedScreen": {
+    "title": "Ready to make a difference?",
+    "subtitle": "Join thousands of people fighting food waste together",
+    "createAccount": "Create Account",
+    "signIn": "Sign In"
+  },
+  "home": {
+    "greeting": "Hello 👋",
+    "searchPlaceholder": "Search stores or bags…",
+    "co2Saved": "CO₂ Saved",
+    "moneySaved": "Money Saved",
+    "donations": "Donations",
+    "surpriseBags": "Surprise Bags Near You",
+    "parcels": "Parcels & Groceries",
+    "popularToday": "Popular Today",
+    "seeAll": "See all",
+    "loading": "Loading listings…",
+    "error": "Could not load listings. Please try again.",
+    "retry": "Retry",
+    "nothingAvailable": "Nothing available right now",
+    "left": "left",
+    "almostGone": "Almost gone!",
+    "surpriseBag": "Surprise Bag",
+    "specificParcel": "Specific Parcel",
+    "soldOut": "Sold Out",
+    "allergenWarning": "Contains allergens",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite"
   }
 }

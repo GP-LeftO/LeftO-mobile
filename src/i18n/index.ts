@@ -1,52 +1,69 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { I18nManager } from 'react-native';
-import * as Updates from 'expo-updates';
+import { I18nManager } from "react-native";
+import * as Localization from "expo-localization";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import en from './en.json';
-import ar from './ar.json';
+import en from "./en.json";
+import ar from "./ar.json";
 
-const LANGUAGE_KEY = 'user-language';
+export type Language = "en" | "ar";
+export type Translations = typeof en;
 
-export const changeLanguage = async (lang: string) => {
-  await AsyncStorage.setItem(LANGUAGE_KEY, lang);
-  await i18n.changeLanguage(lang);
+const translations: Record<Language, Translations> = { en, ar };
+const LANGUAGE_KEY = "@lefto_language";
 
-  const isRTL = lang === 'ar';
+let currentLanguage: Language = "en";
 
-  if (I18nManager.isRTL !== isRTL) {
-    I18nManager.forceRTL(isRTL);
-    await Updates.reloadAsync();
+export function initLanguage(): Language {
+  const locale = Localization.getLocales()[0]?.languageCode ?? "en";
+  const lang: Language = locale === "ar" ? "ar" : "en";
+  currentLanguage = lang;
+  applyRTL(lang);
+  return lang;
+}
+
+export function setLanguage(lang: Language): void {
+  currentLanguage = lang;
+  applyRTL(lang);
+}
+
+export async function setLanguageAsync(lang: Language): Promise<void> {
+  currentLanguage = lang;
+  applyRTL(lang);
+  try {
+    await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  } catch {}
+}
+
+export async function restoreLanguage(): Promise<Language | null> {
+  try {
+    const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
+    if (saved === "en" || saved === "ar") {
+      currentLanguage = saved;
+      applyRTL(saved);
+      return saved;
+    }
+    return null;
+  } catch {
+    return null;
   }
-};
+}
 
-const initI18n = async () => {
-  let savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
+export function getLanguage(): Language {
+  return currentLanguage;
+}
 
-  if (!savedLanguage) {
-    savedLanguage = Localization.getLocales()[0]?.languageCode ?? 'en';
+export function t(): Translations {
+  return translations[currentLanguage];
+}
+
+export function isRTL(): boolean {
+  return currentLanguage === "ar";
+}
+
+function applyRTL(lang: Language): void {
+  const shouldBeRTL = lang === "ar";
+  if (I18nManager.isRTL !== shouldBeRTL) {
+    I18nManager.allowRTL(shouldBeRTL);
+    I18nManager.forceRTL(shouldBeRTL);
   }
-
-  const isRTL = savedLanguage === 'ar';
-  I18nManager.forceRTL(isRTL);
-
-  i18n
-    .use(initReactI18next)
-    .init({
-      resources: {
-        en: { translation: en },
-        ar: { translation: ar },
-      },
-      lng: savedLanguage,
-      fallbackLng: 'en',
-      interpolation: {
-        escapeValue: false,
-      },
-    });
-};
-
-initI18n();
-
-export default i18n;
+}
