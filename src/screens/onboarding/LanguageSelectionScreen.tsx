@@ -3,10 +3,10 @@ import { StyleSheet, Text, View, TouchableOpacity, Platform } from "react-native
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import LeftOLogo from "../components/LeftOLogo";
-import { Colors, Spacing } from "../theme";
-import { setLanguage } from "../i18n";
-import type { Language } from "../i18n";
+import LeftOLogo from "../../components/LeftOLogo";
+import { Colors, Spacing } from "../../theme";
+import { setLanguage } from "../../i18n";
+import type { Language } from "../../i18n";
 
 interface LanguageSelectionScreenProps {
   onComplete?: (lang: Language) => void;

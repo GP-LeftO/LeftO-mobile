@@ -11,20 +11,20 @@ import {
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import OnboardingSlide from "../components/OnboardingSlide";
-import PaginationDots from "../components/PaginationDots";
-import Button from "../components/Button";
-import LeftOLogo from "../components/LeftOLogo";
-import { Colors, Spacing } from "../theme";
-import { t, isRTL } from "../i18n";
+import OnboardingSlide from "../../components/OnboardingSlide";
+import PaginationDots from "../../components/PaginationDots";
+import Button from "../../components/Button";
+import LeftOLogo from "../../components/LeftOLogo";
+import { Colors, Spacing } from "../../theme";
+import { t, isRTL } from "../../i18n";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const SLIDES = [
-  { image: require("../../assets/images/onboarding1.png") },
-  { image: require("../../assets/images/onboarding2.png") },
-  { image: require("../../assets/images/onboarding3.png") },
-  { image: require("../../assets/images/onboarding4.png") },
+  { image: require("../../../assets/images/onboarding1.png") },
+  { image: require("../../../assets/images/onboarding2.png") },
+  { image: require("../../../assets/images/onboarding3.png") },
+  { image: require("../../../assets/images/onboarding4.png") },
 ];
 
 interface OnboardingScreenProps {

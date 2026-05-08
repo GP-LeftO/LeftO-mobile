@@ -2,7 +2,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-import SplashScreen from '../screens/SplashScreen';
+import SplashScreen from '../screens/onboarding/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import HomeScreen from '../screens/HomeScreen';

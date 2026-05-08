@@ -9,10 +9,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Colors, Spacing } from "../theme";
-import { isRTL } from "../i18n";
-import StepIndicator from "../components/StepIndicator";
-import { useAuth } from "../hooks/useAuth";
+import { Colors, Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
+import StepIndicator from "../../components/StepIndicator";
+import { useAuth } from "../../hooks/useAuth";
 
 interface OTPVerificationScreenProps {
   phone?: string;

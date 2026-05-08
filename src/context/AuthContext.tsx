@@ -12,6 +12,10 @@ export interface AuthUser {
   role: UserRole;
   language: "AR" | "EN";
   createdAt: string;
+  co2Saved?: number;
+  moneySaved?: number;
+  donationCount?: number;
+  bagCount?: number;
 }
 
 interface AuthContextValue {

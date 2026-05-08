@@ -3,9 +3,9 @@ import { StyleSheet, Text, View, Platform, TouchableOpacity } from "react-native
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { Colors, Spacing } from "../theme";
-import { isRTL } from "../i18n";
-import { useAuth } from "../hooks/useAuth";
+import { Colors, Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
+import { useAuth } from "../../hooks/useAuth";
 
 interface RejectedScreenProps {
   role?: string;

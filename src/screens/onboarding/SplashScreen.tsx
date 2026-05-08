@@ -165,7 +165,7 @@ export default function SplashScreen({ onComplete, navigation }: SplashScreenPro
     <LinearGradient colors={["#f5f5f2", "#eaeae6"]} style={styles.container}>
       <Animated.View style={[styles.circleWrapper, logoStyle]}>
         <Image
-          source={require("../../assets/images/logo.png")}
+          source={require("../../../assets/images/logo.png")}
           style={styles.logoImage}
           resizeMode="cover"
         />

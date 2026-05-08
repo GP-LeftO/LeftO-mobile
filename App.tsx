@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -6,25 +6,27 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/context/AuthContext";
 import { useAuthContext } from "./src/context/AuthContext";
 
-import SplashScreen           from "./src/screens/SplashScreen";
-import LanguageSelectionScreen from "./src/screens/LanguageSelectionScreen";
-import OnboardingScreen       from "./src/screens/OnboardingScreen";
-import PhoneEntryScreen       from "./src/screens/PhoneEntryScreen";
-import OTPVerificationScreen  from "./src/screens/OTPVerificationScreen";
-import RoleSelectionScreen    from "./src/screens/RoleSelectionScreen";
-import BasicInfoScreen        from "./src/screens/BasicInfoScreen";
-import RoleSpecificInfoScreen from "./src/screens/RoleSpecificInfoScreen";
-import PendingScreen          from "./src/screens/PendingScreen";
-import HomeScreen             from "./src/screens/HomeScreen";
-import SignInScreen           from "./src/screens/SignInScreen";
-import SellerDashboardScreen  from "./src/screens/SellerDashboardScreen";
-import CharityDashboardScreen from "./src/screens/CharityDashboardScreen";
-import RejectedScreen         from "./src/screens/RejectedScreen";
+import SplashScreen           from "./src/screens/onboarding/SplashScreen";
+import LanguageSelectionScreen from "./src/screens/onboarding/LanguageSelectionScreen";
+import OnboardingScreen       from "./src/screens/onboarding/OnboardingScreen";
+import PhoneEntryScreen       from "./src/screens/auth/PhoneEntryScreen";
+import OTPVerificationScreen  from "./src/screens/auth/OTPVerificationScreen";
+import RoleSelectionScreen    from "./src/screens/registration/RoleSelectionScreen";
+import BasicInfoScreen        from "./src/screens/registration/BasicInfoScreen";
+import RoleSpecificInfoScreen from "./src/screens/registration/RoleSpecificInfoScreen";
+import PendingScreen          from "./src/screens/seller/PendingScreen";
+import HomeScreen             from "./src/screens/buyer/HomeScreen";
+import SignInScreen           from "./src/screens/auth/SignInScreen";
+import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
+import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
+import RejectedScreen         from "./src/screens/seller/RejectedScreen";
+import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
 import type { UserRole } from "./src/services/storage";
-import type { PostLoginRoute } from "./src/screens/SignInScreen";
+import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
+import type { StoreDetailsParams } from "./src/types";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/useAuth";
 
@@ -42,7 +44,8 @@ type AppStep =
   | "rejected"
   | "buyer-home"
   | "seller-dashboard"
-  | "charity-dashboard";
+  | "charity-dashboard"
+  | "store-details";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -72,6 +75,8 @@ function AppContent() {
   const [langRestored,  setLangRestored]  = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
+  const [storeParams,   setStoreParams]   = useState<StoreDetailsParams | null>(null);
+  const sessionRestoreHandled = useRef(false);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -87,6 +92,8 @@ function AppContent() {
 
   useEffect(() => {
     if (ctx.isInitializing || !langRestored) return;
+    if (sessionRestoreHandled.current) return;
+    sessionRestoreHandled.current = true;
     if (ctx.isAuthenticated && ctx.user) {
       const route = resolveHomeRoute(ctx.user.role, ctx.sellerStatus, ctx.charityStatus);
       goTo(route);
@@ -123,7 +130,6 @@ function AppContent() {
       const status   = axiosErr.response?.status;
       const msg      = axiosErr.response?.data?.message;
       if (status === 409) {
-        // Phone already registered from a previous attempt — log in silently and continue
         try {
           await login(phone, info.password);
           setIsRegistering(false);
@@ -142,11 +148,18 @@ function AppContent() {
   };
 
   const handleLogout = () => {
+    sessionRestoreHandled.current = false;
     setStepHistory(["language-selection"]);
     setSelectedRole(null);
     setPhone("");
     setBasicInfo({ name: "", email: "", password: "" });
     setRegisterError("");
+    setStoreParams(null);
+  };
+
+  const handleListingPress = (params: StoreDetailsParams) => {
+    setStoreParams(params);
+    goTo("store-details");
   };
 
   if (ctx.isInitializing || !langRestored) {
@@ -259,7 +272,12 @@ function AppContent() {
       }
 
       {step === "buyer-home" &&
-        screen(<HomeScreen onLogout={handleLogout} />)
+        screen(
+          <HomeScreen
+            onLogout={handleLogout}
+            onListingPress={handleListingPress}
+          />
+        )
       }
 
       {step === "seller-dashboard" &&
@@ -276,6 +294,16 @@ function AppContent() {
 
       {step === "rejected" &&
         screen(<RejectedScreen role={ctx.user?.role?.toLowerCase()} onLogout={handleLogout} />)
+      }
+
+      {step === "store-details" && storeParams &&
+        screen(
+          <StoreDetailsScreen
+            listingId={storeParams.listingId}
+            sellerId={storeParams.sellerId}
+            onBack={goBack}
+          />
+        )
       }
 
     </View>

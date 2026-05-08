@@ -6,10 +6,10 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import Button from "../components/Button";
-import { Colors, Spacing } from "../theme";
-import { isRTL } from "../i18n";
-import StepIndicator from "../components/StepIndicator";
+import Button from "../../components/Button";
+import { Colors, Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
+import StepIndicator from "../../components/StepIndicator";
 
 interface BasicInfoScreenProps {
   role?: string;

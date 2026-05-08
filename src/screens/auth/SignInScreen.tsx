@@ -6,10 +6,10 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import Button from "../components/Button";
-import { Colors, Spacing } from "../theme";
-import { isRTL } from "../i18n";
-import { useAuth } from "../hooks/useAuth";
+import Button from "../../components/Button";
+import { Colors, Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
+import { useAuth } from "../../hooks/useAuth";
 
 export type PostLoginRoute =
   | "buyer-home"
@@ -24,14 +24,15 @@ interface SignInScreenProps {
   onBack?: () => void;
   onRegister?: () => void;
   navigation?: any;
+  role?: "buyer" | "seller" | "charity";
 }
 
 const COUNTRY_CODES = [
   { code: "970", flag: "🇵🇸" },
-  { code: "972", flag: "🇮🇱" },
+  { code: "972", flag: "🇵🇸" },
 ];
 
-export default function SignInScreen({ onSuccess, onBack, onRegister, navigation }: SignInScreenProps) {
+export default function SignInScreen({ onSuccess, onBack, onRegister, navigation, role }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -99,6 +100,22 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
           <View style={styles.iconWrap}>
             <Feather name="log-in" size={28} color={Colors.primaryOrange} />
           </View>
+          {role && (
+            <View style={styles.roleBadge}>
+              <Feather
+                name={role === "buyer" ? "shopping-bag" : role === "seller" ? "tag" : "heart"}
+                size={13}
+                color={Colors.primaryOrange}
+              />
+              <Text style={styles.roleBadgeText}>
+                {role === "buyer"
+                  ? (rtl ? "مشترٍ" : "Buyer")
+                  : role === "seller"
+                  ? (rtl ? "بائع" : "Seller")
+                  : (rtl ? "جمعية خيرية" : "Charity")}
+              </Text>
+            </View>
+          )}
           <Text style={[styles.title, rtl && styles.rtl]}>
             {rtl ? "أهلاً بعودتك" : "Welcome back"}
           </Text>
@@ -228,6 +245,13 @@ const styles = StyleSheet.create({
 
   titleBlock: { gap: Spacing.sm, alignItems: "flex-start" },
   titleBlockRTL: { alignItems: "flex-end" },
+  roleBadge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.orangeLight,
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
+    alignSelf: "flex-start",
+  },
+  roleBadgeText: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange },
   iconWrap: {
     width: 56, height: 56, borderRadius: 16,
     backgroundColor: Colors.orangeLight,

@@ -1,24 +1,73 @@
 {
-  "welcome": "Welcome",
-  "home": "Home",
-  "orders": "Orders",
-  "profile": "Profile",
-  "login": "Login",
+  "splash": {
+    "tagline": "Too good to waste"
+  },
+  "onboarding": [
+    {
+      "title": "Too good to waste",
+      "subtitle": "Discover surplus food from local stores at discounted prices"
+    },
+    {
+      "title": "Save money, help the planet",
+      "subtitle": "Reduce food waste and track your impact"
+    },
+    {
+      "title": "Share with others",
+      "subtitle": "Donate meals to local charities easily"
+    },
+    {
+      "title": "Join the community",
+      "subtitle": "Buyers, sellers, and charities working together"
+    }
+  ],
   "skip": "Skip",
   "next": "Next",
   "getStarted": "Get Started",
-  "onboarding": [
-    { "title": "Good food goes to waste", "subtitle": "Every day, restaurants throw away perfectly good food. It doesn't have to be this way." },
-    { "title": "Share it with your community", "subtitle": "Buy surplus food from your favorite restaurants at a reduced price. Win for you, win for them." },
-    { "title": "Donate and make an impact", "subtitle": "Support verified local charities. Your contribution feeds someone in need — with full trust." },
-    { "title": "Join the community", "subtitle": "Buyers, sellers, and charities working together to reduce food waste." }
-  ],
-  "auth": {
-    "fields": { "name": "Full Name", "phone": "Phone Number", "email": "Email Address", "password": "Password" },
-    "placeholders": { "name": "Enter your full name", "phone": "e.g. 0599123456", "email": "example@email.com", "password": "At least 8 characters" },
-    "errors": { "nameRequired": "Name is required", "phoneInvalid": "Please enter a valid phone number", "emailInvalid": "Please enter a valid email address", "passwordShort": "Password must be at least 8 characters" },
-    "signUp": { "title": "Create Account", "subtitle": "Join LeftO and start saving good food", "button": "Sign Up", "haveAccount": "Already have an account?" },
-    "signIn": { "title": "Sign In", "subtitle": "Welcome back!", "button": "Sign In", "noAccount": "Don't have an account?", "forgotPassword": "Forgot Password?", "tagline": "Too good to waste, too good not to share" }
+  "roleSelection": {
+    "title": "How will you use LeftO?",
+    "subtitle": "Choose your role to get started"
   },
-  "fillAll": "Please fill in all fields"
+  "roles": {
+    "buyer": {
+      "label": "Buyer",
+      "description": "Find affordable food near you"
+    },
+    "seller": {
+      "label": "Seller",
+      "description": "Sell surplus and reduce waste"
+    },
+    "charity": {
+      "label": "Charity",
+      "description": "Receive and distribute donations"
+    }
+  },
+  "getStartedScreen": {
+    "title": "Ready to make a difference?",
+    "subtitle": "Join thousands of people fighting food waste together",
+    "createAccount": "Create Account",
+    "signIn": "Sign In"
+  },
+  "home": {
+    "greeting": "Hello 👋",
+    "searchPlaceholder": "Search stores or bags…",
+    "co2Saved": "CO₂ Saved",
+    "moneySaved": "Money Saved",
+    "donations": "Donations",
+    "surpriseBags": "Surprise Bags Near You",
+    "parcels": "Parcels & Groceries",
+    "popularToday": "Popular Today",
+    "seeAll": "See all",
+    "loading": "Loading listings…",
+    "error": "Could not load listings. Please try again.",
+    "retry": "Retry",
+    "nothingAvailable": "Nothing available right now",
+    "left": "left",
+    "almostGone": "Almost gone!",
+    "surpriseBag": "Surprise Bag",
+    "specificParcel": "Specific Parcel",
+    "soldOut": "Sold Out",
+    "allergenWarning": "Contains allergens",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite"
+  }
 }

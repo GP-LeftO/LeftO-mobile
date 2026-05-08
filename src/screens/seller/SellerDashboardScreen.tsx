@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet, Text, View, Platform,
-  TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl,
+  TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { Colors, Spacing } from "../theme";
-import { isRTL } from "../i18n";
-import { useAuth } from "../hooks/useAuth";
-import api from "../services/api";
+import { Colors, Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
+import { useAuth } from "../../hooks/useAuth";
+import api from "../../services/api";
 
 // ─── Seller profile type ──────────────────────────────────────────────────────
 interface SellerProfile {
@@ -22,6 +22,19 @@ interface SellerProfile {
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
   totalDonations?: number;
   activeListings?: number;
+}
+
+interface SellerListing {
+  id: string;
+  title: string;
+  price?: number;
+  discountedPrice?: number;
+  originalPrice?: number;
+  quantity: number;
+  pickupStart?: string;
+  pickupEnd?: string;
+  category?: string;
+  status?: string;
 }
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -49,11 +62,15 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const { user, logout } = useAuth();
 
-  const [activeTab,   setActiveTab]   = useState<Tab>("overview");
-  const [profile,     setProfile]     = useState<SellerProfile | null>(null);
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [fetchError,  setFetchError]  = useState("");
+  const [activeTab,      setActiveTab]      = useState<Tab>("overview");
+  const [profile,        setProfile]        = useState<SellerProfile | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
+  const [fetchError,     setFetchError]     = useState("");
+  const [listings,       setListings]       = useState<SellerListing[]>([]);
+  const [listingsLoading, setListingsLoading] = useState(false);
+  const [listingsError,  setListingsError]  = useState("");
+  const [soldOutLoading, setSoldOutLoading] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -69,7 +86,41 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
     }
   }, [rtl]);
 
+  const fetchListings = useCallback(async () => {
+    if (!user?.id) return;
+    setListingsLoading(true);
+    setListingsError("");
+    try {
+      const { data } = await api.get("/api/listings", { params: { sellerId: user.id } });
+      const payload = data.data ?? data;
+      const items: SellerListing[] = Array.isArray(payload)
+        ? payload
+        : (payload?.listings ?? payload?.items ?? payload?.data ?? []);
+      setListings(items);
+    } catch {
+      setListingsError(rtl ? "تعذّر تحميل القوائم" : "Could not load listings");
+    } finally {
+      setListingsLoading(false);
+    }
+  }, [user?.id, rtl]);
+
+  const handleMarkSoldOut = async (listingId: string) => {
+    setSoldOutLoading(listingId);
+    try {
+      await api.patch(`/api/listings/${listingId}/sold-out`);
+      await fetchListings();
+    } catch {
+      Alert.alert(
+        rtl ? "خطأ" : "Error",
+        rtl ? "تعذّر تحديث حالة القائمة" : "Could not update listing status"
+      );
+    } finally {
+      setSoldOutLoading(null);
+    }
+  };
+
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
 
   const handleLogout = async () => {
     await logout();
@@ -242,16 +293,81 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
 
           {/* ── LISTINGS TAB ── */}
           {activeTab === "listings" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.placeholderPane}>
-              <Text style={styles.placeholderEmoji}>📦</Text>
-              <Text style={[styles.placeholderTitle, rtl && styles.rtl]}>
-                {rtl ? "قوائم الطعام" : "Food Listings"}
-              </Text>
-              <Text style={[styles.placeholderSub, rtl && styles.rtl]}>
-                {rtl
-                  ? "ستتمكن قريباً من إضافة وإدارة أكياس الطعام المخفضة"
-                  : "Soon you'll be able to add and manage your discounted food bags"}
-              </Text>
+            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+              {listingsLoading ? (
+                <View style={styles.loadingWrap}>
+                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                  <Text style={[styles.loadingText, rtl && styles.rtl]}>
+                    {rtl ? "جاري تحميل القوائم…" : "Loading listings…"}
+                  </Text>
+                </View>
+              ) : listingsError ? (
+                <View style={styles.errorWrap}>
+                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                  <Text style={[styles.errorText, rtl && styles.rtl]}>{listingsError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={fetchListings} activeOpacity={0.8}>
+                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : listings.length === 0 ? (
+                <View style={styles.placeholderPane}>
+                  <Text style={styles.placeholderEmoji}>📦</Text>
+                  <Text style={[styles.placeholderTitle, rtl && styles.rtl]}>
+                    {rtl ? "لا توجد قوائم" : "No listings yet"}
+                  </Text>
+                  <Text style={[styles.placeholderSub, rtl && styles.rtl]}>
+                    {rtl
+                      ? "أضف قوائم طعامك المخفضة لتظهر هنا"
+                      : "Your discounted food listings will appear here"}
+                  </Text>
+                </View>
+              ) : (
+                listings.map((listing) => (
+                  <View key={listing.id} style={styles.listingCard}>
+                    <View style={[styles.listingCardInner, rtl && styles.listingCardInnerRTL]}>
+                      <View style={styles.listingIconWrap}>
+                        <Feather name="package" size={18} color={Colors.primaryOrange} />
+                      </View>
+                      <View style={styles.listingBody}>
+                        <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>
+                          {listing.title}
+                        </Text>
+                        {(listing.pickupStart && listing.pickupEnd) && (
+                          <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
+                            <Feather name="clock" size={12} color={Colors.grayMedium} />
+                            <Text style={styles.listingMetaText}>
+                              {listing.pickupStart} – {listing.pickupEnd}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
+                          <Feather name="layers" size={12} color={Colors.grayMedium} />
+                          <Text style={styles.listingMetaText}>
+                            {rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.listingRight}>
+                        <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
+                        <TouchableOpacity
+                          style={styles.soldOutBtn}
+                          onPress={() => handleMarkSoldOut(listing.id)}
+                          disabled={soldOutLoading === listing.id}
+                          activeOpacity={0.8}
+                        >
+                          {soldOutLoading === listing.id ? (
+                            <ActivityIndicator size="small" color="#ef4444" />
+                          ) : (
+                            <Text style={styles.soldOutBtnText}>
+                              {rtl ? "نفد" : "Sold Out"}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
             </Animated.View>
           )}
 
@@ -375,4 +491,32 @@ const styles = StyleSheet.create({
   placeholderEmoji: { fontSize: 56, marginBottom: 4 },
   placeholderTitle: { fontSize: 20, fontWeight: "800", color: Colors.grayDark, textAlign: "center" },
   placeholderSub: { fontSize: 14, color: Colors.grayMedium, lineHeight: 20, textAlign: "center" },
+
+  // Listing cards
+  listingCard: {
+    backgroundColor: Colors.white, borderRadius: 18,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    overflow: "hidden",
+  },
+  listingCardInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
+  listingCardInnerRTL: { flexDirection: "row-reverse" },
+  listingIconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: Colors.orangeLight,
+    alignItems: "center", justifyContent: "center",
+  },
+  listingBody: { flex: 1, gap: 4 },
+  listingTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  listingMeta: { flexDirection: "row", alignItems: "center", gap: 4 },
+  listingMetaRTL: { flexDirection: "row-reverse" },
+  listingMetaText: { fontSize: 12, color: Colors.grayMedium },
+  listingRight: { alignItems: "flex-end", gap: 8 },
+  listingPrice: { fontSize: 15, fontWeight: "800", color: Colors.primaryOrange },
+  soldOutBtn: {
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca",
+    minWidth: 60, alignItems: "center",
+  },
+  soldOutBtnText: { fontSize: 12, fontWeight: "700", color: "#ef4444" },
 });
