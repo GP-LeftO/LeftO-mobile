@@ -71,6 +71,7 @@ export default function HomeScreen({ onLogout, onListingPress }: HomeScreenProps
     </View>
   );
 
+  
   return (
     <View style={styles.container}>
 

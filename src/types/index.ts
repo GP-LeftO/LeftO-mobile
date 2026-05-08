@@ -11,7 +11,7 @@ export type AppStep =
 
 // ─── Listing enums ────────────────────────────────────────────────────────────
 
-export type ListingType = "SURPRISE_BAG" | "SPECIFIC_ITEM";
+export type ListingType = "SURPRISE_BAG" | "SPECIFIC_PARCEL";
 
 export type FreshnessBadge = "FRESH_TODAY" | "EAT_SOON" | "LAST_CHANCE";
 
