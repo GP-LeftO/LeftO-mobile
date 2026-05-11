@@ -255,16 +255,4 @@ pnpm run typecheck
 | Eat Soon | Orange | Best consumed soon |
 | Last Chance | Red | Near expiry |
 
----
 
-## TODOs / Upcoming
-
-- [ ] Reserve button → `POST /api/orders` (StoreDetailsScreen)
-- [ ] Donate button → charity order API
-- [ ] Real map with `react-native-maps`
-- [ ] Favourite listings persistence
-- [ ] Seller: create/edit listing form
-- [ ] Seller: orders management tab
-- [ ] Charity: donations received tab
-- [ ] Push notifications
-- [ ] Payment integration
