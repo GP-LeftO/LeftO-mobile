@@ -32,15 +32,16 @@ import type { Listing, StoreDetailsParams } from "../../types";
 interface HomeScreenProps {
   onLogout?:       () => void;
   onListingPress?: (params: StoreDetailsParams) => void;
+  onSearchPress?:  () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function HomeScreen({ onLogout, onListingPress }: HomeScreenProps) {
+export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: HomeScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl        = isRTL();
-  const tr         = (t() as any).home;
+  const tr         = t().home;
 
   const { logout, user } = useAuth();
   const { surpriseBags, parcels, popularToday, loading, refreshing, error, onRefresh } = useListings();
@@ -71,7 +72,6 @@ export default function HomeScreen({ onLogout, onListingPress }: HomeScreenProps
     </View>
   );
 
-  
   return (
     <View style={styles.container}>
 
@@ -109,8 +109,8 @@ export default function HomeScreen({ onLogout, onListingPress }: HomeScreenProps
         }
       >
 
-        {/* Search bar */}
-        <TouchableOpacity style={styles.searchBar} activeOpacity={0.7}>
+        {/* Search bar — tapping navigates to SearchScreen */}
+        <TouchableOpacity style={styles.searchBar} activeOpacity={0.7} onPress={onSearchPress}>
           <Feather name="search" size={18} color={Colors.grayMedium} />
           <Text style={[styles.searchPlaceholder, rtl && styles.rtl]}>
             {tr.searchPlaceholder}
