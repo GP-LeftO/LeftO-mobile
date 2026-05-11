@@ -46,6 +46,32 @@ export interface Listing {
   seller: ListingSeller;
 }
 
+/** Full listing detail returned by GET /api/listings/:id */
+export interface ListingDetail extends Listing {
+  rating?: number;
+  reviewCount?: number;
+}
+
+/** Full seller profile returned by GET /api/sellers/:id */
+export interface SellerDetail {
+  id: string;
+  businessName: string;
+  businessType: string;
+  description?: string;
+  rating?: number;
+  reviewCount?: number;
+  location?: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  contactInfo?: {
+    phone?: string;
+    website?: string;
+    socialMedia?: string;
+  };
+}
+
 // ─── Store details navigation params ─────────────────────────────────────────
 
 export interface StoreDetailsParams {

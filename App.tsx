@@ -279,6 +279,7 @@ function AppContent() {
           />
         )
       }
+      
 
       {step === "seller-dashboard" &&
         screen(<SellerDashboardScreen onLogout={handleLogout} />)
