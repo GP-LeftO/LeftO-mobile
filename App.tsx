@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { AuthProvider } from "./src/context/AuthContext";
 import { useAuthContext } from "./src/context/AuthContext";
 
@@ -21,6 +20,7 @@ import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
 import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
+import SearchScreen           from "./src/screens/buyer/SearchScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -30,6 +30,7 @@ import type { StoreDetailsParams } from "./src/types";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/useAuth";
 
+// ── Step type ─────────────────────────────────────────────────────────────────
 type AppStep =
   | "splash"
   | "language-selection"
@@ -43,45 +44,46 @@ type AppStep =
   | "under-review"
   | "rejected"
   | "buyer-home"
+  | "buyer-search"
   | "seller-dashboard"
   | "charity-dashboard"
   | "store-details";
 
 interface BasicInfo { name: string; email: string; password: string }
 
-export default function App() {
+// ── Root (provides auth context) ──────────────────────────────────────────────
+export default function Index() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
+// ── App content (can use auth context) ────────────────────────────────────────
 function AppContent() {
   const ctx = useAuthContext();
 
   const { register, login } = useAuth();
   const rtl = isRTL();
 
-  const [stepHistory,   setStepHistory]   = useState<AppStep[]>(["splash"]);
-  const [selectedRole,  setSelectedRole]  = useState<UserRole>(null);
-  const [phone,         setPhone]         = useState("");
-  const [basicInfo,     setBasicInfo]     = useState<BasicInfo>({ name: "", email: "", password: "" });
-  const [language,      setCurrentLanguage] = useState<Language>("en");
-  const [langRestored,  setLangRestored]  = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [registerError, setRegisterError] = useState("");
-  const [storeParams,   setStoreParams]   = useState<StoreDetailsParams | null>(null);
-  const sessionRestoreHandled = useRef(false);
+  const [stepHistory,    setStepHistory]    = useState<AppStep[]>(["splash"]);
+  const [selectedRole,   setSelectedRole]   = useState<UserRole>(null);
+  const [phone,          setPhone]          = useState("");
+  const [basicInfo,      setBasicInfo]      = useState<BasicInfo>({ name: "", email: "", password: "" });
+  const [language,       setCurrentLanguage] = useState<Language>("en");
+  const [langRestored,   setLangRestored]   = useState(false);
+  const [isRegistering,  setIsRegistering]  = useState(false);
+  const [registerError,  setRegisterError]  = useState("");
+  const [storeParams,    setStoreParams]    = useState<StoreDetailsParams | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
   const goBack = ()           => setStepHistory(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
 
+  // ── Restore language + check existing auth session on startup ──────────────
   useEffect(() => {
     (async () => {
       const saved = await restoreLanguage();
@@ -90,16 +92,16 @@ function AppContent() {
     })();
   }, []);
 
+  // When auth initializes and user is already logged in → skip to their home
   useEffect(() => {
     if (ctx.isInitializing || !langRestored) return;
-    if (sessionRestoreHandled.current) return;
-    sessionRestoreHandled.current = true;
     if (ctx.isAuthenticated && ctx.user) {
       const route = resolveHomeRoute(ctx.user.role, ctx.sellerStatus, ctx.charityStatus);
       goTo(route);
     }
   }, [ctx.isInitializing, ctx.isAuthenticated, langRestored]);
 
+  // ── Resolve home route from user role + status ─────────────────────────────
   const resolveHomeRoute = (
     role: string,
     sellerStatus: string | null,
@@ -148,7 +150,6 @@ function AppContent() {
   };
 
   const handleLogout = () => {
-    sessionRestoreHandled.current = false;
     setStepHistory(["language-selection"]);
     setSelectedRole(null);
     setPhone("");
@@ -162,6 +163,7 @@ function AppContent() {
     goTo("store-details");
   };
 
+  // ── Wait until both auth + language are ready before showing splash ─────────
   if (ctx.isInitializing || !langRestored) {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
@@ -276,10 +278,19 @@ function AppContent() {
           <HomeScreen
             onLogout={handleLogout}
             onListingPress={handleListingPress}
+            onSearchPress={() => goTo("buyer-search")}
           />
         )
       }
-      
+
+      {step === "buyer-search" &&
+        screen(
+          <SearchScreen
+            onBack={goBack}
+            onListingPress={handleListingPress}
+          />
+        )
+      }
 
       {step === "seller-dashboard" &&
         screen(<SellerDashboardScreen onLogout={handleLogout} />)
