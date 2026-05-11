@@ -69,5 +69,32 @@
     "allergenWarning": "يحتوي على مسببات حساسية",
     "favorite": "مفضلة",
     "unfavorite": "إلغاء المفضلة"
+  },
+  "storeDetails": {
+    "title": "تفاصيل المتجر",
+    "loading": "جاري تحميل التفاصيل…",
+    "error": "تعذّر تحميل التفاصيل. يرجى المحاولة مجدداً",
+    "retry": "إعادة المحاولة",
+    "pickupWindow": "وقت الاستلام",
+    "itemsLeft": "متبقي",
+    "about": "عن هذا العرض",
+    "allergens": "معلومات مسببات الحساسية",
+    "rating": "التقييم",
+    "reviews": "تقييمات",
+    "location": "الموقع",
+    "noAddress": "العنوان غير متاح",
+    "reserve": "احجز الآن",
+    "donate": "تبرع لجمعية خيرية",
+    "soldOut": "نفد المخزون",
+    "originalPrice": "السعر الأصلي",
+    "freshToday": "طازج اليوم",
+    "eatSoon": "كُل قريباً",
+    "lastChance": "فرصة أخيرة",
+    "mapPlaceholder": "عرض الخريطة قريباً",
+    "surpriseBag": "كيس مفاجأة",
+    "specificParcel": "طرد محدد",
+    "noDescription": "لا يوجد وصف متاح.",
+    "reservedSuccess": "تم الحجز بنجاح!",
+    "donatedSuccess": "تم التبرع بنجاح!"
   }
 }
