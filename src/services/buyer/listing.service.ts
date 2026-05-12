@@ -4,9 +4,9 @@
  * Falls back to mock data in development when the API is unavailable.
  */
 
-import api from "@/src/services/api";
-import type { ListingDetail, SellerDetail } from "../types";
-import { MOCK_SELLER } from "../services/seller.service";
+import api from "../shared/api";
+import type { ListingDetail, SellerDetail } from "../../types";
+import { MOCK_SELLER } from "../seller/seller.service";
 
 const MOCK_LISTING: ListingDetail = {
   id: "mock-listing-1",

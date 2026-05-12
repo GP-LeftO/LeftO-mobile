@@ -1,7 +1,7 @@
 import React from "react";
 import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { Colors, Spacing } from "../../../theme";
-import type { FilterFreshness } from "../../../hooks/useSearchFilters";
+import type { FilterFreshness } from "../../../hooks/buyer/useSearchFilters";
 
 interface FreshnessPickerProps {
   selected: FilterFreshness[];

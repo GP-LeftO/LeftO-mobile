@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, View, Text } from "react-native";
-import { Colors } from "../theme";
-import { isRTL } from "../i18n";
+import { Colors } from "../../theme";
+import { isRTL } from "../../i18n";
 
 interface StepIndicatorProps {
   current: number;

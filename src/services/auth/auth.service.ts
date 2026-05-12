@@ -1,5 +1,5 @@
-import api from "../services/api";
-import type { AuthUser, SellerStatus } from "../context/AuthContext";
+import api from "../shared/api";
+import type { AuthUser, SellerStatus } from "../../context/AuthContext";
 
 export interface RegisterParams {
   name: string;

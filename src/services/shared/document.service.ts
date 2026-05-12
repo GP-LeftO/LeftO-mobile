@@ -1,4 +1,4 @@
-import api from "../services/api";
+import api from "./api";
 
 export type DocumentType = "trade_license" | "health_certificate" | "charity_registration";
 

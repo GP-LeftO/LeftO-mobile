@@ -7,8 +7,8 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { getListingById, getSellerById } from "../services/listing.service";
-import type { ListingDetail, SellerDetail } from "../types";
+import { getListingById, getSellerById } from "../../services/buyer/listing.service";
+import type { ListingDetail, SellerDetail } from "../../types";
 
 interface UseStoreDetailsResult {
   listing:   ListingDetail | null;

@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import api from "../../services/api";
+import api from "../../services/shared/api";
 
 type ApiOrderStatus = "RESERVED" | "COMPLETED" | "CANCELLED" | "DONATED";
 type TabKey = "active" | "completed" | "cancelled";

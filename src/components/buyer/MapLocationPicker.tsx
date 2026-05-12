@@ -8,7 +8,7 @@ import * as Location from "expo-location";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Colors, Spacing } from "../theme";
+import { Colors, Spacing } from "../../theme";
 
 export interface PickedLocation {
   latitude: number;

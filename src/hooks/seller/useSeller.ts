@@ -1,6 +1,6 @@
-import { uploadDocument as uploadDocumentService } from "../services/document.service";
-import * as SellerService from "../services/seller.service";
-import type { RegisterSellerParams } from "../services/seller.service";
+import { uploadDocument as uploadDocumentService } from "../../services/shared/document.service";
+import * as SellerService from "../../services/seller/seller.service";
+import type { RegisterSellerParams } from "../../services/seller/seller.service";
 
 export function useSeller() {
   const uploadDocument = async (

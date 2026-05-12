@@ -5,7 +5,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../hooks/auth/useAuth";
 
 interface RejectedScreenProps {
   role?: string;

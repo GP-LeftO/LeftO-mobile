@@ -8,8 +8,8 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import { useAuth } from "../../hooks/useAuth";
-import api from "../../services/api";
+import { useAuth } from "../../hooks/auth/useAuth";
+import api from "../../services/shared/api";
 
 // ─── Seller profile type ──────────────────────────────────────────────────────
 interface SellerProfile {

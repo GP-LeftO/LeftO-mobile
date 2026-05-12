@@ -12,10 +12,10 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import LeftOLogo from "../components/LeftOLogo";
-import Button from "../components/Button";
-import { Colors, Spacing } from "../theme";
-import type { UserRole } from "../services/storage";
+import LeftOLogo from "../../components/shared/LeftOLogo";
+import Button from "../../components/shared/Button";
+import { Colors, Spacing } from "../../theme";
+import type { UserRole } from "../../services/shared/storage";
 
 interface SignUpScreenProps {
   role?: UserRole;

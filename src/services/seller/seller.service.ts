@@ -1,5 +1,5 @@
-import api from "../services/api";
-import type { SellerDetail } from "../types";
+import api from "../shared/api";
+import type { SellerDetail } from "../../types";
 
 export const MOCK_SELLER: SellerDetail = {
   id: "mock-seller-1",

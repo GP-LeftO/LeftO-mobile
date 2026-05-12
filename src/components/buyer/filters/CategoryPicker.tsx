@@ -1,7 +1,7 @@
 import React from "react";
 import { ScrollView, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { Colors, Spacing } from "../../../theme";
-import type { FilterCategory } from "../../../hooks/useSearchFilters";
+import type { FilterCategory } from "../../../hooks/buyer/useSearchFilters";
 
 interface CategoryPickerProps {
   selected: FilterCategory;

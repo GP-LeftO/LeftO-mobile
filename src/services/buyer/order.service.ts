@@ -1,4 +1,4 @@
-import api from "../services/api";
+import api from "../shared/api";
 
 export const getOrders = (status: string, params?: Record<string, string>) =>
   api.get("/api/orders/me", { params: { status, ...params } });

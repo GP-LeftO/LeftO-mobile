@@ -8,14 +8,14 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import Button from "../../components/Button";
-import MapLocationPicker from "../../components/MapLocationPicker";
-import type { PickedLocation } from "../../components/MapLocationPicker";
+import Button from "../../components/shared/Button";
+import MapLocationPicker from "../../components/buyer/MapLocationPicker";
+import type { PickedLocation } from "../../components/buyer/MapLocationPicker";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import StepIndicator from "../../components/StepIndicator";
-import type { UserRole } from "../../services/storage";
-import { useSeller } from "../../hooks/useSeller";
+import StepIndicator from "../../components/auth/StepIndicator";
+import type { UserRole } from "../../services/shared/storage";
+import { useSeller } from "../../hooks/seller/useSeller";
 
 interface RoleSpecificInfoScreenProps {
   role?: UserRole;

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { Colors } from "../../../theme";
-import type { FilterRadius } from "../../../hooks/useSearchFilters";
+import type { FilterRadius } from "../../../hooks/buyer/useSearchFilters";
 
 interface RadiusSelectorProps {
   selected: FilterRadius;

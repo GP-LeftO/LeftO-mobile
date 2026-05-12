@@ -9,8 +9,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { searchListings } from "../services/search.service";
-import type { Listing } from "../types";
+import { searchListings } from "../../services/buyer/search.service";
+import type { Listing } from "../../types";
 
 interface UseSearchResult {
   listings:  Listing[];

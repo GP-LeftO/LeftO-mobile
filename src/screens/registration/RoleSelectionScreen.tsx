@@ -3,13 +3,13 @@ import { StyleSheet, Text, View, ScrollView, Platform, TouchableOpacity } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import RoleCard from "../../components/RoleCard";
-import Button from "../../components/Button";
+import RoleCard from "../../components/auth/RoleCard";
+import Button from "../../components/shared/Button";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import { saveSelectedRole } from "../../services/storage";
-import type { UserRole } from "../../services/storage";
-import StepIndicator from "../../components/StepIndicator";
+import { saveSelectedRole } from "../../services/shared/storage";
+import type { UserRole } from "../../services/shared/storage";
+import StepIndicator from "../../components/auth/StepIndicator";
 
 interface RoleSelectionScreenProps {
   onComplete?: (role: UserRole) => void;

@@ -4,8 +4,8 @@
  * Follows the same pattern as all other services in this folder.
  */
 
-import api from "../services/api";
-import type { Listing } from "../types";
+import api from "../shared/api";
+import type { Listing } from "../../types";
 
 export interface SearchParams {
   q?:         string;

@@ -4,12 +4,12 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
-import Button from "../components/Button";
-import LeftOLogo from "../components/LeftOLogo";
-import { Colors, Spacing } from "../theme";
-import { t, isRTL } from "../i18n";
-import { markOnboardingComplete } from "../services/storage";
-import type { UserRole } from "../services/storage";
+import Button from "../../components/shared/Button";
+import LeftOLogo from "../../components/shared/LeftOLogo";
+import { Colors, Spacing } from "../../theme";
+import { t, isRTL } from "../../i18n";
+import { markOnboardingComplete } from "../../services/shared/storage";
+import type { UserRole } from "../../services/shared/storage";
 
 interface GetStartedScreenProps {
   role?: UserRole;

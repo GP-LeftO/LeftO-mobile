@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { Colors } from "../theme";
+import { Colors } from "../../theme";
 
 export default function PaginationDots({ total, currentIndex }: { total: number; currentIndex: number }) {
   return (

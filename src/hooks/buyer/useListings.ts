@@ -9,8 +9,8 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import api from "../services/api";
-import type { Listing } from "../types";
+import api from "../../services/shared/api";
+import type { Listing } from "../../types";
 
 interface UseListingsResult {
   surpriseBags:  Listing[];

@@ -8,7 +8,7 @@ import { Colors, Spacing } from "../../../theme";
 import {
   FilterState, DEFAULT_FILTERS,
   FilterCategory, FilterFreshness, FilterRadius, FilterSortBy,
-} from "../../../hooks/useSearchFilters";
+} from "../../../hooks/buyer/useSearchFilters";
 import { t, isRTL } from "../../../i18n";
 import { CategoryPicker }    from "./CategoryPicker";
 import { FreshnessPicker }   from "./FreshnessPicker";

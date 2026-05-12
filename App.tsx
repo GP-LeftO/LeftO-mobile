@@ -24,11 +24,11 @@ import SearchScreen           from "./src/screens/buyer/SearchScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
-import type { UserRole } from "./src/services/storage";
+import type { UserRole } from "./src/services/shared/storage";
 import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
 import type { StoreDetailsParams } from "./src/types";
 import { Colors } from "./src/theme";
-import { useAuth } from "./src/hooks/useAuth";
+import { useAuth } from "./src/hooks/auth/useAuth";
 
 // ── Step type ─────────────────────────────────────────────────────────────────
 type AppStep =

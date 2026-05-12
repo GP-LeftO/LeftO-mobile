@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "../hooks/useColors";
+import { useColors } from "../../hooks/shared/useColors";
 
 export type ErrorFallbackProps = {
   error: Error;

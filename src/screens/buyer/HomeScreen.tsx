@@ -21,10 +21,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
-import { useAuth } from "../../hooks/useAuth";
-import { useListings } from "../../hooks/useListings";
+import { useAuth } from "../../hooks/auth/useAuth";
+import { useListings } from "../../hooks/buyer/useListings";
 import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
-import LeftOLogo from "../../components/LeftOLogo";
+import LeftOLogo from "../../components/shared/LeftOLogo";
 import type { Listing, StoreDetailsParams } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

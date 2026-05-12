@@ -14,9 +14,9 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
-import { Colors } from "../theme";
-import { Spacing } from "../theme";
-import { isRTL } from "../i18n";
+import { Colors } from "../../theme";
+import { Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
 
 interface ButtonProps {
   label: string;

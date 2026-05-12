@@ -11,8 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import StepIndicator from "../../components/StepIndicator";
-import { useAuth } from "../../hooks/useAuth";
+import StepIndicator from "../../components/auth/StepIndicator";
+import { useAuth } from "../../hooks/auth/useAuth";
 
 interface OTPVerificationScreenProps {
   phone?: string;

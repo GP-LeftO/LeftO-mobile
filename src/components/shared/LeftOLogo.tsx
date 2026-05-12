@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Image, StyleSheet, Text } from "react-native";
-import { Colors } from "../theme";
+import { Colors } from "../../theme";
 
 interface LeftOLogoProps {
   size?: "sm" | "md" | "lg";

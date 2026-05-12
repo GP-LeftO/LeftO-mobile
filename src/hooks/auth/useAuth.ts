@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { useAuthContext, AuthUser } from "../context/AuthContext";
-import { isRTL } from "../i18n";
-import * as AuthService from "../services/auth.service";
+import { useAuthContext, AuthUser } from "../../context/AuthContext";
+import { isRTL } from "../../i18n";
+import * as AuthService from "../../services/auth/auth.service";
 // ─── Re-export types for backwards compatibility ───────────────────────────────
 
-export type { RegisterParams } from "../services/auth.service";
-export type { LoginResult } from "../services/auth.service";
+export type { RegisterParams } from "../../services/auth/auth.service";
+export type { LoginResult } from "../../services/auth/auth.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-import type { RegisterParams } from "../services/auth.service";
-import type { LoginResult } from "../services/auth.service";
+import type { RegisterParams } from "../../services/auth/auth.service";
+import type { LoginResult } from "../../services/auth/auth.service";
 
 interface AsyncState<T> {
   loading: boolean;

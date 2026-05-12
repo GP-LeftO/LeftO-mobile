@@ -12,9 +12,9 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { Colors } from "../theme";
-import { Spacing } from "../theme";
-import { isRTL } from "../i18n";
+import { Colors } from "../../theme";
+import { Spacing } from "../../theme";
+import { isRTL } from "../../i18n";
 
 type IconName = keyof typeof Feather.glyphMap;
 

@@ -14,8 +14,8 @@ import Animated, {
   Extrapolation,
   SharedValue,
 } from "react-native-reanimated";
-import { Colors, Spacing } from "../theme/index";
-import { isRTL } from "../i18n/index";
+import { Colors, Spacing } from "../../theme/index";
+import { isRTL } from "../../i18n/index";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const IMAGE_SIZE = SCREEN_WIDTH * 0.72;

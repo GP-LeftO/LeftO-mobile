@@ -6,10 +6,10 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import Button from "../../components/Button";
+import Button from "../../components/shared/Button";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../hooks/auth/useAuth";
 
 export type PostLoginRoute =
   | "buyer-home"
