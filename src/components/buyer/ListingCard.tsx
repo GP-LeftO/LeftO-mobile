@@ -9,8 +9,10 @@
 
 import React, { useState } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, StyleSheet, Dimensions,
 } from "react-native";
+
+const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2; // 16 left + 16 right + 16 gap
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t } from "../../i18n";
@@ -219,7 +221,7 @@ export function SkeletonCard() {
 
 const styles = StyleSheet.create({
   card: {
-    width: 200,
+    width: CARD_WIDTH,
     backgroundColor: Colors.white,
     borderRadius: 20,
     overflow: "hidden",
@@ -228,7 +230,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 10,
     elevation: 3,
-    marginRight: Spacing.sm,
   },
 
   cardImage: {
@@ -276,6 +277,7 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: Spacing.sm,
     gap: 4,
+    minHeight: 100,
   },
 
   row: { flexDirection: "row", alignItems: "center" },

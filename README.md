@@ -82,18 +82,26 @@ artifacts/lefto-mobile/
 │   │       └── CharityDashboardScreen.tsx
 │   ├── components/
 │   │   ├── buyer/
-│   │   │   └── ListingCard.tsx         # Card with freshness badge, price, sold-out overlay
+│   │   │   ├── ListingCard.tsx         # Card with freshness badge, price, sold-out overlay
+│   │   │   └── filters/
+│   │   │       ├── FilterPanel.tsx     # Slide-up Modal bottom sheet (Animated, no lib)
+│   │   │       ├── CategoryPicker.tsx  # Horizontal chip row, single-select
+│   │   │       ├── FreshnessPicker.tsx # Multi-select chips with emoji badges
+│   │   │       ├── PriceRangeSlider.tsx# Dual-thumb slider (PanResponder, no lib)
+│   │   │       ├── RadiusSelector.tsx  # Segmented 1 km / 5 km / 10 km control
+│   │   │       └── SortOptions.tsx     # Distance / Price / Rating chips
 │   │   ├── Button.tsx
 │   │   ├── OnboardingSlide.tsx
 │   │   ├── RoleCard.tsx
 │   │   ├── PaginationDots.tsx
 │   │   └── LeftOLogo.tsx
 │   ├── hooks/
-│   │   ├── useAuth.ts          # sendOtp, verifyOtp, register, login, logout
-│   │   ├── useSeller.ts        # uploadDocument, registerSeller
-│   │   ├── useListings.ts      # Fetches all listings, derives 3 sorted arrays
-│   │   ├── useSearch.ts        # Debounced search (500ms), empty-query short-circuit
-│   │   ├── useStoreDetails.ts  # Parallel fetch: listing + seller
+│   │   ├── useAuth.ts           # sendOtp, verifyOtp, register, login, logout
+│   │   ├── useSeller.ts         # uploadDocument, registerSeller
+│   │   ├── useListings.ts       # Fetches all listings, derives 3 sorted arrays
+│   │   ├── useSearch.ts         # Debounced search (500ms), empty-query short-circuit
+│   │   ├── useSearchFilters.ts  # Filter state, activeFilterCount, buildQueryParams()
+│   │   ├── useStoreDetails.ts   # Parallel fetch: listing + seller
 │   │   └── useColors.ts
 │   ├── services/
 │   │   ├── api.ts              # Axios instance: token attach + silent 401 refresh
@@ -159,7 +167,7 @@ splash
 | Screen | Details |
 |--------|---------|
 | HomeScreen | 3 sections: Surprise Bags, Parcels & Groceries, Popular Today — real data from `GET /api/listings`, pull-to-refresh, skeleton loading, error + retry, per-section empty states |
-| SearchScreen | Live search bar (auto-focus), 500ms debounce, `GET /api/listings/search`, 5 states: initial / loading skeleton / results / empty / error, RTL icon flip |
+| SearchScreen | Live search bar (auto-focus), 500ms debounce, `GET /api/listings/search`, 5 states: initial / loading skeleton / results / empty / error, RTL icon flip. Smart Filters panel (slide-up modal): category, freshness, price range (dual-thumb slider), radius, sort. Filter count badge on trigger button. Empty-with-filters state has Clear Filters CTA. |
 | StoreDetailsScreen | Hero with freshness badge (green/orange/red), discounted price, pickup window, items left, description, allergen card, star rating, map placeholder, Reserve + Donate CTAs, sold-out state |
 | OrdersScreen | Real orders from `GET /api/orders/me`; Cancel + Confirm Pickup on RESERVED tab |
 | ProfileScreen | Real user data (name, phone, email, member-since) |
@@ -195,7 +203,7 @@ splash
 | GET | `/api/sellers/:id` | listing.service → StoreDetailsScreen |
 | POST | `/api/documents/upload` | document.service |
 | GET | `/api/listings` | useListings → HomeScreen |
-| GET | `/api/listings/search` | search.service → SearchScreen |
+| GET | `/api/listings/search` | search.service → SearchScreen. Filter params: `category` (UPPERCASE enum), `freshness[]`, `minPrice`, `maxPrice`, `radius` (metres), `sortBy` |
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |
 | PATCH | `/api/listings/:id/sold-out` | SellerDashboardScreen |
 | GET | `/api/orders/me` | order.service → OrdersScreen |
