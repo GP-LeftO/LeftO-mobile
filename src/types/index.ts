@@ -58,6 +58,8 @@ export interface SellerDetail {
   businessName: string;
   businessType: string;
   description?: string;
+  hero?: string;
+  heroImage?: string;
   rating?: number;
   reviewCount?: number;
   location?: {

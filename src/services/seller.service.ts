@@ -1,4 +1,26 @@
 import api from "../services/api";
+import type { SellerDetail } from "../types";
+
+export const MOCK_SELLER: SellerDetail = {
+  id: "mock-seller-1",
+  businessName: "Sunrise Bakery",
+  businessType: "BAKERY",
+  description:
+    "Family-run bakery serving fresh bread and pastries since 1998. We rescue unsold items every evening so nothing goes to waste.",
+  hero: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800",
+  heroImage: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800",
+  rating: 4.7,
+  reviewCount: 38,
+  location: {
+    address: "14 Al-Nuzha St, Ramallah",
+    latitude: 31.9038,
+    longitude: 35.2034,
+  },
+  contactInfo: {
+    phone: "+970-2-555-0100",
+    website: "https://sunrisebakery.ps",
+  },
+};
 
 export interface RegisterSellerParams {
   businessName: string;

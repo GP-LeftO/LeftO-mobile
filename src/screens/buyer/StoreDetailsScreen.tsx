@@ -41,11 +41,12 @@ function formatTime(iso: string): string {
   }
 }
 
-function freshnessColors(badge: FreshnessBadge): { bg: string; text: string; hero: string } {
+function freshnessColors(badge: FreshnessBadge | undefined): { bg: string; text: string; hero: string } {
   switch (badge) {
     case "FRESH_TODAY": return { bg: Colors.greenLight, text: Colors.greenMain, hero: "#d1fae5" };
     case "EAT_SOON":    return { bg: Colors.orangeLight, text: Colors.primaryOrange, hero: "#ffe8d6" };
     case "LAST_CHANCE": return { bg: "#fee2e2", text: "#ef4444", hero: "#fecaca" };
+    default:            return { bg: Colors.orangeLight, text: Colors.primaryOrange, hero: "#ffe8d6" };
   }
 }
 
@@ -102,18 +103,8 @@ export default function StoreDetailsScreen({
 
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <BackHeader onBack={onBack} rtl={rtl} topPadding={topPadding} title={tr.title} />
-        <Skeleton />
-      </View>
-    );
-  }
-
   // ── Error ────────────────────────────────────────────────────────────────────
-  if (error || !listing) {
+  if (error) {
     return (
       <View style={styles.container}>
         <BackHeader onBack={onBack} rtl={rtl} topPadding={topPadding} title={tr.title} />
@@ -124,6 +115,16 @@ export default function StoreDetailsScreen({
             <Text style={styles.retryBtnText}>{tr.retry}</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  // ── Loading — show skeleton until both seller and listing are defined ────────
+  if (loading || !listing || !seller) {
+    return (
+      <View style={styles.container}>
+        <BackHeader onBack={onBack} rtl={rtl} topPadding={topPadding} title={tr.title} />
+        <Skeleton />
       </View>
     );
   }
