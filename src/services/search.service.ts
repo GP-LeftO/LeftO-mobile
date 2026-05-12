@@ -8,12 +8,18 @@ import api from "../services/api";
 import type { Listing } from "../types";
 
 export interface SearchParams {
-  q:         string;
-  lat?:      number;
-  lng?:      number;
-  radiusKm?: number;
-  page?:     number;
-  limit?:    number;
+  q?:         string;
+  lat?:       number;
+  lng?:       number;
+  radiusKm?:  number;
+  radius?:    number;
+  category?:  string;   // backend expects UPPERCASE enum: MEALS | BREAD_AND_PASTRIES | GROCERIES | MIXED
+  freshness?: string[];
+  minPrice?:  number;
+  maxPrice?:  number;
+  sortBy?:    string;
+  page?:      number;
+  limit?:     number;
 }
 
 export interface SearchResult {

@@ -157,6 +157,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalList}
+                    ItemSeparatorComponent={() => <View style={styles.cardGap} />}
                     scrollEventThrottle={16}
                   />
                 )
@@ -179,6 +180,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalList}
+                    ItemSeparatorComponent={() => <View style={styles.cardGap} />}
                     scrollEventThrottle={16}
                   />
                 )
@@ -201,6 +203,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalList}
+                    ItemSeparatorComponent={() => <View style={styles.cardGap} />}
                     scrollEventThrottle={16}
                   />
                 )
@@ -315,8 +318,9 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 13, fontWeight: "600", color: Colors.primaryOrange },
 
   horizontalList: { paddingVertical: 4 },
+  cardGap: { width: 12 },
 
-  skeletonRow: { flexDirection: "row", gap: Spacing.sm },
+  skeletonRow: { flexDirection: "row", gap: 12 },
 
   emptySection: {
     paddingVertical: Spacing.md,

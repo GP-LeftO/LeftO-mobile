@@ -4,28 +4,33 @@
  * Buyer search / browse screen. Reached by tapping the search bar on HomeScreen.
  *
  * Layout (top → bottom):
- *   • Sticky header: back button + live TextInput search bar + X clear button
- *   • Scrollable results area:
- *       - Initial state  → "Start searching" prompt
- *       - Loading state  → 4 skeleton placeholder cards
- *       - Results        → vertical list of ListingCards (tap → StoreDetails)
- *       - Empty state    → no results message + clear button
- *       - Error state    → error message + retry button
- *
- * RTL: search icon/X flip, text alignment follows isRTL().
+ *   • Sticky header: back + search bar + Filters button (with badge)
+ *   • Scrollable results:
+ *       - Initial state   → prompt
+ *       - Loading         → skeleton cards
+ *       - Results         → 2-column listing grid
+ *       - Empty (search)  → no results message
+ *       - Empty (filters) → no filter match + Clear Filters CTA
+ *       - Error           → error + retry
+ *   • FilterPanel (Modal bottom sheet)
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
-  FlatList, StyleSheet, Platform, ActivityIndicator,
+  FlatList, StyleSheet, Platform, Dimensions,
 } from "react-native";
+
+const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2; // 16 left + 16 right + 16 gap
+type GridItem = Listing | { id: string; _placeholder: true };
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
-import { useSearch } from "../../hooks/useSearch";
+import { searchListings } from "../../services/search.service";
+import { useSearchFilters, DEFAULT_FILTERS, FilterState, CATEGORY_API_MAP } from "../../hooks/useSearchFilters";
 import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
+import { FilterPanel } from "../../components/buyer/filters/FilterPanel";
 import type { Listing, StoreDetailsParams } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,7 +40,20 @@ interface SearchScreenProps {
   onListingPress?: (params: StoreDetailsParams) => void;
 }
 
-// ─── Skeletons ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isDefaultFilters(f: FilterState): boolean {
+  return (
+    f.category  === DEFAULT_FILTERS.category  &&
+    f.freshness.length === 0                  &&
+    f.price_min === DEFAULT_FILTERS.price_min &&
+    f.price_max === DEFAULT_FILTERS.price_max &&
+    f.radius    === DEFAULT_FILTERS.radius    &&
+    f.sort_by   === DEFAULT_FILTERS.sort_by
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonList() {
   return (
@@ -51,8 +69,8 @@ function SkeletonList() {
 }
 
 const skeletonStyles = StyleSheet.create({
-  wrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, gap: Spacing.sm },
-  row:  { flexDirection: "row", gap: Spacing.sm },
+  wrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm },
+  row:  { flexDirection: "row", justifyContent: "space-between" },
 });
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -64,39 +82,138 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
   const rtl        = isRTL();
   const tr         = t().search;
 
-  const inputRef             = useRef<TextInput>(null);
-  const [query, setQuery]    = useState("");
-  const { listings, isLoading, error, refetch } = useSearch(query);
+  const inputRef = useRef<TextInput>(null);
 
-  // Auto-focus on mount
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [query,     setQuery]     = useState("");
+  const [listings,  setListings]  = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  // ── Filters ────────────────────────────────────────────────────────────────
+  const { filters, applyFilters, clearFilters, activeFilterCount } =
+    useSearchFilters();
+
+  // Always-current refs so effects don't capture stale values
+  const queryRef   = useRef(query);
+  const filtersRef = useRef(filters);
+  queryRef.current   = query;
+  filtersRef.current = filters;
+
+  // ── Core fetch ─────────────────────────────────────────────────────────────
+  const doSearch = useCallback(async (q: string, f: FilterState) => {
+    const hasQuery   = q.trim().length > 0;
+    const hasFilters = !isDefaultFilters(f);
+
+    if (!hasQuery && !hasFilters) {
+      setListings([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await searchListings({
+        q:         q.trim() || undefined,
+        radius:    f.radius,
+        category:  f.category !== "all" ? CATEGORY_API_MAP[f.category] : undefined,
+        freshness: f.freshness.length > 0 ? f.freshness : undefined,
+        minPrice:  f.price_min > 0   ? f.price_min : undefined,
+        maxPrice:  f.price_max < 100 ? f.price_max : undefined,
+        sortBy:    f.sort_by !== "distance" ? f.sort_by : undefined,
+        limit:     30,
+      });
+      setListings(result.listings);
+    } catch {
+      setError("error");
+      setListings([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ── Debounced re-fetch when query changes ──────────────────────────────────
+  useEffect(() => {
+    if (!query.trim() && isDefaultFilters(filtersRef.current)) {
+      setListings([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      doSearch(queryRef.current, filtersRef.current);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [query, doSearch]);
+
+  // ── Auto-focus on mount ────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 150);
     return () => clearTimeout(timer);
   }, []);
 
+  // ── Filter apply ───────────────────────────────────────────────────────────
+  const handleFiltersApply = useCallback((newFilters: FilterState) => {
+    applyFilters(newFilters);
+    // Immediate search (not debounced) with the new filters
+    doSearch(queryRef.current, newFilters);
+  }, [applyFilters, doSearch]);
+
+  const handleClearAll = useCallback(() => {
+    clearFilters();
+    doSearch(queryRef.current, DEFAULT_FILTERS);
+  }, [clearFilters, doSearch]);
+
+  // ── Search bar clear ───────────────────────────────────────────────────────
   const handleClear = () => {
     setQuery("");
     inputRef.current?.focus();
+    if (!isDefaultFilters(filtersRef.current)) {
+      doSearch("", filtersRef.current);
+    } else {
+      setListings([]);
+    }
   };
 
-  const isEmpty = query.trim().length > 0 && !isLoading && listings.length === 0 && !error;
-  const isInitial = query.trim().length === 0;
+  // ── Retry ──────────────────────────────────────────────────────────────────
+  const refetch = useCallback(() => {
+    doSearch(queryRef.current, filtersRef.current);
+  }, [doSearch]);
 
-  const renderCard = ({ item }: { item: Listing }) => (
-    <View style={styles.cardWrapper}>
+  // ── Derived states ─────────────────────────────────────────────────────────
+  const hasFilters    = activeFilterCount > 0;
+  const isInitial     = query.trim().length === 0 && !hasFilters;
+  const isEmpty       = !isLoading && !error && listings.length === 0 && !isInitial;
+
+  // ── Card renderer ──────────────────────────────────────────────────────────
+  const renderCard = ({ item }: { item: GridItem }) => {
+    if ("_placeholder" in item) return <View style={{ width: CARD_WIDTH }} />;
+    return (
       <ListingCard
         listing={item}
         rtl={rtl}
         onPress={(params) => onListingPress?.(params)}
         userAllergyPreferences={[]}
       />
-    </View>
-  );
+    );
+  };
+
+  const gridData: GridItem[] = listings.length % 2 !== 0
+    ? [...listings, { id: "__placeholder__", _placeholder: true as const }]
+    : listings;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.container, { paddingTop: topPadding }]}>
 
-      {/* ── Sticky Header: back + search input ── */}
+      {/* ── Sticky Header ── */}
       <View style={[styles.header, rtl && styles.rowReverse]}>
 
         {/* Back button */}
@@ -114,7 +231,6 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
           rtl && styles.rowReverse,
           { borderColor: query.length > 0 ? Colors.primaryOrange : Colors.grayLight },
         ]}>
-          {/* Leading icon */}
           {rtl ? (
             query.length > 0 ? (
               <TouchableOpacity onPress={handleClear} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -140,7 +256,6 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
             textAlign={rtl ? "right" : "left"}
           />
 
-          {/* Trailing icon */}
           {rtl ? (
             <Feather name="search" size={18} color={query.length > 0 ? Colors.primaryOrange : Colors.grayMedium} />
           ) : (
@@ -151,6 +266,20 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
             )
           )}
         </View>
+
+        {/* Filters button */}
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => setPanelOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Feather name="sliders" size={18} color={hasFilters ? Colors.white : Colors.grayDark} />
+          {activeFilterCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* ── Results area ── */}
@@ -178,22 +307,30 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
       )}
 
       {/* Empty state */}
-      {isEmpty && (
+      {isEmpty && !error && (
         <View style={styles.centerWrap}>
           <Text style={styles.centerEmoji}>📦</Text>
           <Text style={[styles.centerText, rtl && styles.textRight]}>
-            {tr.noResults.replace("{query}", query)}
+            {hasFilters
+              ? tr.noFilterResults
+              : tr.noResults.replace("{query}", query)}
           </Text>
-          <TouchableOpacity style={styles.clearBtn} onPress={handleClear} activeOpacity={0.8}>
-            <Text style={styles.clearBtnText}>{tr.clearSearch}</Text>
-          </TouchableOpacity>
+          {hasFilters ? (
+            <TouchableOpacity style={styles.actionBtn} onPress={handleClearAll} activeOpacity={0.8}>
+              <Text style={styles.actionBtnText}>{t().filters.clearFilters}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.clearBtn} onPress={handleClear} activeOpacity={0.8}>
+              <Text style={styles.clearBtnText}>{tr.clearSearch}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
-      {/* Results list */}
+      {/* Results grid */}
       {!isLoading && !error && listings.length > 0 && (
-        <FlatList
-          data={listings}
+        <FlatList<GridItem>
+          data={gridData}
           renderItem={renderCard}
           keyExtractor={(item) => item.id}
           numColumns={2}
@@ -207,6 +344,14 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
         />
       )}
 
+      {/* ── Filter panel ── */}
+      <FilterPanel
+        visible={panelOpen}
+        initialFilters={filters}
+        onClose={() => setPanelOpen(false)}
+        onApply={handleFiltersApply}
+      />
+
     </View>
   );
 }
@@ -214,9 +359,9 @@ export default function SearchScreen({ onBack, onListingPress }: SearchScreenPro
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: Colors.background },
-  rowReverse:   { flexDirection: "row-reverse" },
-  textRight:    { textAlign: "right" },
+  container:  { flex: 1, backgroundColor: Colors.background },
+  rowReverse: { flexDirection: "row-reverse" },
+  textRight:  { textAlign: "right" },
 
   header: {
     flexDirection: "row",
@@ -256,18 +401,40 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
 
+  // Filters button
+  filterBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Colors.primaryOrange,
+    alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  badge: {
+    position: "absolute",
+    top: -2, right: -2,
+    minWidth: 16, height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.white,
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryOrange,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.primaryOrange,
+    lineHeight: 11,
+  },
+
   // Results
   listContent: {
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    paddingTop: Spacing.sm,
   },
   columnWrapper: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  cardWrapper: {
-    flex: 1,
-    maxWidth: 200,
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    marginBottom: 12,
   },
 
   // Center states
