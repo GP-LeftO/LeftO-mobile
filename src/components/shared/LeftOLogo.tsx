@@ -28,7 +28,7 @@ export default function LeftOLogo({ size = "md", showText = true }: LeftOLogoPro
         ]}
       >
         <Image
-          source={require("../../assets/images/logo.png")}
+          source={require("../../../assets/images/logo.png")}
           style={styles.image}
           resizeMode="cover"
         />

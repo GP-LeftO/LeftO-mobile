@@ -105,6 +105,23 @@
     "km10": "10 كم",
     "priceLabel": "{min} شيكل – {max} شيكل"
   },
+  "browse": {
+    "listView": "قائمة",
+    "mapView": "خريطة",
+    "noSellersNearby": "لا يوجد بائعون في هذه المنطقة",
+    "locationDenied": "تم رفض الوصول للموقع — عرض منطقة نابلس",
+    "reserve": "احجز",
+    "donate": "تبرع",
+    "itemsLeft": "{count} متبقي",
+    "pickupWindow": "الاستلام {start} – {end}",
+    "distanceKm": "على بُعد {dist} كم",
+    "surpriseBag": "كيس مفاجأة",
+    "specificParcel": "طرد محدد",
+    "soldOut": "نفد المخزون",
+    "recenter": "موقعي",
+    "mapError": "تعذّر تحميل البائعين. انقر للمحاولة مجدداً.",
+    "retry": "إعادة المحاولة"
+  },
   "storeDetails": {
     "title": "تفاصيل المتجر",
     "loading": "جاري تحميل التفاصيل…",
