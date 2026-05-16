@@ -50,9 +50,13 @@ export default function RoleSpecificInfoScreen({
 
   const { uploadDocument, registerSeller } = useSeller();
 
-  // ── buyer state
+  // ── location state
   const [pickedLocation,   setPickedLocation]  = useState<PickedLocation | null>(null);
   const [showMap,          setShowMap]          = useState(false);
+  const [locationMode,     setLocationMode]     = useState<"map" | "manual">("map");
+  const [manualAddress,    setManualAddress]    = useState("");
+
+  // ── buyer state
   const [selectedPrefs,    setSelectedPrefs]    = useState<string[]>([]);
   const [selectedWindows,  setSelectedWindows]  = useState<string[]>([]);
 
@@ -104,7 +108,10 @@ export default function RoleSpecificInfoScreen({
     }
     if (role === "seller") {
       if (!businessType)               e.btype = rtl ? "اختر نوع عملك"  : "Select your business type";
-      if (!pickedLocation)             e.location = rtl ? "يرجى تحديد موقع عملك" : "Please select your business location";
+      if (locationMode === "map" && !pickedLocation)
+                                       e.location = rtl ? "يرجى تحديد موقع عملك على الخريطة" : "Please select your business location on the map";
+      if (locationMode === "manual" && !manualAddress.trim())
+                                       e.location = rtl ? "يرجى كتابة عنوان عملك" : "Please enter your business address";
       if (!description.trim())         e.desc  = rtl ? "يرجى وصف عملك"  : "Please describe your business";
     }
     if (role === "charity") {
@@ -171,11 +178,13 @@ export default function RoleSpecificInfoScreen({
         await registerSeller({
           businessName: name,
           businessType: businessType as "RESTAURANT" | "MARKET" | "BAKERY",
-          location: {
-            latitude:  pickedLocation?.latitude  ?? 0,
-            longitude: pickedLocation?.longitude ?? 0,
-            address:   pickedLocation?.address,
-          },
+          location: locationMode === "manual"
+            ? { latitude: 0, longitude: 0, address: manualAddress.trim() }
+            : {
+                latitude:  pickedLocation?.latitude  ?? 0,
+                longitude: pickedLocation?.longitude ?? 0,
+                address:   pickedLocation?.address,
+              },
           description: description || undefined,
           documentUrls,
         });
@@ -321,26 +330,72 @@ export default function RoleSpecificInfoScreen({
           {role === "seller" && (
             <Animated.View entering={FadeInDown.delay(240).duration(500).springify()} style={styles.section}>
               <Text style={styles.sectionLabel}><Feather name="map-pin" size={14} color={Colors.primaryOrange} /> {rtl ? "موقع العمل" : "Business location"}</Text>
-              {pickedLocation ? (
-                <TouchableOpacity style={styles.locationSelected} onPress={() => setShowMap(true)} activeOpacity={0.85}>
-                  <View style={styles.locationSelectedIcon}><Feather name="map-pin" size={18} color={Colors.primaryOrange} /></View>
-                  <View style={styles.locationSelectedText}>
-                    <Text style={styles.locationSelectedAddress} numberOfLines={2}>{pickedLocation.address}</Text>
-                    <Text style={styles.locationSelectedChange}>{rtl ? "اضغط للتغيير" : "Tap to change"}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color={Colors.grayMedium} />
-                </TouchableOpacity>
-              ) : (
+
+              {/* Map / Type toggle */}
+              <View style={styles.locationToggle}>
                 <TouchableOpacity
-                  style={[styles.mapPickerBtn, !!errors.location && styles.mapPickerBtnError]}
-                  onPress={() => { setShowMap(true); setErrors(e => ({ ...e, location: "" })); }}
-                  activeOpacity={0.85}
+                  style={[styles.locationToggleBtn, locationMode === "map" && styles.locationToggleActive]}
+                  onPress={() => { setLocationMode("map"); setErrors(e => ({ ...e, location: "" })); }}
+                  activeOpacity={0.8}
                 >
-                  <View style={styles.mapPickerBtnInner}><View style={styles.mapPreviewDot} /><Feather name="map" size={26} color={Colors.primaryOrange} /></View>
-                  <Text style={styles.mapPickerBtnLabel}>{rtl ? "اختر على الخريطة" : "Choose on map"}</Text>
-                  <Text style={styles.mapPickerBtnSub}>{rtl ? "اضغط لفتح الخريطة وتثبيت موقع عملك" : "Tap to open the map and pin your business location"}</Text>
+                  <Feather name="map" size={14} color={locationMode === "map" ? Colors.white : Colors.grayMedium} />
+                  <Text style={[styles.locationToggleText, locationMode === "map" && styles.locationToggleTextActive]}>
+                    {rtl ? "اختر على الخريطة" : "Pick on map"}
+                  </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.locationToggleBtn, locationMode === "manual" && styles.locationToggleActive]}
+                  onPress={() => { setLocationMode("manual"); setErrors(e => ({ ...e, location: "" })); }}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="edit-2" size={14} color={locationMode === "manual" ? Colors.white : Colors.grayMedium} />
+                  <Text style={[styles.locationToggleText, locationMode === "manual" && styles.locationToggleTextActive]}>
+                    {rtl ? "اكتب العنوان" : "Type address"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Map mode */}
+              {locationMode === "map" && (
+                pickedLocation ? (
+                  <TouchableOpacity style={styles.locationSelected} onPress={() => setShowMap(true)} activeOpacity={0.85}>
+                    <View style={styles.locationSelectedIcon}><Feather name="map-pin" size={18} color={Colors.primaryOrange} /></View>
+                    <View style={styles.locationSelectedText}>
+                      <Text style={styles.locationSelectedAddress} numberOfLines={2}>{pickedLocation.address}</Text>
+                      <Text style={styles.locationSelectedChange}>{rtl ? "اضغط للتغيير" : "Tap to change"}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={Colors.grayMedium} />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.mapPickerBtn, !!errors.location && styles.mapPickerBtnError]}
+                    onPress={() => { setShowMap(true); setErrors(e => ({ ...e, location: "" })); }}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.mapPickerBtnInner}><View style={styles.mapPreviewDot} /><Feather name="map" size={26} color={Colors.primaryOrange} /></View>
+                    <Text style={styles.mapPickerBtnLabel}>{rtl ? "اختر على الخريطة" : "Choose on map"}</Text>
+                    <Text style={styles.mapPickerBtnSub}>{rtl ? "اضغط لفتح الخريطة وتثبيت موقع عملك" : "Tap to open the map and pin your business location"}</Text>
+                  </TouchableOpacity>
+                )
               )}
+
+              {/* Manual mode */}
+              {locationMode === "manual" && (
+                <View style={[styles.textAreaWrap, !!errors.location && styles.inputError, styles.addressInputWrap]}>
+                  <Feather name="map-pin" size={16} color={Colors.primaryOrange} style={styles.addressInputIcon} />
+                  <TextInput
+                    style={styles.addressInput}
+                    value={manualAddress}
+                    onChangeText={v => { setManualAddress(v); setErrors(e => ({ ...e, location: "" })); }}
+                    placeholder={rtl ? "مثال: شارع النزهة، نابلس" : "e.g. Al-Nuzha St, Nablus"}
+                    placeholderTextColor={Colors.grayMedium}
+                    textAlign={rtl ? "right" : "left"}
+                    returnKeyType="done"
+                    autoCapitalize="words"
+                  />
+                </View>
+              )}
+
               {!!errors.location && <Text style={styles.errorText}>{errors.location}</Text>}
             </Animated.View>
           )}
@@ -523,4 +578,18 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, backgroundColor: Colors.grayLight, borderRadius: 4, overflow: "hidden" },
   progressFill: { height: 8, backgroundColor: Colors.primaryOrange, borderRadius: 4 },
   progressPct: { fontSize: 12, color: Colors.grayMedium },
+
+  locationToggle: { flexDirection: "row", gap: 8 },
+  locationToggleBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
+  locationToggleActive: { backgroundColor: Colors.primaryOrange, borderColor: Colors.primaryOrange },
+  locationToggleText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
+  locationToggleTextActive: { color: Colors.white },
+
+  addressInputWrap: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 0 },
+  addressInputIcon: { marginLeft: 2 },
+  addressInput: { flex: 1, fontSize: 15, color: Colors.grayDark, paddingVertical: 4 },
 });

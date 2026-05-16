@@ -105,6 +105,23 @@
     "km10": "10 km",
     "priceLabel": "{min} ILS – {max} ILS"
   },
+  "browse": {
+    "listView": "List",
+    "mapView": "Map",
+    "noSellersNearby": "No sellers found in this area",
+    "locationDenied": "Location access denied — showing Nablus area",
+    "reserve": "Reserve",
+    "donate": "Donate",
+    "itemsLeft": "{count} left",
+    "pickupWindow": "Pickup {start} – {end}",
+    "distanceKm": "{dist} km away",
+    "surpriseBag": "Surprise Bag",
+    "specificParcel": "Specific Parcel",
+    "soldOut": "Sold Out",
+    "recenter": "My Location",
+    "mapError": "Could not load sellers. Tap to retry.",
+    "retry": "Retry"
+  },
   "storeDetails": {
     "title": "Store Details",
     "loading": "Loading details…",

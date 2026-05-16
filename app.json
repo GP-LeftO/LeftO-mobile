@@ -28,7 +28,10 @@
       "favicon": "./assets/images/logo.png"
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-location",
+         { "locationWhenInUsePermission": "LeftO needs your location to show nearby sellers." }]
     ]
   }
 }

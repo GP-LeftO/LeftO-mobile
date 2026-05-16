@@ -20,7 +20,7 @@ import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
 import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
-import SearchScreen           from "./src/screens/buyer/SearchScreen";
+import BrowseScreen           from "./src/features/browse/BrowseScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -285,7 +285,7 @@ function AppContent() {
 
       {step === "buyer-search" &&
         screen(
-          <SearchScreen
+          <BrowseScreen
             onBack={goBack}
             onListingPress={handleListingPress}
           />

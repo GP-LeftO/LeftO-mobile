@@ -14,6 +14,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, ActivityIndicator,
 } from "react-native";
+import LeafletMap from "../../components/shared/LeafletMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
@@ -136,9 +137,19 @@ export default function StoreDetailsScreen({
   const pickupWindow  = listing.pickupStart && listing.pickupEnd
     ? `${formatTime(listing.pickupStart)} – ${formatTime(listing.pickupEnd)}`
     : null;
-  const displayRating     = listing.rating ?? seller?.rating;
+  const displayRating      = listing.rating ?? seller?.rating;
   const displayReviewCount = listing.reviewCount ?? seller?.reviewCount;
-  const address       = listing.seller?.location?.address ?? seller?.location?.address;
+  const address            = listing.seller?.location?.address ?? seller?.location?.address;
+  const sellerLat          = seller?.location?.latitude  ?? listing.seller?.location?.latitude;
+  const sellerLng          = seller?.location?.longitude ?? listing.seller?.location?.longitude;
+  // 0,0 is the dummy value sent when a seller typed their address manually — not a real coordinate
+  const hasCoords          = sellerLat != null && sellerLng != null && (sellerLat !== 0 || sellerLng !== 0);
+  // Always show a real map — fall back to a central Palestine coordinate when the
+  // backend hasn't populated seller coordinates yet.
+  const PALESTINE_CENTER = { latitude: 31.9524, longitude: 35.2332 };
+  const mapCenter = hasCoords
+    ? { latitude: sellerLat!, longitude: sellerLng! }
+    : PALESTINE_CENTER;
 
   return (
     <View style={styles.container}>
@@ -275,16 +286,20 @@ export default function StoreDetailsScreen({
             </View>
           )}
 
-          {/* Location / Map placeholder */}
+          {/* Location / Map */}
           <View style={styles.card}>
             <View style={[styles.row, rtl && styles.rowReverse, { gap: 8, marginBottom: 10 }]}>
               <Feather name="map-pin" size={16} color={Colors.primaryOrange} />
               <Text style={[styles.sectionTitle, rtl && styles.textRight]}>{tr.location}</Text>
             </View>
-            <View style={styles.mapPlaceholder}>
-              <Feather name="map" size={28} color={Colors.grayMedium} />
-              <Text style={styles.mapPlaceholderText}>{tr.mapPlaceholder}</Text>
+
+            <View style={styles.mapWrapper}>
+              <LeafletMap
+                latitude={mapCenter.latitude}
+                longitude={mapCenter.longitude}
+              />
             </View>
+
             <Text style={[styles.address, rtl && styles.textRight]}>
               {address ?? tr.noAddress}
             </Text>
@@ -492,15 +507,16 @@ const styles = StyleSheet.create({
   ratingText: { fontSize: 16, fontWeight: "700", color: Colors.grayDark },
   reviewCount: { fontSize: 13, fontWeight: "400", color: Colors.grayMedium },
 
-  // Map placeholder
-  mapPlaceholder: {
-    height: 110, borderRadius: 14,
-    backgroundColor: Colors.grayLight,
-    alignItems: "center", justifyContent: "center",
-    gap: 6,
+  // Map — wrapper clips borderRadius on Android (MapView ignores overflow)
+  mapWrapper: {
+    height: 180,
+    borderRadius: 14,
+    overflow: "hidden",
     marginBottom: 6,
   },
-  mapPlaceholderText: { fontSize: 13, color: Colors.grayMedium },
+  map: {
+    flex: 1,
+  },
   address: { fontSize: 13, color: Colors.grayMedium, lineHeight: 18 },
 
   // Error
