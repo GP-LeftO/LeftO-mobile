@@ -7,7 +7,7 @@
  * Also exports SkeletonCard for loading placeholder states.
  */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
 } from "react-native";
@@ -16,14 +16,15 @@ const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2; // 16 left + 16 ri
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t } from "../../i18n";
+import { useFavoritesContext } from "../../context/shared/FavoritesContext";
 import type { Listing, FreshnessBadge, ListingType } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ListingCardProps {
-  listing:                Listing;
-  rtl:                    boolean;
-  onPress:                (params: { listingId: string; sellerId: string }) => void;
+  listing:                 Listing;
+  rtl:                     boolean;
+  onPress:                 (params: { listingId: string; sellerId: string }) => void;
   userAllergyPreferences?: string[];
 }
 
@@ -81,7 +82,8 @@ export default function ListingCard({
   onPress,
   userAllergyPreferences = [],
 }: ListingCardProps) {
-  const [isFav, setIsFav] = useState(false);
+  const { isFavorited, addFavorite, removeFavorite } = useFavoritesContext();
+  const isHearted = isFavorited(listing.seller.id);
 
   const tr = t().home;
   const isSoldOut = listing.status === "SOLD_OUT";
@@ -143,13 +145,19 @@ export default function ListingCard({
               <Feather name="alert-triangle" size={16} color="#f59e0b" />
             )}
             <TouchableOpacity
-              onPress={() => setIsFav((v) => !v)}
+              onPress={() => {
+                if (isHearted) {
+                  removeFavorite(listing.seller.id);
+                } else {
+                  addFavorite(listing.seller.id);
+                }
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Feather
-                name={isFav ? "heart" : "heart"}
+                name="heart"
                 size={18}
-                color={isFav ? "#ef4444" : Colors.grayLight}
+                color={isHearted ? "#ef4444" : Colors.grayLight}
               />
             </TouchableOpacity>
           </View>

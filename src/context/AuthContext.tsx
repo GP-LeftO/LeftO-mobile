@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setApiToken } from "../services/shared/api";
 
 export type UserRole = "BUYER" | "SELLER" | "CHARITY" | "ADMIN";
 export type SellerStatus = "PENDING" | "APPROVED" | "REJECTED" | null;
@@ -64,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const charitySt   = stored[4][1] as SellerStatus;
 
         if (access && userJson) {
+          setApiToken(access);
           setAccessToken(access);
           setRefreshToken(refresh);
           setUser(JSON.parse(userJson));
@@ -93,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (charityStatus) pairs.push(["charityStatus", charityStatus]);
 
     await AsyncStorage.multiSet(pairs);
+    setApiToken(accessToken);
     setUser(user);
     setAccessToken(accessToken);
     if (refreshToken)  setRefreshToken(refreshToken);
@@ -102,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearSession = async () => {
     await AsyncStorage.multiRemove(["accessToken", "refreshToken", "authUser", "sellerStatus", "charityStatus"]);
+    setApiToken(null);
     setUser(null);
     setAccessToken(null);
     setRefreshToken(null);

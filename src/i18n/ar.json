@@ -148,5 +148,25 @@
     "noDescription": "لا يوجد وصف متاح.",
     "reservedSuccess": "تم الحجز بنجاح!",
     "donatedSuccess": "تم التبرع بنجاح!"
+  },
+  "favorites": {
+    "title": "المفضلة",
+    "loading": "جاري تحميل المفضلة…",
+    "error": "تعذّر تحميل المفضلة. يرجى المحاولة مجدداً",
+    "retry": "إعادة المحاولة",
+    "emptyTitle": "لا توجد محلات محفوظة",
+    "emptySubtitle": "لا توجد محلات محفوظة بعد — ابدأ بحفظ المحلات!",
+    "browseStores": "تصفح المحلات",
+    "removedToast": "تمت الإزالة من المفضلة",
+    "errorToast": "حدث خطأ ما. يرجى المحاولة مجدداً.",
+    "surpriseBag": "كيس مفاجأة",
+    "specificParcel": "طرد محدد",
+    "soldOut": "نفد المخزون",
+    "itemsLeft": "{count} متبقي",
+    "pickupWindow": "الاستلام {start} – {end}",
+    "distanceKm": "على بُعد {dist} كم",
+    "notificationOn": "الإشعارات مفعّلة",
+    "notificationOff": "الإشعارات مغلقة",
+    "removeFavorite": "إزالة من المفضلة"
   }
 }

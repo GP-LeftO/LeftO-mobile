@@ -1,6 +1,13 @@
 # LeftO Mobile
 
-LeftO is a platform that connects customers with surplus good-quality food from local restaurants, markets, and bakeries at reduced prices. Customers can also donate to verified charity organisations, who distribute food to people in need — with full transparency and trust. Built for Palestine, with full Arabic (RTL) and English support.
+**Food rescue, built for Palestine.** LeftO connects buyers with local stores selling surplus food at discounted prices, reducing waste and supporting communities. Donations flow to verified charities with full transparency.
+
+> *Too good to waste.*
+
+![React Native](https://img.shields.io/badge/React_Native-0.83-61DAFB?logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-55-000020?logo=expo&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![i18n](https://img.shields.io/badge/i18n-Arabic%20%2B%20English-16A34A)
 
 ---
 
@@ -172,6 +179,14 @@ splash
 | OrdersScreen | Real orders from `GET /api/orders/me`; Cancel + Confirm Pickup on RESERVED tab |
 | ProfileScreen | Real user data (name, phone, email, member-since) |
 
+### Favorites
+- View all saved stores with their latest active listing (bag type, pickup window, distance, price)
+- Bell icon toggles per-store notifications (local state — no API call required)
+- Heart icon removes a store instantly with **optimistic UI** and a success toast; reverts on API failure
+- Skeleton loading state while favorites are fetched
+- Empty state with CTA to navigate to the Browse screen
+- Full Arabic RTL + English LTR layout support
+
 ### Seller
 | Screen | Details |
 |--------|---------|
@@ -207,6 +222,8 @@ splash
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |
 | PATCH | `/api/listings/:id/sold-out` | SellerDashboardScreen |
 | GET | `/api/orders/me` | order.service → OrdersScreen |
+| GET | `/api/favorites/me` | favorites.service → FavoritesScreen |
+| DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic remove) |
 
 ---
 

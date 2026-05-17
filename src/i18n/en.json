@@ -148,5 +148,25 @@
     "noDescription": "No description provided.",
     "reservedSuccess": "Reserved successfully!",
     "donatedSuccess": "Donated successfully!"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "loading": "Loading favorites…",
+    "error": "Could not load favorites. Please try again.",
+    "retry": "Retry",
+    "emptyTitle": "No favorites yet",
+    "emptySubtitle": "No favorites yet — start saving stores!",
+    "browseStores": "Browse Stores",
+    "removedToast": "Removed from favorites",
+    "errorToast": "Something went wrong. Please try again.",
+    "surpriseBag": "Surprise Bag",
+    "specificParcel": "Specific Parcel",
+    "soldOut": "Sold Out",
+    "itemsLeft": "{count} left",
+    "pickupWindow": "Pickup {start} – {end}",
+    "distanceKm": "{dist} km away",
+    "notificationOn": "Notifications on",
+    "notificationOff": "Notifications off",
+    "removeFavorite": "Remove from favorites"
   }
 }
