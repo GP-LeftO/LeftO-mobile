@@ -45,7 +45,11 @@ const MENU_SECTIONS = [
   },
 ];
 
-export default function ProfileScreen() {
+interface ProfileScreenProps {
+  onLogout?: () => void;
+}
+
+export default function ProfileScreen({ onLogout }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl = isRTL();
@@ -200,7 +204,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.signOutBtn}
           activeOpacity={0.8}
-          onPress={() => logout()}
+          onPress={() => { logout(); onLogout?.(); }}
         >
           <Feather name="log-out" size={17} color="#ef4444" />
           <Text style={styles.signOutText}>{rtl ? "تسجيل الخروج" : "Sign Out"}</Text>

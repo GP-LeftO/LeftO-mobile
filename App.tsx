@@ -14,13 +14,12 @@ import RoleSelectionScreen    from "./src/screens/registration/RoleSelectionScre
 import BasicInfoScreen        from "./src/screens/registration/BasicInfoScreen";
 import RoleSpecificInfoScreen from "./src/screens/registration/RoleSpecificInfoScreen";
 import PendingScreen          from "./src/screens/seller/PendingScreen";
-import HomeScreen             from "./src/screens/buyer/HomeScreen";
 import SignInScreen           from "./src/screens/auth/SignInScreen";
 import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
 import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
-import BrowseScreen           from "./src/features/browse/BrowseScreen";
+import BuyerTabNavigator      from "./src/navigation/BuyerTabNavigator";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -44,7 +43,6 @@ type AppStep =
   | "under-review"
   | "rejected"
   | "buyer-home"
-  | "buyer-search"
   | "seller-dashboard"
   | "charity-dashboard"
   | "store-details";
@@ -275,18 +273,8 @@ function AppContent() {
 
       {step === "buyer-home" &&
         screen(
-          <HomeScreen
+          <BuyerTabNavigator
             onLogout={handleLogout}
-            onListingPress={handleListingPress}
-            onSearchPress={() => goTo("buyer-search")}
-          />
-        )
-      }
-
-      {step === "buyer-search" &&
-        screen(
-          <BrowseScreen
-            onBack={goBack}
             onListingPress={handleListingPress}
           />
         )

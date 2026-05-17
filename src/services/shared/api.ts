@@ -9,15 +9,19 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ─── Request interceptor: attach access token ────────────────────────────────
-api.interceptors.request.use(
-  async (config) => {
-    const token = await AsyncStorage.getItem("accessToken");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// ─── Token management ─────────────────────────────────────────────────────────
+// Set/clear the Authorization header on the shared axios instance.
+// Called by AuthContext on login, logout, and cold-start restore.
+// Using api.defaults ensures every request includes the header without
+// relying on an async interceptor, which can silently drop header mutations
+// in Axios 1.x.
+export function setApiToken(token: string | null): void {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+}
 
 // ─── Response interceptor: silent token refresh on 401 ───────────────────────
 let isRefreshing = false;
@@ -60,6 +64,7 @@ api.interceptors.response.use(
       const newAccess: string = data.data.accessToken;
 
       await AsyncStorage.setItem("accessToken", newAccess);
+      setApiToken(newAccess);
       processQueue(null, newAccess);
 
       original.headers.Authorization = `Bearer ${newAccess}`;
@@ -67,6 +72,7 @@ api.interceptors.response.use(
     } catch (err) {
       processQueue(err, null);
       await AsyncStorage.multiRemove(["accessToken", "refreshToken"]);
+      setApiToken(null);
       return Promise.reject(err);
     } finally {
       isRefreshing = false;
