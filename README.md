@@ -199,6 +199,16 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 | ProfileScreen | Real user data (name, phone, email, member-since) |
 | ChatbotScreen | AI assistant accessible from Profile → Customer Support; orange header with 🤖 avatar; 4 Arabic suggested chips (hidden after first message); inverted FlatList with animated 3-dot typing indicator; per-message RTL via `isArabicText()`; error bubble on failure; `KeyboardAvoidingView` |
 
+### Chatbot Screen
+- Screen: `src/screens/buyer/support/ChatbotScreen.tsx`
+- Hook: `src/hooks/buyer/support/useChatbot.ts`
+- Service: `src/services/buyer/support/chatbotService.ts`
+- Types: `src/types/chatbot.ts`
+- API: POST /api/chatbot/message (shape verified from Swagger)
+- Auth: JWT from AuthContext sent in Authorization header
+- Message history: session-only, no persistence
+- RTL: handled per message bubble, not globally
+
 ### Favorites
 - View all saved stores with their latest active listing (bag type, pickup window, distance, price)
 - Bell icon toggles per-store notifications (local state — no API call required)
@@ -244,7 +254,7 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 | GET | `/api/orders/me` | order.service → OrdersScreen |
 | GET | `/api/favorites/me` | favorites.service → FavoritesScreen |
 | DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic remove) |
-| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen. Body: `{ message, lat?, lng? }`. Auth via shared axios instance |
+| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen. Body: `{ message, lat?, lng? }`. Response: `{ reply }` |
 
 ---
 
