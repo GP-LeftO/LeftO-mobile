@@ -49,7 +49,7 @@ export function useChatbot() {
       }
 
       try {
-        const response = await chatbotService.sendMessage({ message: trimmed }, accessToken);
+        const response = await chatbotService.sendMessage({ message: trimmed });
         setMessages(prev => [
           ...prev,
           { id: (Date.now() + 1).toString(), role: 'bot', text: response.reply, timestamp: new Date() },
