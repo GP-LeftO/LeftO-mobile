@@ -1,5 +1,18 @@
 export type UserRole = "buyer" | "seller" | "charity" | null;
 
+// Lowercase values match what the backend stores and returns (GET /api/users/me)
+export type AllergyOption =
+  | "gluten"
+  | "dairy"
+  | "nuts"
+  | "eggs"
+  | "seafood"
+  | "soy"
+  | "sesame"
+  | "vegetarian"
+  | "vegan"
+  | "halal_only";
+
 export type Language = "en" | "ar";
 
 export type AppStep =
@@ -11,11 +24,17 @@ export type AppStep =
 
 // ─── Listing enums ────────────────────────────────────────────────────────────
 
-export type ListingType = "SURPRISE_BAG" | "SPECIFIC_PARCEL";
+// POST /api/listings → type: "MEAL_BAG" | "SPECIFIC_PARCEL"
+export type ListingType = "MEAL_BAG" | "SPECIFIC_PARCEL";
 
-export type FreshnessBadge = "FRESH_TODAY" | "EAT_SOON" | "LAST_CHANCE";
+// GET /api/listings → freshnessBadge values (lowercase from backend)
+export type FreshnessBadge = "eat_today" | "fresh_tonight" | "good_1_2_days";
 
-export type ListingStatus = "AVAILABLE" | "SOLD_OUT";
+// GET /api/listings → status values
+export type ListingStatus = "ACTIVE" | "SOLD_OUT" | "EXPIRED";
+
+// POST /api/listings → category values
+export type ListingCategory = "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
 
 // ─── Listing interfaces ───────────────────────────────────────────────────────
 
@@ -23,6 +42,9 @@ export interface ListingSeller {
   id: string;
   businessName: string;
   businessType: string;
+  rating?: number;
+  verifiedBadge?: boolean;
+  totalDonations?: number;
   location?: {
     address?: string;
     latitude?: number;
@@ -35,14 +57,19 @@ export interface Listing {
   title: string;
   description?: string;
   type: ListingType;
+  category?: ListingCategory;
   status: ListingStatus;
-  freshnessBadge: FreshnessBadge;
+  freshnessBadge?: FreshnessBadge;
   originalPrice: number;
   discountedPrice: number;
   quantity: number;
   pickupStart?: string;
   pickupEnd?: string;
   allergenNote?: string;
+  estimatedWeightG?: number;
+  estimatedCo2SavedG?: number;
+  qrCodeUrl?: string;
+  distanceKm?: number;
   seller: ListingSeller;
 }
 
@@ -50,6 +77,8 @@ export interface Listing {
 export interface ListingDetail extends Listing {
   rating?: number;
   reviewCount?: number;
+  score?: number;
+  reasons?: string[];
 }
 
 /** Full seller profile returned by GET /api/sellers/:id */
@@ -62,6 +91,8 @@ export interface SellerDetail {
   heroImage?: string;
   rating?: number;
   reviewCount?: number;
+  verifiedBadge?: boolean;
+  totalDonations?: number;
   location?: {
     address?: string;
     latitude?: number;
@@ -72,6 +103,36 @@ export interface SellerDetail {
     website?: string;
     socialMedia?: string;
   };
+}
+
+/** Full user profile returned by GET /api/users/me */
+export interface UserProfile {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  role: "BUYER" | "SELLER" | "CHARITY";
+  language?: "AR" | "EN";
+  avatarStyle?: string | null;
+  avatarColor?: string | null;
+  dietaryPreferences: string[];
+  allergyPreferences: AllergyOption[];
+  badges: string[];
+  points: number;
+  totalCo2SavedKg: number;
+  pickupWindowPref?: string | null;
+  createdAt: string;
+  activeOrdersCount: number;
+  confirmedDonationsCount: number;
+  seller?: {
+    id: string;
+    businessName: string;
+    businessType: string;
+    status: string;
+    rating?: number;
+    verifiedBadge: boolean;
+  } | null;
+  charity?: unknown | null;
 }
 
 // ─── Store details navigation params ─────────────────────────────────────────

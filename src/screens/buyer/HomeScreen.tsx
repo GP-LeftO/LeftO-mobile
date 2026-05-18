@@ -3,8 +3,8 @@
  *
  * Buyer discovery screen. Fetches nearby listings via useListings hook and
  * renders three horizontal sections:
- *   1. Surprise Bags Near You  (type === SURPRISE_BAG)
- *   2. Parcels & Groceries     (type === SPECIFIC_ITEM)
+ *   1. Surprise Bags Near You  (type === MEAL_BAG)
+ *   2. Parcels & Groceries     (type === SPECIFIC_PARCEL)
  *   3. Popular Today           (all, sorted by lowest quantity first)
  *
  * Each section has a header with a "See all" link and a horizontal FlatList

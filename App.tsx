@@ -13,19 +13,21 @@ import OTPVerificationScreen  from "./src/screens/auth/OTPVerificationScreen";
 import RoleSelectionScreen    from "./src/screens/registration/RoleSelectionScreen";
 import BasicInfoScreen        from "./src/screens/registration/BasicInfoScreen";
 import RoleSpecificInfoScreen from "./src/screens/registration/RoleSpecificInfoScreen";
+import AllergyPreferencesScreen from "./src/screens/registration/AllergyPreferencesScreen";
 import PendingScreen          from "./src/screens/seller/PendingScreen";
 import SignInScreen           from "./src/screens/auth/SignInScreen";
 import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
 import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
+import ChatbotScreen          from "./src/screens/buyer/support/ChatbotScreen";
 import BuyerTabNavigator      from "./src/navigation/BuyerTabNavigator";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
 import type { UserRole } from "./src/services/shared/storage";
 import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
-import type { StoreDetailsParams } from "./src/types";
+import type { StoreDetailsParams, AllergyOption } from "./src/types";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -39,10 +41,12 @@ type AppStep =
   | "role-selection"
   | "basic-info"
   | "role-specific"
+  | "allergy-preferences"
   | "sign-in"
   | "under-review"
   | "rejected"
   | "buyer-home"
+  | "chatbot"
   | "seller-dashboard"
   | "charity-dashboard"
   | "store-details";
@@ -116,13 +120,20 @@ function AppContent() {
     goTo(route as AppStep);
   };
 
-  const handleRegisterAndProceed = async (info: BasicInfo) => {
+  const handleRegisterAndProceed = async (info: BasicInfo, allergyPreferences: AllergyOption[] = []) => {
     setBasicInfo(info);
     setIsRegistering(true);
     setRegisterError("");
     try {
       const apiRole = (selectedRole as string).toUpperCase() as "BUYER" | "SELLER" | "CHARITY";
-      await register({ name: info.name, phone, password: info.password, role: apiRole, email: info.email || undefined });
+      await register({
+        name: info.name,
+        phone,
+        password: info.password,
+        role: apiRole,
+        email: info.email || undefined,
+        allergyPreferences: allergyPreferences.length > 0 ? allergyPreferences : undefined,
+      });
       setIsRegistering(false);
       goTo("role-specific");
     } catch (err: unknown) {
@@ -239,7 +250,27 @@ function AppContent() {
             onBack={goBack}
             registerError={registerError}
             isRegistering={isRegistering}
-            onComplete={handleRegisterAndProceed}
+            onComplete={(info) => {
+              if (selectedRole === "buyer") {
+                setBasicInfo(info);
+                goTo("allergy-preferences");
+              } else {
+                handleRegisterAndProceed(info);
+              }
+            }}
+          />
+        )
+      }
+
+      {step === "allergy-preferences" &&
+        screen(
+          <AllergyPreferencesScreen
+            key={language}
+            onBack={goBack}
+            isRegistering={isRegistering}
+            registerError={registerError}
+            onContinue={(allergies) => handleRegisterAndProceed(basicInfo, allergies)}
+            onSkip={() => handleRegisterAndProceed(basicInfo)}
           />
         )
       }
@@ -276,8 +307,13 @@ function AppContent() {
           <BuyerTabNavigator
             onLogout={handleLogout}
             onListingPress={handleListingPress}
+            onOpenChatbot={() => goTo("chatbot")}
           />
         )
+      }
+
+      {step === "chatbot" &&
+        screen(<ChatbotScreen onBack={goBack} />)
       }
 
       {step === "seller-dashboard" &&

@@ -44,23 +44,24 @@ function formatTime(iso: string): string {
 
 function freshnessColors(badge: FreshnessBadge | undefined): { bg: string; text: string; hero: string } {
   switch (badge) {
-    case "FRESH_TODAY": return { bg: Colors.greenLight, text: Colors.greenMain, hero: "#d1fae5" };
-    case "EAT_SOON":    return { bg: Colors.orangeLight, text: Colors.primaryOrange, hero: "#ffe8d6" };
-    case "LAST_CHANCE": return { bg: "#fee2e2", text: "#ef4444", hero: "#fecaca" };
-    default:            return { bg: Colors.orangeLight, text: Colors.primaryOrange, hero: "#ffe8d6" };
+    case "eat_today":    return { bg: Colors.greenLight,  text: Colors.greenMain,       hero: "#d1fae5" };
+    case "fresh_tonight": return { bg: Colors.orangeLight, text: Colors.primaryOrange,  hero: "#ffe8d6" };
+    case "good_1_2_days": return { bg: "#fee2e2",          text: "#ef4444",              hero: "#fecaca" };
+    default:              return { bg: Colors.orangeLight, text: Colors.primaryOrange,  hero: "#ffe8d6" };
   }
 }
 
-function freshnessLabel(badge: FreshnessBadge, tr: ReturnType<typeof t>["storeDetails"]): string {
+function freshnessLabel(badge: FreshnessBadge | undefined, tr: ReturnType<typeof t>["storeDetails"]): string {
   switch (badge) {
-    case "FRESH_TODAY": return tr.freshToday;
-    case "EAT_SOON":    return tr.eatSoon;
-    case "LAST_CHANCE": return tr.lastChance;
+    case "eat_today":    return tr.freshToday;
+    case "fresh_tonight": return tr.eatSoon;
+    case "good_1_2_days": return tr.lastChance;
+    default:              return "";
   }
 }
 
 function typeLabel(type: ListingType, tr: ReturnType<typeof t>["storeDetails"]): string {
-  return type === "SURPRISE_BAG" ? tr.surpriseBag : tr.specificParcel;
+  return type === "MEAL_BAG" ? tr.surpriseBag : tr.specificParcel;
 }
 
 function discountPercent(original: number, discounted: number): number {

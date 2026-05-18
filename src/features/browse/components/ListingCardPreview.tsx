@@ -59,7 +59,7 @@ export function ListingCardPreview({
 
   const s = visibleSeller;
   const listing = s.listing;
-  const isSurprise = listing.type === "SURPRISE_BAG";
+  const isSurprise = listing.type === "MEAL_BAG";
   const discount = Math.round(
     ((listing.originalPrice - listing.discountedPrice) / listing.originalPrice) * 100,
   );

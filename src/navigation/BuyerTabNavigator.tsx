@@ -37,6 +37,7 @@ interface TabConfig {
 export interface BuyerTabNavigatorProps {
   onLogout?: () => void;
   onListingPress?: (params: StoreDetailsParams) => void;
+  onOpenChatbot?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ export default function BuyerTabNavigator(props: BuyerTabNavigatorProps) {
 
 // ─── Inner content — has access to FavoritesContext ───────────────────────────
 
-function BuyerTabContent({ onLogout, onListingPress }: BuyerTabNavigatorProps) {
+function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot }: BuyerTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const botPad = Platform.OS === "web" ? 16 : insets.bottom;
   const rtl = isRTL();
@@ -97,7 +98,7 @@ function BuyerTabContent({ onLogout, onListingPress }: BuyerTabNavigatorProps) {
       case "orders":
         return <OrdersScreen />;
       case "profile":
-        return <ProfileScreen onLogout={onLogout} />;
+        return <ProfileScreen onLogout={onLogout} onOpenChatbot={onOpenChatbot} />;
     }
   };
 

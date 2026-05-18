@@ -47,9 +47,10 @@ const MENU_SECTIONS = [
 
 interface ProfileScreenProps {
   onLogout?: () => void;
+  onOpenChatbot?: () => void;
 }
 
-export default function ProfileScreen({ onLogout }: ProfileScreenProps) {
+export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl = isRTL();
@@ -181,7 +182,11 @@ export default function ProfileScreen({ onLogout }: ProfileScreenProps) {
             <View style={styles.menuCard}>
               {section.items.map((item, idx) => (
                 <React.Fragment key={item.labelEn}>
-                  <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    activeOpacity={0.7}
+                    onPress={item.labelEn === "Customer Support" ? onOpenChatbot : undefined}
+                  >
                     <View style={styles.menuIconWrap}>
                       <Feather name={item.icon as any} size={17} color={Colors.primaryOrange} />
                     </View>

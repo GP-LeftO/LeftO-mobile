@@ -40,32 +40,35 @@ function formatTime(iso: string): string {
   }
 }
 
-function freshnessBadgeColor(badge: FreshnessBadge): string {
+function freshnessBadgeColor(badge: FreshnessBadge | undefined): string {
   switch (badge) {
-    case "FRESH_TODAY": return Colors.greenMain;
-    case "EAT_SOON":    return Colors.primaryOrange;
-    case "LAST_CHANCE": return "#ef4444";
+    case "eat_today":    return Colors.greenMain;
+    case "fresh_tonight": return Colors.primaryOrange;
+    case "good_1_2_days": return "#f59e0b";
+    default:              return Colors.primaryOrange;
   }
 }
 
-function freshnessLabel(badge: FreshnessBadge, rtl: boolean): string {
+function freshnessLabel(badge: FreshnessBadge | undefined, rtl: boolean): string {
   if (rtl) {
     switch (badge) {
-      case "FRESH_TODAY": return "طازج اليوم";
-      case "EAT_SOON":    return "كُل قريباً";
-      case "LAST_CHANCE": return "فرصة أخيرة";
+      case "eat_today":    return "طازج اليوم";
+      case "fresh_tonight": return "طازج الليلة";
+      case "good_1_2_days": return "جيد 1-2 أيام";
+      default:              return "";
     }
   }
   switch (badge) {
-    case "FRESH_TODAY": return "Fresh Today";
-    case "EAT_SOON":    return "Eat Soon";
-    case "LAST_CHANCE": return "Last Chance";
+    case "eat_today":    return "Fresh Today";
+    case "fresh_tonight": return "Fresh Tonight";
+    case "good_1_2_days": return "Good 1-2 Days";
+    default:              return "";
   }
 }
 
-function typeLabel(type: ListingType, rtl: boolean): string {
-  if (type === "SURPRISE_BAG") return rtl ? t().home.surpriseBag  : t().home.surpriseBag;
-  return rtl ? t().home.specificParcel : t().home.specificParcel;
+function typeLabel(type: ListingType): string {
+  if (type === "MEAL_BAG") return t().home.surpriseBag;
+  return t().home.specificParcel;
 }
 
 function hasAllergenOverlap(allergenNote: string | undefined, prefs: string[]): boolean {
@@ -114,13 +117,15 @@ export default function ListingCard({
 
         {/* Type pill */}
         <View style={styles.typePill}>
-          <Text style={styles.typePillText}>{typeLabel(listing.type, rtl)}</Text>
+          <Text style={styles.typePillText}>{typeLabel(listing.type)}</Text>
         </View>
 
         {/* Freshness badge */}
-        <View style={[styles.freshnessBadge, { backgroundColor: freshnessBadgeColor(listing.freshnessBadge) }]}>
-          <Text style={styles.freshnessBadgeText}>{freshnessLabel(listing.freshnessBadge, rtl)}</Text>
-        </View>
+        {listing.freshnessBadge && (
+          <View style={[styles.freshnessBadge, { backgroundColor: freshnessBadgeColor(listing.freshnessBadge) }]}>
+            <Text style={styles.freshnessBadgeText}>{freshnessLabel(listing.freshnessBadge, rtl)}</Text>
+          </View>
+        )}
 
         {/* Sold-out overlay */}
         {isSoldOut && (

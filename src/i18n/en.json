@@ -149,6 +149,25 @@
     "reservedSuccess": "Reserved successfully!",
     "donatedSuccess": "Donated successfully!"
   },
+  "allergyPreferences": {
+    "title": "Allergy preferences",
+    "subtitle": "Select any allergens to avoid. We'll use this to highlight safe options for you.",
+    "stepLabel": "5 of 6",
+    "continue": "Continue",
+    "skip": "Skip for now",
+    "chips": {
+      "gluten": "Gluten",
+      "dairy": "Dairy",
+      "nuts": "Nuts",
+      "eggs": "Eggs",
+      "seafood": "Seafood",
+      "soy": "Soy",
+      "sesame": "Sesame",
+      "vegetarian": "Vegetarian",
+      "vegan": "Vegan",
+      "halal_only": "Halal only"
+    }
+  },
   "favorites": {
     "title": "Favorites",
     "loading": "Loading favorites…",
