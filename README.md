@@ -179,6 +179,16 @@ splash
 | OrdersScreen | Real orders from `GET /api/orders/me`; Cancel + Confirm Pickup on RESERVED tab |
 | ProfileScreen | Real user data (name, phone, email, member-since) |
 
+### Chatbot Screen
+- Screen: `src/screens/buyer/support/ChatbotScreen.tsx`
+- Hook: `src/hooks/buyer/support/useChatbot.ts`
+- Service: `src/services/buyer/support/chatbotService.ts`
+- Types: `src/types/chatbot.ts`
+- API: POST /api/chatbot/message (shape verified from Swagger)
+- Auth: JWT from AuthContext sent in Authorization header
+- Message history: session-only, no persistence
+- RTL: handled per message bubble, not globally
+
 ### Favorites
 - View all saved stores with their latest active listing (bag type, pickup window, distance, price)
 - Bell icon toggles per-store notifications (local state — no API call required)
@@ -224,6 +234,7 @@ splash
 | GET | `/api/orders/me` | order.service → OrdersScreen |
 | GET | `/api/favorites/me` | favorites.service → FavoritesScreen |
 | DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic remove) |
+| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen. Body: `{ message, lat?, lng? }`. Response: `{ reply }` |
 
 ---
 
