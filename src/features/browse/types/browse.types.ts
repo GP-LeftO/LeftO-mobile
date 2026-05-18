@@ -8,7 +8,7 @@ export interface Coordinate {
 }
 
 export interface MapListing {
-  type: "SURPRISE_BAG" | "SPECIFIC_PARCEL";
+  type: "MEAL_BAG" | "SPECIFIC_PARCEL";
   pickupStart?: string;
   pickupEnd?: string;
   discountedPrice: number;

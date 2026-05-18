@@ -13,9 +13,9 @@ const MOCK_LISTING: ListingDetail = {
   title: "Mixed Pastry Bag",
   description:
     "A surprise selection of today's freshest pastries — croissants, danishes, and more. Rescue food, save money, reduce waste.",
-  type: "SURPRISE_BAG",
-  status: "AVAILABLE",
-  freshnessBadge: "FRESH_TODAY",
+  type: "MEAL_BAG",
+  status: "ACTIVE",
+  freshnessBadge: "eat_today",
   originalPrice: 40,
   discountedPrice: 15,
   quantity: 5,

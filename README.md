@@ -74,6 +74,7 @@ artifacts/lefto-mobile/
 │   │   ├── registration/
 │   │   │   ├── RoleSelectionScreen.tsx
 │   │   │   ├── BasicInfoScreen.tsx
+│   │   │   ├── AllergyPreferencesScreen.tsx  # buyer-only step 5/6
 │   │   │   └── RoleSpecificInfoScreen.tsx
 │   │   ├── buyer/
 │   │   │   ├── HomeScreen.tsx          # Discovery: Surprise Bags, Parcels, Popular
@@ -97,28 +98,38 @@ artifacts/lefto-mobile/
 │   │   │       ├── PriceRangeSlider.tsx# Dual-thumb slider (PanResponder, no lib)
 │   │   │       ├── RadiusSelector.tsx  # Segmented 1 km / 5 km / 10 km control
 │   │   │       └── SortOptions.tsx     # Distance / Price / Rating chips
-│   │   ├── Button.tsx
-│   │   ├── OnboardingSlide.tsx
-│   │   ├── RoleCard.tsx
-│   │   ├── PaginationDots.tsx
-│   │   └── LeftOLogo.tsx
+│   │   ├── shared/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Chip.tsx              # Multi-select toggle chip (allergy prefs)
+│   │   │   ├── OnboardingSlide.tsx
+│   │   │   ├── RoleCard.tsx
+│   │   │   ├── PaginationDots.tsx
+│   │   │   └── LeftOLogo.tsx
 │   ├── hooks/
-│   │   ├── useAuth.ts           # sendOtp, verifyOtp, register, login, logout
-│   │   ├── useSeller.ts         # uploadDocument, registerSeller
-│   │   ├── useListings.ts       # Fetches all listings, derives 3 sorted arrays
-│   │   ├── useSearch.ts         # Debounced search (500ms), empty-query short-circuit
-│   │   ├── useSearchFilters.ts  # Filter state, activeFilterCount, buildQueryParams()
-│   │   ├── useStoreDetails.ts   # Parallel fetch: listing + seller
-│   │   └── useColors.ts
+│   │   ├── auth/
+│   │   │   └── useAuth.ts           # sendOtp, verifyOtp, register, login, logout
+│   │   ├── buyer/
+│   │   │   ├── useListings.ts       # Fetches all listings, derives 3 sorted arrays
+│   │   │   ├── useSearch.ts         # Debounced search (500ms), empty-query short-circuit
+│   │   │   ├── useSearchFilters.ts  # Filter state, activeFilterCount, buildQueryParams()
+│   │   │   ├── useStoreDetails.ts   # Parallel fetch: listing + seller
+│   │   │   └── useAllergyPreferences.ts  # Multi-select toggle state for allergy chips
+│   │   └── shared/
+│   │       └── useColors.ts
 │   ├── services/
-│   │   ├── api.ts              # Axios instance: token attach + silent 401 refresh
-│   │   ├── auth.service.ts
-│   │   ├── seller.service.ts
-│   │   ├── listing.service.ts  # getListingById, getSellerById
-│   │   ├── search.service.ts   # searchListings → GET /api/listings/search
-│   │   ├── order.service.ts
-│   │   ├── document.service.ts
-│   │   └── storage.ts
+│   │   ├── shared/
+│   │   │   ├── api.ts              # Axios instance: token attach + silent 401 refresh
+│   │   │   └── storage.ts
+│   │   ├── auth/
+│   │   │   └── auth.service.ts
+│   │   ├── buyer/
+│   │   │   ├── listing.service.ts  # getListingById, getSellerById
+│   │   │   ├── search.service.ts   # searchListings → GET /api/listings/search
+│   │   │   ├── order.service.ts
+│   │   │   └── favorites.service.ts
+│   │   └── seller/
+│   │       ├── seller.service.ts
+│   │       └── document.service.ts
 │   ├── context/
 │   │   └── AuthContext.tsx     # user, tokens, sellerStatus, charityStatus; persisted
 │   ├── i18n/
@@ -144,10 +155,13 @@ splash
                           └─► role-selection
                                 └─► basic-info
                                       └─► role-specific
-                                            ├─► buyer-home ◄──────────────────────┐
-                                            │     ├─► buyer-search                │
-                                            │     │     └─► store-details ─────────┘
-                                            │     └─► store-details
+                                      └─► allergy-preferences (buyer only)
+                                                  └─► role-specific
+                                                        ├─► buyer-home ◄──────────────────────┐
+                                                        │     ├─► buyer-search                │
+                                                        │     │     └─► store-details ─────────┘
+                                                        │     ├─► store-details
+                                                        │     └─► chatbot (Profile → Customer Support)
                                             ├─► seller-dashboard
                                             ├─► charity-dashboard
                                             ├─► under-review
@@ -170,6 +184,11 @@ splash
 - Logout clears all state + AsyncStorage
 - Full RTL / LTR layout switching via `isRTL()` throughout
 
+### Registration — Buyer-only step
+After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 5/6) with 10 multi-select chips: Gluten, Dairy, Nuts, Eggs, Seafood, Soy, Sesame, Vegetarian, Vegan, Halal only. Selecting and tapping Continue sends `allergyPreferences: string[]` in the `POST /api/auth/register` body. Skip bypasses it. Sellers and charities go directly from Basic Info to role-specific registration.
+
+> **⚠️ Pending backend fix:** `POST /api/auth/register` does not yet accept or save `allergyPreferences` — assigned to backend team. `GET /api/users/me` confirms the field exists in the DB but is always returned as `[]` after fresh registration. No `PATCH /api/users/me` endpoint exists yet to update it post-registration.
+
 ### Buyer
 | Screen | Details |
 |--------|---------|
@@ -178,6 +197,7 @@ splash
 | StoreDetailsScreen | Hero with freshness badge (green/orange/red), discounted price, pickup window, items left, description, allergen card, star rating, map placeholder, Reserve + Donate CTAs, sold-out state |
 | OrdersScreen | Real orders from `GET /api/orders/me`; Cancel + Confirm Pickup on RESERVED tab |
 | ProfileScreen | Real user data (name, phone, email, member-since) |
+| ChatbotScreen | AI assistant accessible from Profile → Customer Support; orange header with 🤖 avatar; 4 Arabic suggested chips (hidden after first message); inverted FlatList with animated 3-dot typing indicator; per-message RTL via `isArabicText()`; error bubble on failure; `KeyboardAvoidingView` |
 
 ### Favorites
 - View all saved stores with their latest active listing (bag type, pickup window, distance, price)
@@ -218,12 +238,13 @@ splash
 | GET | `/api/sellers/:id` | listing.service → StoreDetailsScreen |
 | POST | `/api/documents/upload` | document.service |
 | GET | `/api/listings` | useListings → HomeScreen |
-| GET | `/api/listings/search` | search.service → SearchScreen. Filter params: `category` (UPPERCASE enum), `freshness[]`, `minPrice`, `maxPrice`, `radius` (metres), `sortBy` |
+| GET | `/api/listings/search` | search.service → SearchScreen. Filter params: `category`, `freshnessBadge`, `minPrice`, `maxPrice`, `radius` (km), `sortBy`, `excludeAllergens` (comma-separated) |
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |
 | PATCH | `/api/listings/:id/sold-out` | SellerDashboardScreen |
 | GET | `/api/orders/me` | order.service → OrdersScreen |
 | GET | `/api/favorites/me` | favorites.service → FavoritesScreen |
 | DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic remove) |
+| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen. Body: `{ message, lat?, lng? }`. Auth via shared axios instance |
 
 ---
 
@@ -267,17 +288,33 @@ pnpm run typecheck
 
 ---
 
-## Listing Types & Freshness Badges
+## Listing Types, Freshness Badges & Enums
 
 | Type | API value |
 |------|-----------|
-| Surprise Bag | `SURPRISE_BAG` |
+| Surprise Bag | `MEAL_BAG` |
 | Specific Parcel | `SPECIFIC_PARCEL` |
 
-| Badge | Colour | Meaning |
-|-------|--------|---------|
-| Fresh Today | Green | Prepared today |
-| Eat Soon | Orange | Best consumed soon |
-| Last Chance | Red | Near expiry |
+| Badge | API value | Colour | Meaning |
+|-------|-----------|--------|---------|
+| Eat Today | `eat_today` | Green | Prepared today, consume same day |
+| Fresh Tonight | `fresh_tonight` | Orange | Best consumed tonight |
+| Good 1–2 Days | `good_1_2_days` | Red/Amber | Near expiry |
+
+| Listing status | API value |
+|----------------|-----------|
+| Available | `ACTIVE` |
+| Sold out | `SOLD_OUT` |
+| Expired | `EXPIRED` |
+
+| Category | API value |
+|----------|-----------|
+| Meals | `MEALS` |
+| Bread & Pastries | `BREAD_AND_PASTRIES` |
+| Groceries | `GROCERIES` |
+| Mixed | `MIXED` |
+
+AllergyOption values (lowercase, as returned by `GET /api/users/me`):
+`gluten` · `dairy` · `nuts` · `eggs` · `seafood` · `soy` · `sesame` · `vegetarian` · `vegan` · `halal_only`
 
 

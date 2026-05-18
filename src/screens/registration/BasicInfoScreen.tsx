@@ -75,7 +75,7 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
             <Feather name="arrow-left" size={20} color={Colors.grayDark} />
           </TouchableOpacity>
           <View style={styles.stepWrap}>
-            <StepIndicator current={4} total={5} />
+            <StepIndicator current={4} total={role === "buyer" ? 6 : 5} />
           </View>
         </View>
 

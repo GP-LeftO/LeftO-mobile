@@ -219,7 +219,7 @@ export default function RoleSpecificInfoScreen({
               <Feather name="arrow-left" size={20} color={Colors.grayDark} />
             </TouchableOpacity>
             <View style={styles.stepWrap}>
-              <StepIndicator current={5} total={5} />
+              <StepIndicator current={role === "buyer" ? 6 : 5} total={role === "buyer" ? 6 : 5} />
             </View>
           </View>
 

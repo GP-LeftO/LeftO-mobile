@@ -7,6 +7,7 @@ export interface RegisterParams {
   password: string;
   role: "BUYER" | "SELLER" | "CHARITY";
   email?: string;
+  allergyPreferences?: string[];
 }
 
 export interface LoginResult {

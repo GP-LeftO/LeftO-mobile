@@ -149,6 +149,25 @@
     "reservedSuccess": "تم الحجز بنجاح!",
     "donatedSuccess": "تم التبرع بنجاح!"
   },
+  "allergyPreferences": {
+    "title": "تفضيلات الحساسية",
+    "subtitle": "اختر المواد التي تريد تجنبها. سنستخدم هذه المعلومات لإبراز الخيارات الآمنة لك.",
+    "stepLabel": "٥ من ٦",
+    "continue": "متابعة",
+    "skip": "تخطّ الآن",
+    "chips": {
+      "gluten": "غلوتين",
+      "dairy": "ألبان",
+      "nuts": "مكسرات",
+      "eggs": "بيض",
+      "seafood": "مأكولات بحرية",
+      "soy": "صويا",
+      "sesame": "سمسم",
+      "vegetarian": "نباتي",
+      "vegan": "نباتي صارم",
+      "halal_only": "حلال فقط"
+    }
+  },
   "favorites": {
     "title": "المفضلة",
     "loading": "جاري تحميل المفضلة…",

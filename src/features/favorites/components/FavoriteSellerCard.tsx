@@ -38,7 +38,7 @@ const FavoriteSellerCard = memo(function FavoriteSellerCard({
   const avatarLetter = (seller.businessName ?? "?").charAt(0).toUpperCase();
 
   const listingTypeLabel =
-    activeListing?.type === "SURPRISE_BAG"
+    activeListing?.type === "MEAL_BAG"
       ? tr.surpriseBag
       : activeListing?.type === "SPECIFIC_PARCEL"
         ? tr.specificParcel

@@ -3,7 +3,7 @@
  *
  * Fetches listings from GET /api/listings.
  * Derives and returns three filtered/sorted arrays ready for the Home screen:
- *  - surpriseBags   — type === 'SURPRISE_BAG'
+ *  - surpriseBags   — type === 'MEAL_BAG'
  *  - parcels        — type === 'SPECIFIC_PARCEL'
  *  - popularToday   — all listings sorted by quantity ascending (low stock first)
  */
@@ -28,7 +28,7 @@ function deriveArrays(listings: Listing[]): {
   parcels:      Listing[];
   popularToday: Listing[];
 } {
-  const surpriseBags  = listings.filter((l) => l.type === "SURPRISE_BAG");
+  const surpriseBags  = listings.filter((l) => l.type === "MEAL_BAG");
   const parcels       = listings.filter((l) => l.type === "SPECIFIC_PARCEL");
   const popularToday  = [...listings].sort((a, b) => a.quantity - b.quantity);
   return { surpriseBags, parcels, popularToday };

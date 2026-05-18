@@ -28,7 +28,7 @@ const MOCK_SELLERS: MapSeller[] = [
     lng: 35.2561,
     category: "MEALS",
     listing: {
-      type: "SURPRISE_BAG",
+      type: "MEAL_BAG",
       pickupStart: "18:00",
       pickupEnd: "20:00",
       discountedPrice: 12,
@@ -79,7 +79,7 @@ const MOCK_SELLERS: MapSeller[] = [
     lng: 35.2551,
     category: "MIXED",
     listing: {
-      type: "SURPRISE_BAG",
+      type: "MEAL_BAG",
       pickupStart: "20:00",
       pickupEnd: "22:00",
       discountedPrice: 15,
@@ -96,7 +96,7 @@ const MOCK_SELLERS: MapSeller[] = [
     lng: 35.2578,
     category: "BREAD_AND_PASTRIES",
     listing: {
-      type: "SURPRISE_BAG",
+      type: "MEAL_BAG",
       pickupStart: "19:00",
       pickupEnd: "21:00",
       discountedPrice: 10,
