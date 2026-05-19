@@ -87,7 +87,10 @@ artifacts/lefto-mobile/
 │   │   │   ├── PendingScreen.tsx
 │   │   │   └── RejectedScreen.tsx
 │   │   └── charity/
-│   │       └── CharityDashboardScreen.tsx
+│   │       ├── CharityDashboardScreen.tsx
+│   │       └── registration/
+│   │           ├── CharityInfoScreen.tsx      # Step 4/5: org name, description, region, contact phone
+│   │           └── CharityDocumentScreen.tsx  # Step 5/5: document upload → register → dashboard
 │   ├── components/
 │   │   ├── buyer/
 │   │   │   ├── ListingCard.tsx         # Card with freshness badge, price, sold-out overlay
@@ -114,6 +117,9 @@ artifacts/lefto-mobile/
 │   │   │   ├── useSearchFilters.ts  # Filter state, activeFilterCount, buildQueryParams()
 │   │   │   ├── useStoreDetails.ts   # Parallel fetch: listing + seller
 │   │   │   └── useAllergyPreferences.ts  # Multi-select toggle state for allergy chips
+│   │   ├── charity/
+│   │   │   └── registration/
+│   │   │       └── useCharityRegistration.ts  # Form state, doc upload, register call
 │   │   └── shared/
 │   │       └── useColors.ts
 │   ├── services/
@@ -121,12 +127,15 @@ artifacts/lefto-mobile/
 │   │   │   ├── api.ts              # Axios instance: token attach + silent 401 refresh
 │   │   │   └── storage.ts
 │   │   ├── auth/
-│   │   │   └── auth.service.ts
+│   │   │   └── auth.service.ts     # RegisterParams extended with optional charity fields
 │   │   ├── buyer/
 │   │   │   ├── listing.service.ts  # getListingById, getSellerById
 │   │   │   ├── search.service.ts   # searchListings → GET /api/listings/search
 │   │   │   ├── order.service.ts
 │   │   │   └── favorites.service.ts
+│   │   ├── charity/
+│   │   │   └── registration/
+│   │   │       └── charityRegistration.service.ts  # uploadCharityDocument wrapper
 │   │   └── seller/
 │   │       ├── seller.service.ts
 │   │       └── document.service.ts
@@ -163,6 +172,9 @@ splash
                                                         │     ├─► store-details
                                                         │     └─► chatbot (Profile → Customer Support)
                                             ├─► seller-dashboard
+                                            ├─► charity-info
+                                            │     └─► charity-document
+                                            │           └─► charity-dashboard
                                             ├─► charity-dashboard
                                             ├─► under-review
                                             └─► rejected
@@ -226,11 +238,12 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 | RejectedScreen | Rejection state |
 
 ### Charity
-| Screen | Details |
-|--------|---------|
-| Registration | Organisation name, reg number, certificate upload, map location → `POST /api/sellers/register` with CHARITY role |
-| CharityDashboardScreen | Real user name; quick action cards (coming soon) |
-| PendingScreen / RejectedScreen | Shared with seller flow |
+| Screen | Path | Details |
+|--------|------|---------|
+| CharityInfoScreen | `src/screens/charity/registration/CharityInfoScreen.tsx` | Step 4/5 — Collects organization name, description, region (map picker), and contact phone. Validates all fields before allowing Next. Full RTL support. |
+| CharityDocumentScreen | `src/screens/charity/registration/CharityDocumentScreen.tsx` | Step 5/5 — Document upload (JPEG/PNG, max 5 MB) with real-time progress bar. On upload success calls `POST /api/auth/register` with role `CHARITY` and all collected form data. Shows success message then navigates to CharityDashboardScreen. On upload failure shows inline error and stays on screen — register is never called. |
+| CharityDashboardScreen | `src/screens/charity/CharityDashboardScreen.tsx` | Real user name; status badge (Approved / Under Review / Rejected); quick action cards (coming soon). |
+| PendingScreen / RejectedScreen | Shared with seller flow | — |
 
 ---
 
@@ -246,7 +259,7 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 | POST | `/api/sellers/register` | RoleSpecificInfoScreen |
 | GET | `/api/sellers/me` | seller.service |
 | GET | `/api/sellers/:id` | listing.service → StoreDetailsScreen |
-| POST | `/api/documents/upload` | document.service |
+| POST | `/api/documents/upload` | document.service, charityRegistration.service (type: `charity_registration`) |
 | GET | `/api/listings` | useListings → HomeScreen |
 | GET | `/api/listings/search` | search.service → SearchScreen. Filter params: `category`, `freshnessBadge`, `minPrice`, `maxPrice`, `radius` (km), `sortBy`, `excludeAllergens` (comma-separated) |
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |

@@ -8,6 +8,11 @@ export interface RegisterParams {
   role: "BUYER" | "SELLER" | "CHARITY";
   email?: string;
   allergyPreferences?: string[];
+  // Charity-specific fields (sent only when role === "CHARITY")
+  organizationName?: string;
+  description?: string;
+  location?: { latitude: number; longitude: number; address?: string };
+  contactPhone?: string;
 }
 
 export interface LoginResult {

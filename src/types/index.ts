@@ -141,3 +141,17 @@ export interface StoreDetailsParams {
   listingId: string;
   sellerId: string;
 }
+
+// ─── Charity registration ─────────────────────────────────────────────────────
+
+export interface CharityInfoFormData {
+  orgName: string;
+  description: string;
+  location: { latitude: number; longitude: number; address?: string } | null;
+  contactPhone: string;
+}
+
+export interface CharityRegistrationForm extends CharityInfoFormData {
+  docUri: string | null;
+  docName: string;
+}
