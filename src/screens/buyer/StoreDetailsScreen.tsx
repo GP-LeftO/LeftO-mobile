@@ -21,13 +21,15 @@ import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
 import type { FreshnessBadge, ListingType } from "../../types";
+import type { CheckoutParams } from "../../types/order.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StoreDetailsScreenProps {
-  listingId: string;
-  sellerId:  string;
-  onBack:    () => void;
+  listingId:  string;
+  sellerId:   string;
+  onBack:     () => void;
+  onCheckout: (params: CheckoutParams) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ export default function StoreDetailsScreen({
   listingId,
   sellerId,
   onBack,
+  onCheckout,
 }: StoreDetailsScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
@@ -152,6 +155,18 @@ export default function StoreDetailsScreen({
     ? { latitude: sellerLat!, longitude: sellerLng! }
     : PALESTINE_CENTER;
 
+  const buildCheckoutParams = (): CheckoutParams => ({
+    listingId,
+    listingTitle:      listing.title,
+    storeName:         seller?.businessName ?? listing.seller?.businessName ?? "",
+    pickupStart:       listing.pickupStart,
+    pickupEnd:         listing.pickupEnd,
+    pickupWindow,
+    originalPrice:     listing.originalPrice,
+    discountedPrice:   listing.discountedPrice,
+    availableQuantity: listing.quantity,
+  });
+
   return (
     <View style={styles.container}>
       {/* ── Floating back button (over hero) ── */}
@@ -167,7 +182,7 @@ export default function StoreDetailsScreen({
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: botPadding + 100 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: botPadding + 152 }]}
       >
         {/* ── Hero ── */}
         <View style={[styles.hero, { backgroundColor: freshColors.hero }]}>
@@ -316,13 +331,21 @@ export default function StoreDetailsScreen({
             <Text style={styles.soldOutCtaText}>{tr.soldOut}</Text>
           </View>
         ) : (
-          <View style={[styles.ctaRow, rtl && styles.rowReverse]}>
-            <TouchableOpacity style={styles.reserveBtn} activeOpacity={0.85}>
-              <Feather name="check-circle" size={18} color={Colors.white} />
+          <View style={styles.ctaStack}>
+            <TouchableOpacity
+              style={styles.reserveBtn}
+              activeOpacity={0.85}
+              onPress={() => onCheckout(buildCheckoutParams())}
+            >
+              <Feather name="check-circle" size={19} color={Colors.white} />
               <Text style={styles.reserveBtnText}>{tr.reserve}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.donateBtn} activeOpacity={0.85}>
-              <Feather name="gift" size={18} color={Colors.greenMain} />
+            <TouchableOpacity
+              style={styles.donateBtn}
+              activeOpacity={0.85}
+              onPress={() => onCheckout(buildCheckoutParams())}
+            >
+              <Feather name="gift" size={17} color={Colors.greenMain} />
               <Text style={styles.donateBtnText}>{tr.donate}</Text>
             </TouchableOpacity>
           </View>
@@ -546,29 +569,29 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  ctaRow: { flexDirection: "row", gap: Spacing.sm },
+  ctaStack: { gap: Spacing.sm },
   reserveBtn: {
-    flex: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     backgroundColor: Colors.primaryOrange,
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 15,
   },
   reserveBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
   donateBtn: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    backgroundColor: Colors.greenLight,
+    gap: 8,
+    backgroundColor: Colors.white,
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 13,
+    borderWidth: 2,
+    borderColor: Colors.greenMain,
   },
-  donateBtnText: { fontSize: 14, fontWeight: "700", color: Colors.greenMain },
+  donateBtnText: { fontSize: 15, fontWeight: "700", color: Colors.greenMain },
   soldOutCta: {
     backgroundColor: Colors.grayLight,
     borderRadius: 16, paddingVertical: 14,

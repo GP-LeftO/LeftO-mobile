@@ -24,7 +24,7 @@ interface OTPVerificationScreenProps {
 const OTP_LENGTH = 6;
 
 export default function OTPVerificationScreen({
-  phone = "+970 59 000 0000",
+  phone = "0590000000",
   onComplete,
   onBack,
   navigation,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet, Text, View, TextInput,
   TouchableOpacity, Platform, KeyboardAvoidingView, ScrollView,
@@ -38,6 +38,11 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmFocused, setConfirmFocused] = useState(false);
 
+  const nameRef     = useRef<TextInput>(null);
+  const emailRef    = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef  = useRef<TextInput>(null);
+
   const nameLabel = rtl
     ? (role === "seller" ? "اسم العمل" : role === "charity" ? "اسم المنظمة" : "الاسم الكامل")
     : (role === "seller" ? "Business Name" : role === "charity" ? "Organization Name" : "Full Name");
@@ -64,7 +69,7 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
   };
 
   return (
-    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: topPadding + 12, paddingBottom: bottomPadding + 24 }]}
         keyboardShouldPersistTaps="handled"
@@ -99,12 +104,16 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
             <View style={[styles.inputRow, rtl && styles.inputRowRTL, nameFocused && styles.inputFocused, !!errors.name && styles.inputError]}>
               <Feather name={role === "seller" ? "briefcase" : role === "charity" ? "heart" : "user"} size={18} color={nameFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={nameRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={name}
                 onChangeText={(v) => { setName(v); setErrors((e) => ({ ...e, name: "" })); }}
                 placeholder={namePlaceholder}
                 placeholderTextColor={Colors.grayMedium}
                 autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
+                submitBehavior="submit"
                 onFocus={() => setNameFocused(true)}
                 onBlur={() => setNameFocused(false)}
                 textAlign={rtl ? "right" : "left"}
@@ -121,6 +130,7 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
             <View style={[styles.inputRow, rtl && styles.inputRowRTL, emailFocused && styles.inputFocused, !!errors.email && styles.inputError]}>
               <Feather name="mail" size={18} color={emailFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={emailRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={email}
                 onChangeText={(v) => { setEmail(v); setErrors((e) => ({ ...e, email: "" })); }}
@@ -128,6 +138,9 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
                 placeholderTextColor={Colors.grayMedium}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                submitBehavior="submit"
                 onFocus={() => setEmailFocused(true)}
                 onBlur={() => setEmailFocused(false)}
                 textAlign={rtl ? "right" : "left"}
@@ -144,6 +157,7 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
             <View style={[styles.inputRow, rtl && styles.inputRowRTL, passwordFocused && styles.inputFocused, !!errors.password && styles.inputError]}>
               <Feather name="lock" size={18} color={passwordFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={passwordRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={password}
                 onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: "" })); }}
@@ -151,6 +165,9 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
                 placeholderTextColor={Colors.grayMedium}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => confirmRef.current?.focus()}
+                submitBehavior="submit"
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
                 textAlign={rtl ? "right" : "left"}
@@ -170,6 +187,7 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
             <View style={[styles.inputRow, rtl && styles.inputRowRTL, confirmFocused && styles.inputFocused, !!errors.confirm && styles.inputError]}>
               <Feather name="lock" size={18} color={confirmFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={confirmRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={confirmPassword}
                 onChangeText={(v) => { setConfirmPassword(v); setErrors((e) => ({ ...e, confirm: "" })); }}
@@ -177,6 +195,8 @@ export default function BasicInfoScreen({ role, onComplete, onBack, navigation, 
                 placeholderTextColor={Colors.grayMedium}
                 secureTextEntry={!showConfirm}
                 autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleContinue}
                 onFocus={() => setConfirmFocused(true)}
                 onBlur={() => setConfirmFocused(false)}
                 textAlign={rtl ? "right" : "left"}

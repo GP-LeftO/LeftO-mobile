@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -61,6 +61,12 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
 
   const content = ROLE_CONTENT[role ?? "buyer"];
 
+  const nameRef     = useRef<TextInput>(null);
+  const emailRef    = useRef<TextInput>(null);
+  const phoneRef    = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef  = useRef<TextInput>(null);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -100,7 +106,7 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
   return (
     <KeyboardAvoidingView
       style={styles.keyboardView}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.bgContainer} pointerEvents="none">
         <View style={[styles.blob, styles.blob1]} />
@@ -153,6 +159,9 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
             autoComplete="name"
             error={errors.name}
             icon={content.nameIcon as any}
+            inputRef={nameRef}
+            returnKeyType="next"
+            onSubmitEditing={() => emailRef.current?.focus()}
           />
 
           {/* Business type picker — Seller only */}
@@ -203,17 +212,23 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
             autoCapitalize="none"
             error={errors.email}
             icon="mail"
+            inputRef={emailRef}
+            returnKeyType="next"
+            onSubmitEditing={() => phoneRef.current?.focus()}
           />
 
           <Field
             label="Phone Number"
             value={phone}
             onChangeText={(v) => { setPhone(v); clear("phone"); }}
-            placeholder="+970 59 000 0000"
+            placeholder="0590000000"
             keyboardType="phone-pad"
             autoComplete="tel"
             error={errors.phone}
             icon="phone"
+            inputRef={phoneRef}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
 
           <Field
@@ -227,6 +242,9 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
             icon="lock"
             rightIcon={showPassword ? "eye-off" : "eye"}
             onRightIconPress={() => setShowPassword((p) => !p)}
+            inputRef={passwordRef}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
           />
 
           <Field
@@ -240,6 +258,9 @@ export default function SignUpScreen({ role = "buyer", onSignUp, onGoToSignIn, n
             icon="lock"
             rightIcon={showConfirm ? "eye-off" : "eye"}
             onRightIconPress={() => setShowConfirm((p) => !p)}
+            inputRef={confirmRef}
+            returnKeyType="done"
+            onSubmitEditing={handleSignUp}
           />
 
           {/* Document upload — Seller and Charity */}
@@ -316,12 +337,16 @@ interface FieldProps {
   icon: keyof typeof Feather.glyphMap;
   rightIcon?: keyof typeof Feather.glyphMap;
   onRightIconPress?: () => void;
+  returnKeyType?: "next" | "done" | "go";
+  onSubmitEditing?: () => void;
+  inputRef?: React.RefObject<TextInput>;
 }
 
 function Field({
   label, value, onChangeText, placeholder, secureTextEntry,
   keyboardType = "default", autoComplete, autoCapitalize = "sentences",
   error, icon, rightIcon, onRightIconPress,
+  returnKeyType, onSubmitEditing, inputRef,
 }: FieldProps) {
   const [focused, setFocused] = useState(false);
   return (
@@ -330,6 +355,7 @@ function Field({
       <View style={[styles.inputRow, focused && styles.inputFocused, !!error && styles.inputError]}>
         <Feather name={icon} size={18} color={focused ? Colors.primaryOrange : Colors.grayMedium} style={styles.inputIcon} />
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={value}
           onChangeText={onChangeText}
@@ -339,6 +365,9 @@ function Field({
           keyboardType={keyboardType}
           autoComplete={autoComplete}
           autoCapitalize={autoCapitalize}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          submitBehavior={returnKeyType === "next" ? "submit" : undefined}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />

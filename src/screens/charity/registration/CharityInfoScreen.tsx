@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet, Text, View, TextInput,
   TouchableOpacity, Platform, KeyboardAvoidingView,
@@ -36,6 +36,9 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
     infoErrors, validateInfoFields, clearInfoError,
   } = useCharityRegistration();
 
+  const orgNameRef      = useRef<TextInput>(null);
+  const contactPhoneRef = useRef<TextInput>(null);
+
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [showMap, setShowMap]               = useState(false);
 
@@ -53,7 +56,7 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
     <>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           contentContainerStyle={[
@@ -90,6 +93,7 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
             </Text>
             <View style={[styles.inputWrap, !!infoErrors.orgName && styles.inputError]}>
               <TextInput
+                ref={orgNameRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={orgName}
                 onChangeText={v => { setOrgName(v); clearInfoError("orgName"); }}
@@ -97,6 +101,8 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
                 placeholderTextColor={Colors.grayMedium}
                 textAlign={rtl ? "right" : "left"}
                 returnKeyType="next"
+                onSubmitEditing={() => contactPhoneRef.current?.focus()}
+                submitBehavior="submit"
                 autoCapitalize="words"
               />
             </View>
@@ -187,6 +193,7 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
             </Text>
             <View style={[styles.inputWrap, !!infoErrors.contactPhone && styles.inputError]}>
               <TextInput
+                ref={contactPhoneRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={contactPhone}
                 onChangeText={v => { setContactPhone(v); clearInfoError("contactPhone"); }}
@@ -195,6 +202,7 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
                 keyboardType="phone-pad"
                 textAlign={rtl ? "right" : "left"}
                 returnKeyType="done"
+                onSubmitEditing={handleNext}
               />
             </View>
             {!!infoErrors.contactPhone && (
