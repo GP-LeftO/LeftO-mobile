@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet, Text, View, TextInput,
   TouchableOpacity, Platform, KeyboardAvoidingView, ScrollView,
@@ -27,11 +27,6 @@ interface SignInScreenProps {
   role?: "buyer" | "seller" | "charity";
 }
 
-const COUNTRY_CODES = [
-  { code: "970", flag: "🇵🇸" },
-  { code: "972", flag: "🇵🇸" },
-];
-
 export default function SignInScreen({ onSuccess, onBack, onRegister, navigation, role }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
@@ -40,8 +35,8 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
 
   const { login, loginState } = useAuth();
 
-  const [selectedCode, setSelectedCode] = useState(COUNTRY_CODES[0]);
-  const [showPicker, setShowPicker] = useState(false);
+  const phoneRef    = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -84,7 +79,7 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
   };
 
   return (
-    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: topPadding + 12, paddingBottom: bottomPadding + 24 }]}
         keyboardShouldPersistTaps="handled"
@@ -129,38 +124,19 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
           {/* Phone */}
           <View style={styles.fieldWrap}>
             <Text style={[styles.label, rtl && styles.rtl]}>{rtl ? "رقم الهاتف" : "Phone Number"}</Text>
-            <TouchableOpacity
-              style={[styles.countryBtn, rtl && styles.rtlRow]}
-              onPress={() => setShowPicker(!showPicker)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.flag}>{selectedCode.flag}</Text>
-              <Text style={styles.codeText}>{selectedCode.code}</Text>
-              <Feather name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={Colors.grayMedium} />
-            </TouchableOpacity>
-            {showPicker && (
-              <View style={styles.picker}>
-                {COUNTRY_CODES.map((c) => (
-                  <TouchableOpacity
-                    key={c.code}
-                    style={[styles.pickerItem, selectedCode.code === c.code && styles.pickerItemActive]}
-                    onPress={() => { setSelectedCode(c); setShowPicker(false); }}
-                  >
-                    <Text style={styles.flag}>{c.flag}</Text>
-                    <Text style={styles.codeText}>{c.code}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
             <View style={[styles.inputRow, phoneFocused && styles.inputFocused, !!errors.phone && styles.inputError]}>
               <Feather name="phone" size={18} color={phoneFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={phoneRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={phone}
                 onChangeText={(v) => { setPhone(v); setErrors((e) => ({ ...e, phone: "" })); }}
                 placeholder="0590000000"
                 placeholderTextColor={Colors.grayMedium}
                 keyboardType="phone-pad"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                submitBehavior="submit"
                 onFocus={() => setPhoneFocused(true)}
                 onBlur={() => setPhoneFocused(false)}
                 maxLength={15}
@@ -177,6 +153,7 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
             <View style={[styles.inputRow, passwordFocused && styles.inputFocused, !!errors.password && styles.inputError]}>
               <Feather name="lock" size={18} color={passwordFocused ? Colors.primaryOrange : Colors.grayMedium} />
               <TextInput
+                ref={passwordRef}
                 style={[styles.input, rtl && styles.rtl]}
                 value={password}
                 onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: "" })); }}
@@ -184,6 +161,8 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
                 placeholderTextColor={Colors.grayMedium}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleSignIn}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
                 textAlign={rtl ? "right" : "left"}
@@ -264,24 +243,6 @@ const styles = StyleSheet.create({
   fieldWrap: { gap: 6 },
   label: { fontSize: 14, fontWeight: "600", color: Colors.grayDark },
 
-  countryBtn: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.white,
-    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.grayLight,
-    paddingHorizontal: Spacing.md, paddingVertical: 14, marginBottom: 6,
-  },
-  picker: {
-    backgroundColor: Colors.white, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.grayLight,
-    overflow: "hidden", marginBottom: 6,
-  },
-  pickerItem: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: Spacing.md, paddingVertical: 14,
-  },
-  pickerItemActive: { backgroundColor: Colors.orangeLight },
-  flag: { fontSize: 22 },
-  codeText: { flex: 1, fontSize: 16, fontWeight: "600", color: Colors.grayDark },
 
   inputRow: {
     flexDirection: "row", alignItems: "center", gap: 10,

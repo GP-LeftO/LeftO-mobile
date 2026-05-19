@@ -23,6 +23,10 @@ import CharityDocumentScreen  from "./src/screens/charity/registration/CharityDo
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
 import ChatbotScreen          from "./src/screens/buyer/support/ChatbotScreen";
+import CheckoutScreen         from "./src/screens/buyer/reserve/CheckoutScreen";
+import OrderConfirmedScreen   from "./src/screens/buyer/reserve/OrderConfirmedScreen";
+import CharitySelectorScreen  from "./src/screens/buyer/reserve/CharitySelectorScreen";
+import DonationConfirmedScreen from "./src/screens/buyer/reserve/DonationConfirmedScreen";
 import BuyerTabNavigator      from "./src/navigation/BuyerTabNavigator";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
@@ -30,6 +34,7 @@ import type { Language } from "./src/i18n";
 import type { UserRole } from "./src/services/shared/storage";
 import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
 import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./src/types";
+import type { CheckoutParams, Order } from "./src/types/order.types";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -53,7 +58,11 @@ type AppStep =
   | "chatbot"
   | "seller-dashboard"
   | "charity-dashboard"
-  | "store-details";
+  | "store-details"
+  | "checkout"
+  | "order-confirmed"
+  | "charity-selector"
+  | "donation-confirmed";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -83,8 +92,12 @@ function AppContent() {
   const [langRestored,   setLangRestored]   = useState(false);
   const [isRegistering,  setIsRegistering]  = useState(false);
   const [registerError,  setRegisterError]  = useState("");
-  const [storeParams,    setStoreParams]    = useState<StoreDetailsParams | null>(null);
-  const [charityInfoData, setCharityInfoData] = useState<CharityInfoFormData | null>(null);
+  const [storeParams,       setStoreParams]       = useState<StoreDetailsParams | null>(null);
+  const [charityInfoData,   setCharityInfoData]   = useState<CharityInfoFormData | null>(null);
+  const [checkoutParams,    setCheckoutParams]    = useState<CheckoutParams | null>(null);
+  const [confirmedOrder,    setConfirmedOrder]    = useState<Order | null>(null);
+  const [donationQuantity,  setDonationQuantity]  = useState(1);
+  const [donatedCharityName, setDonatedCharityName] = useState("");
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -171,6 +184,15 @@ function AppContent() {
     setRegisterError("");
     setStoreParams(null);
     setCharityInfoData(null);
+    setCheckoutParams(null);
+    setConfirmedOrder(null);
+    setDonationQuantity(1);
+    setDonatedCharityName("");
+  };
+
+  const handleOpenCheckout = (params: CheckoutParams) => {
+    setCheckoutParams(params);
+    goTo("checkout");
   };
 
   const handleListingPress = (params: StoreDetailsParams) => {
@@ -373,6 +395,61 @@ function AppContent() {
             listingId={storeParams.listingId}
             sellerId={storeParams.sellerId}
             onBack={goBack}
+            onCheckout={handleOpenCheckout}
+          />
+        )
+      }
+
+      {step === "checkout" && checkoutParams &&
+        screen(
+          <CheckoutScreen
+            params={checkoutParams}
+            onBack={goBack}
+            onReserved={(order) => {
+              setConfirmedOrder(order);
+              goTo("order-confirmed");
+            }}
+            onDonate={(qty) => {
+              setDonationQuantity(qty);
+              goTo("charity-selector");
+            }}
+          />
+        )
+      }
+
+      {step === "order-confirmed" && confirmedOrder && checkoutParams &&
+        screen(
+          <OrderConfirmedScreen
+            order={confirmedOrder}
+            params={checkoutParams}
+            onGoHome={() => setStepHistory(["buyer-home"])}
+          />
+        )
+      }
+
+      {step === "charity-selector" && checkoutParams &&
+        screen(
+          <CharitySelectorScreen
+            checkoutParams={checkoutParams}
+            quantity={donationQuantity}
+            onBack={goBack}
+            onDonated={(charityName, order) => {
+              setDonatedCharityName(charityName);
+              setConfirmedOrder(order);
+              goTo("donation-confirmed");
+            }}
+          />
+        )
+      }
+
+      {step === "donation-confirmed" && checkoutParams && confirmedOrder &&
+        screen(
+          <DonationConfirmedScreen
+            charityName={donatedCharityName}
+            checkoutParams={checkoutParams}
+            quantity={donationQuantity}
+            order={confirmedOrder}
+            onGoHome={() => setStepHistory(["buyer-home"])}
           />
         )
       }

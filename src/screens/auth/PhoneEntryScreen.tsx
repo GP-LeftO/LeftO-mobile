@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet, Text, View, TextInput,
   TouchableOpacity, Platform, KeyboardAvoidingView, ScrollView,
-  ActivityIndicator,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,11 +19,6 @@ interface PhoneEntryScreenProps {
   navigation?: any;
 }
 
-const COUNTRY_CODES = [
-  { code: "970", flag: "🇵🇸", name: "Palestine" },
-  { code: "972", flag: "🇵🇸", name: "Palestine (972)" },
-];
-
 export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigation }: PhoneEntryScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
@@ -33,9 +27,8 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
 
   const { sendOtp, sendOtpState } = useAuth();
 
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRY_CODES[0]);
+  const phoneRef = useRef<TextInput>(null);
   const [phone, setPhone] = useState("");
-  const [showPicker, setShowPicker] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState(false);
 
@@ -63,7 +56,7 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
   const displayError = error || sendOtpState.error || "";
 
   return (
-    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: topPadding + 12, paddingBottom: bottomPadding + 24 }]}
         keyboardShouldPersistTaps="handled"
@@ -96,40 +89,17 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.inputGroup}>
-          <TouchableOpacity
-            style={[styles.countryBtn, rtl && styles.rtlRow]}
-            onPress={() => setShowPicker(!showPicker)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.flag}>{selectedCountry.flag}</Text>
-            <Text style={styles.countryCode}>{selectedCountry.code}</Text>
-            <Feather name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={Colors.grayMedium} />
-          </TouchableOpacity>
-
-          {showPicker && (
-            <View style={styles.picker}>
-              {COUNTRY_CODES.map((c) => (
-                <TouchableOpacity
-                  key={c.code}
-                  style={[styles.pickerItem, selectedCountry.code === c.code && styles.pickerItemActive]}
-                  onPress={() => { setSelectedCountry(c); setShowPicker(false); }}
-                >
-                  <Text style={styles.flag}>{c.flag}</Text>
-                  <Text style={styles.pickerName}>{c.name}</Text>
-                  <Text style={styles.pickerCode}>{c.code}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
           <View style={[styles.phoneRow, focused && styles.phoneFocused, !!displayError && styles.phoneError]}>
             <TextInput
+              ref={phoneRef}
               style={[styles.phoneInput, rtl && styles.rtl]}
               value={phone}
               onChangeText={(v) => { setPhone(v); setError(""); }}
               placeholder="0590000000"
               placeholderTextColor={Colors.grayMedium}
               keyboardType="phone-pad"
+              returnKeyType="done"
+              onSubmitEditing={handleContinue}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               maxLength={15}
@@ -200,27 +170,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 15, color: Colors.grayMedium, lineHeight: 22, width: "100%" },
 
   inputGroup: { gap: Spacing.sm },
-  countryBtn: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.white,
-    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.grayLight,
-    paddingHorizontal: Spacing.md, paddingVertical: 14,
-  },
-  flag: { fontSize: 22 },
-  countryCode: { flex: 1, fontSize: 16, fontWeight: "600", color: Colors.grayDark },
-  picker: {
-    backgroundColor: Colors.white, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.grayLight, overflow: "hidden",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
-  },
-  pickerItem: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: Spacing.md, paddingVertical: 14,
-  },
-  pickerItemActive: { backgroundColor: Colors.orangeLight },
-  pickerName: { flex: 1, fontSize: 15, color: Colors.grayDark },
-  pickerCode: { fontSize: 14, color: Colors.grayMedium, fontWeight: "600" },
 
   phoneRow: {
     backgroundColor: Colors.white, borderRadius: 14,
