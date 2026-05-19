@@ -18,6 +18,8 @@ import PendingScreen          from "./src/screens/seller/PendingScreen";
 import SignInScreen           from "./src/screens/auth/SignInScreen";
 import SellerDashboardScreen  from "./src/screens/seller/SellerDashboardScreen";
 import CharityDashboardScreen from "./src/screens/charity/CharityDashboardScreen";
+import CharityInfoScreen      from "./src/screens/charity/registration/CharityInfoScreen";
+import CharityDocumentScreen  from "./src/screens/charity/registration/CharityDocumentScreen";
 import RejectedScreen         from "./src/screens/seller/RejectedScreen";
 import StoreDetailsScreen     from "./src/screens/buyer/StoreDetailsScreen";
 import ChatbotScreen          from "./src/screens/buyer/support/ChatbotScreen";
@@ -27,7 +29,7 @@ import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
 import type { UserRole } from "./src/services/shared/storage";
 import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
-import type { StoreDetailsParams, AllergyOption } from "./src/types";
+import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./src/types";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -42,6 +44,8 @@ type AppStep =
   | "basic-info"
   | "role-specific"
   | "allergy-preferences"
+  | "charity-info"
+  | "charity-document"
   | "sign-in"
   | "under-review"
   | "rejected"
@@ -80,6 +84,7 @@ function AppContent() {
   const [isRegistering,  setIsRegistering]  = useState(false);
   const [registerError,  setRegisterError]  = useState("");
   const [storeParams,    setStoreParams]    = useState<StoreDetailsParams | null>(null);
+  const [charityInfoData, setCharityInfoData] = useState<CharityInfoFormData | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -165,6 +170,7 @@ function AppContent() {
     setBasicInfo({ name: "", email: "", password: "" });
     setRegisterError("");
     setStoreParams(null);
+    setCharityInfoData(null);
   };
 
   const handleListingPress = (params: StoreDetailsParams) => {
@@ -254,6 +260,9 @@ function AppContent() {
               if (selectedRole === "buyer") {
                 setBasicInfo(info);
                 goTo("allergy-preferences");
+              } else if (selectedRole === "charity") {
+                setBasicInfo(info);
+                goTo("charity-info");
               } else {
                 handleRegisterAndProceed(info);
               }
@@ -271,6 +280,32 @@ function AppContent() {
             registerError={registerError}
             onContinue={(allergies) => handleRegisterAndProceed(basicInfo, allergies)}
             onSkip={() => handleRegisterAndProceed(basicInfo)}
+          />
+        )
+      }
+
+      {step === "charity-info" &&
+        screen(
+          <CharityInfoScreen
+            key={language}
+            onBack={goBack}
+            onNext={(data) => {
+              setCharityInfoData(data);
+              goTo("charity-document");
+            }}
+          />
+        )
+      }
+
+      {step === "charity-document" && charityInfoData &&
+        screen(
+          <CharityDocumentScreen
+            key={language}
+            basicInfo={basicInfo}
+            phone={phone}
+            charityInfo={charityInfoData}
+            onBack={goBack}
+            onSuccess={() => goTo("charity-dashboard")}
           />
         )
       }
