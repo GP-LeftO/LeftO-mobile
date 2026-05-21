@@ -46,7 +46,7 @@ export function useListings(): UseListingsResult {
     setError(null);
 
     try {
-      const { data } = await api.get("/api/listings");
+      const { data } = await api.get("/api/listings", { params: { status: "ACTIVE" } });
 
       const payload = data?.data ?? data;
       const items: Listing[] = Array.isArray(payload)

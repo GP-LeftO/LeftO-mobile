@@ -36,9 +36,11 @@ export interface SearchResult {
 export const searchListings = async (params: SearchParams): Promise<SearchResult> => {
   const { data } = await api.get("/api/listings/search", { params });
   const payload = data?.data ?? data;
-  const listings: Listing[] = Array.isArray(payload?.listings)
+  const raw: Listing[] = Array.isArray(payload?.listings)
     ? payload.listings
     : Array.isArray(payload) ? payload : [];
+  // Search endpoint has no status filter param — drop non-ACTIVE results client-side
+  const listings = raw.filter((l) => l.status === "ACTIVE");
   const pagination = payload?.pagination ?? { page: 1, limit: 10, total: listings.length, totalPages: 1 };
   return { listings, pagination };
 };

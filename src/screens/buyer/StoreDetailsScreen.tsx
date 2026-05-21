@@ -20,6 +20,8 @@ import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
+import { useSellerReviews } from "../../hooks/buyer/useSellerReviews";
+import ReviewCard from "../../components/buyer/profile/ReviewCard";
 import type { FreshnessBadge, ListingType } from "../../types";
 import type { CheckoutParams } from "../../types/order.types";
 
@@ -107,6 +109,7 @@ export default function StoreDetailsScreen({
   const tr         = t().storeDetails;
 
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
+  const { reviews, loading: reviewsLoading } = useSellerReviews(sellerId);
 
   // ── Error ────────────────────────────────────────────────────────────────────
   if (error) {
@@ -301,6 +304,30 @@ export default function StoreDetailsScreen({
               </Text>
             </View>
           )}
+
+          {/* Reviews */}
+          <View style={styles.card}>
+            <View style={[styles.row, rtl && styles.rowReverse, { gap: 8, marginBottom: 4 }]}>
+              <Feather name="message-square" size={16} color={Colors.primaryOrange} />
+              <Text style={[styles.sectionTitle, rtl && styles.textRight]}>{tr.reviewsTitle}</Text>
+            </View>
+            {reviewsLoading ? (
+              <ActivityIndicator size="small" color={Colors.primaryOrange} style={{ marginVertical: 12 }} />
+            ) : reviews.length === 0 ? (
+              <Text style={[styles.description, rtl && styles.textRight, { marginTop: 4 }]}>{tr.noReviews}</Text>
+            ) : (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {reviews.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    anonymousLabel={tr.anonymous}
+                    rtl={rtl}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
 
           {/* Location / Map */}
           <View style={styles.card}>

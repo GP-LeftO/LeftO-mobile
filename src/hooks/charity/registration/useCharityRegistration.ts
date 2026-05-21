@@ -2,7 +2,11 @@ import { useState } from "react";
 import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../../auth/useAuth";
-import { uploadCharityDocument } from "../../../services/charity/registration/charityRegistration.service";
+import { useAuthContext } from "../../../context/AuthContext";
+import {
+  uploadCharityDocument,
+  registerCharity,
+} from "../../../services/charity/registration/charityRegistration.service";
 import { isRTL } from "../../../i18n";
 import type { CharityInfoFormData } from "../../../types";
 
@@ -11,25 +15,28 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 export function useCharityRegistration() {
   const rtl = isRTL();
   const { register, login } = useAuth();
+  const ctx = useAuthContext();
 
   // ── Info form state (Screen 1) ───────────────────────────────────────────────
-  const [orgName, setOrgName]           = useState("");
-  const [description, setDescription]   = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [infoErrors, setInfoErrors]     = useState<Record<string, string>>({});
+  const [orgName, setOrgName]                       = useState("");
+  const [description, setDescription]               = useState("");
+  const [region, setRegion]                         = useState("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [contactPhone, setContactPhone]             = useState("");
+  const [infoErrors, setInfoErrors]                 = useState<Record<string, string>>({});
 
   // ── Document state (Screen 2) ────────────────────────────────────────────────
-  const [docUri,           setDocUri]           = useState<string | null>(null);
-  const [docName,          setDocName]          = useState("");
-  const [docError,         setDocError]         = useState("");
+  const [docUri,  setDocUri]  = useState<string | null>(null);
+  const [docName, setDocName] = useState("");
+  const [docError, setDocError] = useState("");
 
   // ── Upload state ─────────────────────────────────────────────────────────────
-  const [isUploading,     setIsUploading]     = useState(false);
-  const [uploadProgress,  setUploadProgress]  = useState(0);
+  const [isUploading,    setIsUploading]    = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // ── Submit state ─────────────────────────────────────────────────────────────
-  const [isSubmitting,  setIsSubmitting]  = useState(false);
-  const [submitError,   setSubmitError]   = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError,  setSubmitError]  = useState("");
 
   // ── Validate Screen 1 fields ─────────────────────────────────────────────────
   const validateInfoFields = (location: CharityInfoFormData["location"]): boolean => {
@@ -38,8 +45,16 @@ export function useCharityRegistration() {
       e.orgName = rtl ? "يرجى إدخال اسم المنظمة" : "Please enter your organization name";
     if (!description.trim())
       e.description = rtl ? "يرجى وصف منظمتك" : "Please describe your organization";
+    if (!region.trim())
+      e.region = rtl ? "يرجى إدخال المحافظة أو المنطقة" : "Please enter your region or city";
+    if (!registrationNumber.trim())
+      e.registrationNumber = rtl
+        ? "يرجى إدخال رقم التسجيل الصادر عن وزارة الداخلية"
+        : "Please enter your Ministry of Interior registration number";
     if (!location)
-      e.location = rtl ? "يرجى تحديد منطقة منظمتك على الخريطة" : "Please select your organization region on the map";
+      e.location = rtl
+        ? "يرجى تحديد موقع منظمتك على الخريطة"
+        : "Please select your organization location on the map";
     if (!contactPhone.trim())
       e.contactPhone = rtl ? "يرجى إدخال رقم التواصل" : "Please enter a contact phone number";
     setInfoErrors(e);
@@ -93,17 +108,14 @@ export function useCharityRegistration() {
     setDocError("");
   };
 
-  // ── Register then upload document ────────────────────────────────────────────
-  // Order matters: register sets the auth token; upload requires auth.
+  // ── 3-step flow: register user → upload doc → register charity profile ────────
   const uploadAndRegister = async (
     basicInfo: { name: string; phone: string; password: string; email: string },
     charityInfo: CharityInfoFormData
   ): Promise<"success" | "upload_error" | "register_error"> => {
     if (!docUri) {
       setDocError(
-        rtl
-          ? "يرجى رفع وثيقة التسجيل"
-          : "Please upload a registration document"
+        rtl ? "يرجى رفع وثيقة التسجيل" : "Please upload a registration document"
       );
       return "upload_error";
     }
@@ -112,25 +124,21 @@ export function useCharityRegistration() {
     setDocError("");
     setSubmitError("");
 
-    // Step 1: Register to get auth token
+    // Step 1: Create user account (basic info only)
     try {
       await register({
-        name:             basicInfo.name,
-        phone:            basicInfo.phone,
-        password:         basicInfo.password,
-        role:             "CHARITY",
-        email:            basicInfo.email || undefined,
-        organizationName: charityInfo.orgName,
-        description:      charityInfo.description,
-        location:         charityInfo.location ?? undefined,
-        contactPhone:     charityInfo.contactPhone,
+        name:     basicInfo.name,
+        phone:    basicInfo.phone,
+        password: basicInfo.password,
+        role:     "CHARITY",
+        email:    basicInfo.email || undefined,
       });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string }; status?: number } };
       const status = axiosErr.response?.status;
 
       if (status === 409) {
-        // Already registered (retry after upload failure) — restore session via login
+        // Phone already registered — restore session via login and continue
         try {
           await login(basicInfo.phone, basicInfo.password);
         } catch {
@@ -160,8 +168,9 @@ export function useCharityRegistration() {
     setIsUploading(true);
     setUploadProgress(0);
 
+    let documentUrl = "";
     try {
-      await uploadCharityDocument(docUri, (pct) => setUploadProgress(pct));
+      documentUrl = await uploadCharityDocument(docUri, (pct) => setUploadProgress(pct));
     } catch {
       setDocError(
         rtl
@@ -173,6 +182,43 @@ export function useCharityRegistration() {
     }
 
     setIsUploading(false);
+
+    // Step 3: Register charity profile
+    setIsSubmitting(true);
+    try {
+      const { data: res } = await registerCharity({
+        orgName:            charityInfo.orgName,
+        description:        charityInfo.description || undefined,
+        region:             charityInfo.region,
+        registrationNumber: charityInfo.registrationNumber,
+        location:           charityInfo.location ?? undefined,
+        contactInfo:        { phone: charityInfo.contactPhone },
+        documentUrls:       documentUrl ? [documentUrl] : [],
+      });
+
+      // Persist the approved charityStatus to the session
+      if (ctx.user && ctx.accessToken) {
+        await ctx.saveSession({
+          user:          ctx.user,
+          accessToken:   ctx.accessToken,
+          refreshToken:  ctx.refreshToken ?? undefined,
+          sellerStatus:  ctx.sellerStatus,
+          charityStatus: res.data.status === "APPROVED" ? "APPROVED" : "PENDING",
+        });
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string }; status?: number } };
+      const msg = axiosErr.response?.data?.message;
+      setSubmitError(
+        msg ?? (rtl
+          ? "فشل تسجيل المنظمة، يرجى المحاولة مجدداً"
+          : "Charity registration failed, please try again")
+      );
+      setIsSubmitting(false);
+      return "register_error";
+    }
+
+    setIsSubmitting(false);
     return "success";
   };
 
@@ -182,6 +228,8 @@ export function useCharityRegistration() {
     // Info form
     orgName, setOrgName,
     description, setDescription,
+    region, setRegion,
+    registrationNumber, setRegistrationNumber,
     contactPhone, setContactPhone,
     infoErrors, validateInfoFields, clearInfoError,
 
@@ -198,7 +246,7 @@ export function useCharityRegistration() {
     // Combined busy flag
     isBusy,
 
-    // Upload + register combined action
+    // Combined action
     uploadAndRegister,
   };
 }

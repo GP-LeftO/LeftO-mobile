@@ -147,7 +147,10 @@
     "specificParcel": "Specific Parcel",
     "noDescription": "No description provided.",
     "reservedSuccess": "Reserved successfully!",
-    "donatedSuccess": "Donated successfully!"
+    "donatedSuccess": "Donated successfully!",
+    "reviewsTitle": "Reviews",
+    "noReviews": "No reviews yet",
+    "anonymous": "Anonymous"
   },
   "allergyPreferences": {
     "title": "Allergy preferences",
@@ -176,7 +179,7 @@
     "uploadDoc": "Upload Registration Document",
     "uploadSuccess": "Document uploaded successfully",
     "uploadError": "Document upload failed. Please check the file type and size (max 5MB).",
-    "submitPending": "✅ Your registration is submitted! Our team will review and approve your organization shortly.",
+    "submitPending": "✅ Registration complete! Your organization has been verified and is now active.",
     "next": "Next",
     "submit": "Submit",
     "orgNamePlaceholder": "e.g. Al-Baraka Charity Society",
@@ -188,7 +191,7 @@
     "tapToChange": "Tap to change",
     "uploading": "Uploading document…",
     "submitting": "Submitting registration…",
-    "approvalNote": "Your account will be reviewed by our team within 24–48 hours before activation.",
+    "approvalNote": "If your registration number matches our records, your account will be activated immediately.",
     "screenTitle": "Organization Details",
     "screenSubtitle": "Tell us about your charity organization",
     "docScreenTitle": "Registration Document",
@@ -196,9 +199,15 @@
     "docHint": "Accepted: JPEG, PNG, PDF — max 5 MB",
     "retryUpload": "Retry Upload",
     "locationLabel": "Organization Region",
+    "registrationNumber": "Registration Number",
+    "registrationNumberPlaceholder": "e.g. MOI-10002",
+    "registrationNumberHint": "Your official number issued by the Ministry of Interior (Law No. 1 of 2000)",
+    "regionPlaceholder": "e.g. Nablus",
     "validationOrgName": "Please enter your organization name",
     "validationDescription": "Please describe your organization",
-    "validationLocation": "Please select your organization region on the map",
+    "validationRegion": "Please enter your region or city",
+    "validationRegistrationNumber": "Please enter your Ministry of Interior registration number",
+    "validationLocation": "Please select your organization location on the map",
     "validationPhone": "Please enter a contact phone number",
     "validationDoc": "Please upload a registration document"
   },
@@ -251,6 +260,43 @@
     "quantity": "Quantity",
     "pickup": "Pickup Window",
     "backHome": "Back to Home"
+  },
+  "profile": {
+    "title": "Profile",
+    "points": "pts",
+    "co2Saved": "CO₂ Saved",
+    "kg": "kg",
+    "badges": "My Badges",
+    "noBadges": "No badges yet",
+    "tabs": {
+      "orders": "Orders",
+      "donations": "Donations"
+    },
+    "ordersEmpty": "No completed orders yet",
+    "donationsEmpty": "No donations yet",
+    "leaveReview": "Leave Review",
+    "status": {
+      "COMPLETED": "Completed",
+      "RESERVED": "Reserved",
+      "CANCELLED": "Cancelled"
+    },
+    "review": {
+      "title": "Rate Your Experience",
+      "ratingOverall": "Overall",
+      "ratingPickup": "Pickup",
+      "ratingQuality": "Quality",
+      "ratingVariety": "Variety",
+      "commentPlaceholder": "Add a comment (optional)",
+      "submit": "Submit Review",
+      "submitting": "Submitting…",
+      "success": "Review submitted!",
+      "alreadyReviewed": "Already reviewed",
+      "error": "Something went wrong"
+    },
+    "signOut": "Sign Out",
+    "loading": "Loading profile…",
+    "error": "Could not load profile. Please try again.",
+    "retry": "Retry"
   },
   "favorites": {
     "title": "Favorites",

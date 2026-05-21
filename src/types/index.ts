@@ -147,6 +147,8 @@ export interface StoreDetailsParams {
 export interface CharityInfoFormData {
   orgName: string;
   description: string;
+  region: string;
+  registrationNumber: string;
   location: { latitude: number; longitude: number; address?: string } | null;
   contactPhone: string;
 }

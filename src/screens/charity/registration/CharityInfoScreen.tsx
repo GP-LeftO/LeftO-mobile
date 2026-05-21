@@ -32,12 +32,16 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
   const {
     orgName, setOrgName,
     description, setDescription,
+    region, setRegion,
+    registrationNumber, setRegistrationNumber,
     contactPhone, setContactPhone,
     infoErrors, validateInfoFields, clearInfoError,
   } = useCharityRegistration();
 
-  const orgNameRef      = useRef<TextInput>(null);
-  const contactPhoneRef = useRef<TextInput>(null);
+  const orgNameRef            = useRef<TextInput>(null);
+  const regionRef             = useRef<TextInput>(null);
+  const registrationNumberRef = useRef<TextInput>(null);
+  const contactPhoneRef       = useRef<TextInput>(null);
 
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [showMap, setShowMap]               = useState(false);
@@ -45,10 +49,12 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
   const handleNext = () => {
     if (!validateInfoFields(pickedLocation)) return;
     onNext({
-      orgName:      orgName.trim(),
-      description:  description.trim(),
-      location:     pickedLocation,
-      contactPhone: contactPhone.trim(),
+      orgName:            orgName.trim(),
+      description:        description.trim(),
+      region:             region.trim(),
+      registrationNumber: registrationNumber.trim(),
+      location:           pickedLocation,
+      contactPhone:       contactPhone.trim(),
     });
   };
 
@@ -101,7 +107,7 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
                 placeholderTextColor={Colors.grayMedium}
                 textAlign={rtl ? "right" : "left"}
                 returnKeyType="next"
-                onSubmitEditing={() => contactPhoneRef.current?.focus()}
+                onSubmitEditing={() => regionRef.current?.focus()}
                 submitBehavior="submit"
                 autoCapitalize="words"
               />
@@ -135,7 +141,61 @@ export default function CharityInfoScreen({ onNext, onBack }: CharityInfoScreenP
             )}
           </Animated.View>
 
-          {/* Region — map picker */}
+          {/* Region (governorate / city) */}
+          <Animated.View entering={FadeInDown.delay(270).duration(500).springify()} style={styles.section}>
+            <Text style={[styles.sectionLabel, rtl && styles.rtl]}>
+              <Feather name="map" size={14} color={Colors.primaryOrange} />{" "}
+              {charityReg.region}
+            </Text>
+            <View style={[styles.inputWrap, !!infoErrors.region && styles.inputError]}>
+              <TextInput
+                ref={regionRef}
+                style={[styles.input, rtl && styles.rtl]}
+                value={region}
+                onChangeText={v => { setRegion(v); clearInfoError("region"); }}
+                placeholder={charityReg.regionPlaceholder}
+                placeholderTextColor={Colors.grayMedium}
+                textAlign={rtl ? "right" : "left"}
+                returnKeyType="next"
+                onSubmitEditing={() => registrationNumberRef.current?.focus()}
+                submitBehavior="submit"
+              />
+            </View>
+            {!!infoErrors.region && (
+              <Text style={[styles.errorText, rtl && styles.rtl]}>{infoErrors.region}</Text>
+            )}
+          </Animated.View>
+
+          {/* Ministry of Interior Registration Number */}
+          <Animated.View entering={FadeInDown.delay(285).duration(500).springify()} style={styles.section}>
+            <Text style={[styles.sectionLabel, rtl && styles.rtl]}>
+              <Feather name="hash" size={14} color={Colors.primaryOrange} />{" "}
+              {charityReg.registrationNumber}
+            </Text>
+            <Text style={[styles.sectionHint, rtl && styles.rtl]}>
+              {charityReg.registrationNumberHint}
+            </Text>
+            <View style={[styles.inputWrap, !!infoErrors.registrationNumber && styles.inputError]}>
+              <TextInput
+                ref={registrationNumberRef}
+                style={[styles.input, rtl && styles.rtl]}
+                value={registrationNumber}
+                onChangeText={v => { setRegistrationNumber(v); clearInfoError("registrationNumber"); }}
+                placeholder={charityReg.registrationNumberPlaceholder}
+                placeholderTextColor={Colors.grayMedium}
+                textAlign={rtl ? "right" : "left"}
+                returnKeyType="next"
+                onSubmitEditing={() => contactPhoneRef.current?.focus()}
+                submitBehavior="submit"
+                autoCapitalize="characters"
+              />
+            </View>
+            {!!infoErrors.registrationNumber && (
+              <Text style={[styles.errorText, rtl && styles.rtl]}>{infoErrors.registrationNumber}</Text>
+            )}
+          </Animated.View>
+
+          {/* Location — map picker */}
           <Animated.View entering={FadeInDown.delay(300).duration(500).springify()} style={styles.section}>
             <Text style={[styles.sectionLabel, rtl && styles.rtl]}>
               <Feather name="map-pin" size={14} color={Colors.primaryOrange} />{" "}
@@ -263,6 +323,7 @@ const styles = StyleSheet.create({
 
   section:      { gap: 10 },
   sectionLabel: { fontSize: 15, fontWeight: "700", color: Colors.grayDark },
+  sectionHint:  { fontSize: 13, color: Colors.grayMedium, marginTop: -4 },
   errorText:    { fontSize: 13, color: "#ef4444" },
 
   inputWrap: {

@@ -28,11 +28,11 @@
 |------|---------|
 | React Native + Expo (Managed) | Cross-platform mobile framework |
 | TypeScript | Static typing throughout |
-| Expo Router (file-based) | Routing via `app/` directory |
+| State-machine router (App.tsx) | Custom `stepHistory` stack — no React Navigation |
 | Reanimated + FadeIn/FadeOut | Screen transition animations |
 | React Native Safe Area Context | Safe area inset handling |
 | Axios | HTTP client with token attach + silent 401 refresh |
-| AsyncStorage | Token + onboarding + language persistence |
+| AsyncStorage | Token, onboarding, language, reviewed-order-IDs persistence |
 | expo-localization | Device language detection |
 | Nunito (Google Fonts) | Brand typography (400–800 weights) |
 | @expo/vector-icons (Feather) | Icon set used throughout |
@@ -58,126 +58,135 @@ Spacing scale: `4 / 8 / 16 / 24 / 32 / 48` — defined in `src/theme/index.ts`.
 ## Project Structure
 
 ```
-artifacts/lefto-mobile/
-├── app/
-│   └── index.tsx               # Root state-machine navigator (all steps wired here)
-├── src/
-│   ├── screens/
-│   │   ├── onboarding/
-│   │   │   ├── SplashScreen.tsx
-│   │   │   ├── LanguageSelectionScreen.tsx
-│   │   │   └── OnboardingScreen.tsx
-│   │   ├── auth/
-│   │   │   ├── PhoneEntryScreen.tsx
-│   │   │   ├── OTPVerificationScreen.tsx
-│   │   │   └── SignInScreen.tsx
-│   │   ├── registration/
-│   │   │   ├── RoleSelectionScreen.tsx
-│   │   │   ├── BasicInfoScreen.tsx
-│   │   │   ├── AllergyPreferencesScreen.tsx  # buyer-only step 5/6
-│   │   │   └── RoleSpecificInfoScreen.tsx
-│   │   ├── buyer/
-│   │   │   ├── HomeScreen.tsx          # Discovery: Surprise Bags, Parcels, Popular
-│   │   │   ├── SearchScreen.tsx        # Live search with debounce
-│   │   │   ├── StoreDetailsScreen.tsx  # Full listing + seller detail page
-│   │   │   ├── OrdersScreen.tsx        # My orders (Reserved/Completed tabs)
-│   │   │   └── ProfileScreen.tsx       # User profile
-│   │   ├── seller/
-│   │   │   ├── SellerDashboardScreen.tsx
-│   │   │   ├── PendingScreen.tsx
-│   │   │   └── RejectedScreen.tsx
-│   │   └── charity/
-│   │       ├── CharityDashboardScreen.tsx
-│   │       └── registration/
-│   │           ├── CharityInfoScreen.tsx      # Step 4/5: org name, description, region, contact phone
-│   │           └── CharityDocumentScreen.tsx  # Step 5/5: document upload → register → dashboard
-│   ├── components/
-│   │   ├── buyer/
-│   │   │   ├── ListingCard.tsx         # Card with freshness badge, price, sold-out overlay
-│   │   │   └── filters/
-│   │   │       ├── FilterPanel.tsx     # Slide-up Modal bottom sheet (Animated, no lib)
-│   │   │       ├── CategoryPicker.tsx  # Horizontal chip row, single-select
-│   │   │       ├── FreshnessPicker.tsx # Multi-select chips with emoji badges
-│   │   │       ├── PriceRangeSlider.tsx# Dual-thumb slider (PanResponder, no lib)
-│   │   │       ├── RadiusSelector.tsx  # Segmented 1 km / 5 km / 10 km control
-│   │   │       └── SortOptions.tsx     # Distance / Price / Rating chips
-│   │   ├── shared/
-│   │   │   ├── Button.tsx
-│   │   │   ├── Chip.tsx              # Multi-select toggle chip (allergy prefs)
-│   │   │   ├── OnboardingSlide.tsx
-│   │   │   ├── RoleCard.tsx
-│   │   │   ├── PaginationDots.tsx
-│   │   │   └── LeftOLogo.tsx
-│   ├── hooks/
-│   │   ├── auth/
-│   │   │   └── useAuth.ts           # sendOtp, verifyOtp, register, login, logout
-│   │   ├── buyer/
-│   │   │   ├── useListings.ts       # Fetches all listings, derives 3 sorted arrays
-│   │   │   ├── useSearch.ts         # Debounced search (500ms), empty-query short-circuit
-│   │   │   ├── useSearchFilters.ts  # Filter state, activeFilterCount, buildQueryParams()
-│   │   │   ├── useStoreDetails.ts   # Parallel fetch: listing + seller
-│   │   │   └── useAllergyPreferences.ts  # Multi-select toggle state for allergy chips
-│   │   ├── charity/
-│   │   │   └── registration/
-│   │   │       └── useCharityRegistration.ts  # Form state, doc upload, register call
-│   │   └── shared/
-│   │       └── useColors.ts
-│   ├── services/
-│   │   ├── shared/
-│   │   │   ├── api.ts              # Axios instance: token attach + silent 401 refresh
-│   │   │   └── storage.ts
-│   │   ├── auth/
-│   │   │   └── auth.service.ts     # RegisterParams extended with optional charity fields
-│   │   ├── buyer/
-│   │   │   ├── listing.service.ts  # getListingById, getSellerById
-│   │   │   ├── search.service.ts   # searchListings → GET /api/listings/search
-│   │   │   ├── order.service.ts
-│   │   │   └── favorites.service.ts
-│   │   ├── charity/
-│   │   │   └── registration/
-│   │   │       └── charityRegistration.service.ts  # uploadCharityDocument wrapper
-│   │   └── seller/
-│   │       ├── seller.service.ts
-│   │       └── document.service.ts
-│   ├── context/
-│   │   └── AuthContext.tsx     # user, tokens, sellerStatus, charityStatus; persisted
-│   ├── i18n/
-│   │   ├── index.ts            # t(), isRTL(), setLanguageAsync(), restoreLanguage()
-│   │   ├── en.json
-│   │   └── ar.json
-│   └── theme/
-│       └── index.ts            # Colors, Spacing, Typography
+LeftO-mobile/
+├── App.tsx                        # Root state-machine navigator (stepHistory stack)
+└── src/
+    ├── screens/
+    │   ├── onboarding/
+    │   │   ├── SplashScreen.tsx
+    │   │   ├── LanguageSelectionScreen.tsx
+    │   │   └── OnboardingScreen.tsx
+    │   ├── auth/
+    │   │   ├── PhoneEntryScreen.tsx
+    │   │   ├── OTPVerificationScreen.tsx
+    │   │   └── SignInScreen.tsx
+    │   ├── registration/
+    │   │   ├── RoleSelectionScreen.tsx
+    │   │   ├── BasicInfoScreen.tsx
+    │   │   ├── AllergyPreferencesScreen.tsx
+    │   │   └── RoleSpecificInfoScreen.tsx
+    │   ├── buyer/
+    │   │   ├── HomeScreen.tsx          # Discovery: Surprise Bags, Parcels, Popular
+    │   │   ├── SearchScreen.tsx        # Live search + filter panel
+    │   │   ├── StoreDetailsScreen.tsx  # Listing detail + seller reviews section
+    │   │   ├── CheckoutScreen.tsx      # Reserve / Donate checkout
+    │   │   ├── OrderConfirmedScreen.tsx
+    │   │   ├── DonationConfirmedScreen.tsx
+    │   │   ├── CharitySelectorScreen.tsx
+    │   │   ├── OrdersScreen.tsx
+    │   │   └── ProfileScreen.tsx       # Full profile: stats, badges, activity, settings
+    │   ├── seller/
+    │   │   ├── SellerDashboardScreen.tsx
+    │   │   ├── PendingScreen.tsx
+    │   │   └── RejectedScreen.tsx
+    │   └── charity/
+    │       ├── CharityDashboardScreen.tsx
+    │       └── registration/
+    │           ├── CharityInfoScreen.tsx
+    │           └── CharityDocumentScreen.tsx
+    ├── components/
+    │   ├── buyer/
+    │   │   ├── ListingCard.tsx
+    │   │   ├── filters/
+    │   │   │   ├── FilterPanel.tsx
+    │   │   │   ├── CategoryPicker.tsx
+    │   │   │   ├── FreshnessPicker.tsx
+    │   │   │   ├── PriceRangeSlider.tsx
+    │   │   │   ├── RadiusSelector.tsx
+    │   │   │   └── SortOptions.tsx
+    │   │   └── profile/
+    │   │       ├── BadgeGrid.tsx       # Icon-based badge cards, unlocked/locked states
+    │   │       ├── OrderCard.tsx       # Order row + Leave Review bottom sheet modal
+    │   │       ├── DonationCard.tsx    # Donation row (green accent, charity name)
+    │   │       └── ReviewCard.tsx      # Individual seller review (avatar, stars, comment)
+    │   └── shared/
+    │       ├── Button.tsx
+    │       ├── Chip.tsx
+    │       ├── LeafletMap.tsx
+    │       ├── OnboardingSlide.tsx
+    │       ├── RoleCard.tsx
+    │       ├── PaginationDots.tsx
+    │       └── LeftOLogo.tsx
+    ├── hooks/
+    │   ├── auth/
+    │   │   └── useAuth.ts
+    │   ├── buyer/
+    │   │   ├── useListings.ts          # Fetches ACTIVE listings only (status=ACTIVE param)
+    │   │   ├── useSearch.ts
+    │   │   ├── useSearchFilters.ts
+    │   │   ├── useStoreDetails.ts
+    │   │   ├── useSellerReviews.ts     # Fetches seller reviews for StoreDetailsScreen
+    │   │   ├── useAllergyPreferences.ts
+    │   │   └── profile/
+    │   │       └── useProfile.ts       # Profile + orders + reviews state + AsyncStorage
+    │   ├── charity/
+    │   │   └── registration/
+    │   │       └── useCharityRegistration.ts
+    │   └── shared/
+    │       └── useColors.ts
+    ├── services/
+    │   ├── shared/
+    │   │   ├── api.ts
+    │   │   └── storage.ts
+    │   ├── auth/
+    │   │   └── auth.service.ts
+    │   ├── buyer/
+    │   │   ├── listing.service.ts
+    │   │   ├── search.service.ts       # Client-side ACTIVE filter for search results
+    │   │   ├── order.service.ts
+    │   │   ├── favorites.service.ts
+    │   │   └── profile/
+    │   │       └── profileService.ts   # fetchProfile, fetchMyOrders, submitReview, fetchSellerReviews
+    │   ├── charity/
+    │   │   └── registration/
+    │   │       └── charityRegistration.service.ts
+    │   └── seller/
+    │       ├── seller.service.ts
+    │       └── document.service.ts
+    ├── context/
+    │   └── AuthContext.tsx
+    ├── types/
+    │   ├── index.ts
+    │   ├── profile.ts                  # ProfileOrder, ReviewPayload, SellerReview, ToastKey
+    │   ├── order.types.ts
+    │   └── chatbot.ts
+    ├── i18n/
+    │   ├── index.ts
+    │   ├── en.json
+    │   └── ar.json
+    └── theme/
+        └── index.ts
 ```
 
 ---
 
 ## Navigation Model
 
-This app uses a **state-machine pattern** — no React Navigation tab bar or stack. All screen transitions are managed via a `stepHistory` array in `app/index.tsx`. Each screen receives `onBack` / `onComplete` / `onXxx` callbacks; it never imports a navigation library directly.
+Custom **state-machine router** — no React Navigation. `App.tsx` maintains a `stepHistory: AppStep[]` stack. Screens receive `onBack` / `onComplete` / `onXxx` callbacks and never import a navigation library.
 
 ```
-splash
-  └─► language-selection
-        └─► onboarding
-              └─► phone-entry ◄──── sign-in
-                    └─► otp-verification
-                          └─► role-selection
-                                └─► basic-info
-                                      └─► role-specific
-                                      └─► allergy-preferences (buyer only)
-                                                  └─► role-specific
-                                                        ├─► buyer-home ◄──────────────────────┐
-                                                        │     ├─► buyer-search                │
-                                                        │     │     └─► store-details ─────────┘
-                                                        │     ├─► store-details
-                                                        │     └─► chatbot (Profile → Customer Support)
-                                            ├─► seller-dashboard
-                                            ├─► charity-info
-                                            │     └─► charity-document
-                                            │           └─► charity-dashboard
-                                            ├─► charity-dashboard
-                                            ├─► under-review
-                                            └─► rejected
+splash → language-selection → onboarding → phone-entry ←→ sign-in
+  └─► otp → role-selection → basic-info → allergy-prefs (buyer) → role-specific
+        ├─► buyer-home
+        │     ├─► browse (list + map)
+        │     │     └─► store-details → checkout → order-confirmed
+        │     │                      └─► charity-selector → donation-confirmed
+        │     ├─► search → store-details
+        │     ├─► favorites
+        │     ├─► orders
+        │     └─► profile → chatbot
+        ├─► seller-dashboard / pending / rejected
+        └─► charity-info → charity-document → charity-dashboard
 ```
 
 ---
@@ -196,54 +205,118 @@ splash
 - Logout clears all state + AsyncStorage
 - Full RTL / LTR layout switching via `isRTL()` throughout
 
-### Registration — Buyer-only step
-After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 5/6) with 10 multi-select chips: Gluten, Dairy, Nuts, Eggs, Seafood, Soy, Sesame, Vegetarian, Vegan, Halal only. Selecting and tapping Continue sends `allergyPreferences: string[]` in the `POST /api/auth/register` body. Skip bypasses it. Sellers and charities go directly from Basic Info to role-specific registration.
-
-> **⚠️ Pending backend fix:** `POST /api/auth/register` does not yet accept or save `allergyPreferences` — assigned to backend team. `GET /api/users/me` confirms the field exists in the DB but is always returned as `[]` after fresh registration. No `PATCH /api/users/me` endpoint exists yet to update it post-registration.
-
 ### Buyer
-| Screen | Details |
-|--------|---------|
-| HomeScreen | 3 sections: Surprise Bags, Parcels & Groceries, Popular Today — real data from `GET /api/listings`, pull-to-refresh, skeleton loading, error + retry, per-section empty states |
-| SearchScreen | Live search bar (auto-focus), 500ms debounce, `GET /api/listings/search`, 5 states: initial / loading skeleton / results / empty / error, RTL icon flip. Smart Filters panel (slide-up modal): category, freshness, price range (dual-thumb slider), radius, sort. Filter count badge on trigger button. Empty-with-filters state has Clear Filters CTA. |
-| StoreDetailsScreen | Hero with freshness badge (green/orange/red), discounted price, pickup window, items left, description, allergen card, star rating, map placeholder, Reserve + Donate CTAs, sold-out state |
-| OrdersScreen | Real orders from `GET /api/orders/me`; Cancel + Confirm Pickup on RESERVED tab |
-| ProfileScreen | Real user data (name, phone, email, member-since) |
-| ChatbotScreen | AI assistant accessible from Profile → Customer Support; orange header with 🤖 avatar; 4 Arabic suggested chips (hidden after first message); inverted FlatList with animated 3-dot typing indicator; per-message RTL via `isArabicText()`; error bubble on failure; `KeyboardAvoidingView` |
+| Screen | Status | Details |
+|--------|--------|---------|
+| HomeScreen | ✅ | 3 sections (Surprise Bags, Parcels, Popular), **ACTIVE listings only** (`status=ACTIVE`), pull-to-refresh, skeleton, error+retry |
+| SearchScreen | ✅ | Live search, 500ms debounce, 5 filter types, **client-side ACTIVE filter** (search endpoint has no status param) |
+| StoreDetailsScreen | ✅ | Hero, freshness badge, pricing, pickup window, allergen card, rating, **seller reviews list**, map, Reserve + Donate CTAs |
+| CheckoutScreen | ✅ | Reserve or Donate flow, cash-on-pickup, quantity picker |
+| CharitySelectorScreen | ✅ | List of verified charities with selection |
+| OrderConfirmedScreen | ✅ | Order summary with pickup details |
+| DonationConfirmedScreen | ✅ | Donation summary |
+| OrdersScreen | ✅ | Real orders from `GET /api/orders/me`; Reserved / Completed tabs |
+| ProfileScreen | ✅ | Full profile — see details below |
+| ChatbotScreen | ✅ | AI assistant, suggested chips, animated typing indicator, per-message RTL |
+| FavoritesScreen | ✅ | Saved stores, optimistic remove, bell toggle, empty state |
 
-### Chatbot Screen
-- Screen: `src/screens/buyer/support/ChatbotScreen.tsx`
-- Hook: `src/hooks/buyer/support/useChatbot.ts`
-- Service: `src/services/buyer/support/chatbotService.ts`
-- Types: `src/types/chatbot.ts`
-- API: POST /api/chatbot/message (shape verified from Swagger)
-- Auth: JWT from AuthContext sent in Authorization header
-- Message history: session-only, no persistence
-- RTL: handled per message bubble, not globally
+---
+
+### Profile Screen (Sprint 2)
+
+Full buyer profile with real data from `GET /api/users/me` and `GET /api/orders/me`.
+
+**Files:**
+
+| File | Role |
+|------|------|
+| `src/screens/buyer/ProfileScreen.tsx` | FlatList shell, impact grid, badges, activity tabs, footer buttons |
+| `src/hooks/buyer/profile/useProfile.ts` | All state: profile, orders, reviewedIds (AsyncStorage-persisted), toast |
+| `src/services/buyer/profile/profileService.ts` | `fetchProfile()`, `fetchMyOrders()`, `submitReview()`, `fetchSellerReviews()` |
+| `src/components/buyer/profile/BadgeGrid.tsx` | Icon-based badge cards — 6 standard badges, unlocked/locked visual states |
+| `src/components/buyer/profile/OrderCard.tsx` | Order row + Leave Review bottom sheet (4 star ratings + comment) |
+| `src/components/buyer/profile/DonationCard.tsx` | Donation row (green accent, charity/seller name fallback) |
+| `src/components/buyer/profile/ReviewCard.tsx` | Individual review card used in StoreDetailsScreen |
+| `src/types/profile.ts` | `ProfileOrder`, `ReviewPayload`, `SellerReview`, `ToastKey` |
+
+**Layout (top → bottom):**
+
+1. **Avatar** — initials from `profile.name`, `avatarColor` from API, disabled camera button
+2. **Name, contact, role badge, member since**
+3. **Impact grid** (2 × 2, horizontal card layout):
+   - Points (`profile.points`)
+   - CO₂ Saved (`profile.totalCo2SavedKg` kg)
+   - Donations (count of `type=DONATION && status=COMPLETED` orders)
+   - Orders (count of `status=COMPLETED && type≠DONATION` orders)
+4. **My Badges** — `BadgeGrid` with 6 standard badges always shown (First Bag, Eco Hero, Kind Heart, Loyal Saver, Top Saver, Community Hero). Earned = colorful + glow ring. Unearned = gray dashed + padlock overlay. Extra backend badges auto-resolved via keyword matching.
+5. **My Activity** label → segmented Orders / Donations tabs → order/donation cards
+6. **Footer:**
+   - **AI Assistant** button → opens chatbot
+   - **Settings** button → collapses/expands settings panel (Personal Info, Notifications, Pickup Times, Rate LeftO, Terms & Privacy)
+   - **Sign Out** button
+
+**Leave Review flow:**
+- Button appears on COMPLETED orders only when `sellerId` is present and order hasn't been reviewed
+- Bottom sheet: 4 required star dimensions (`ratingOverall`, `ratingPickup`, `ratingQuality`, `ratingVariety`) + optional comment → `POST /api/reviews`
+- HTTP 201 → success toast, button hidden
+- HTTP 409 (already reviewed) → "Already reviewed" toast, button hidden
+- Reviewed order IDs persisted to AsyncStorage (`@lefto_reviewed_order_ids`) — button stays hidden across app restarts
+
+**Known backend note:** `POST /api/reviews` returns HTTP 409 (not 400) for "already reviewed". Both are handled.
+
+---
+
+### Seller Reviews on Store Details (Sprint 2)
+
+Individual reviews now appear below the aggregate rating card on `StoreDetailsScreen`.
+
+- Hook: `src/hooks/buyer/useSellerReviews.ts` — fetches `GET /api/reviews/seller/:id` (limit 10)
+- Component: `src/components/buyer/profile/ReviewCard.tsx` — buyer avatar (initials), overall star rating, comment, date
+- Shows spinner while loading, "No reviews yet" when empty
+- Full RTL support
+
+---
+
+### Active Listing Filter (Sprint 2)
+
+`SOLD_OUT` and `EXPIRED` listings no longer appear anywhere in the buyer experience.
+
+| Screen | Fix |
+|--------|-----|
+| HomeScreen | `GET /api/listings` now passes `status=ACTIVE` query param |
+| Browse / Map | `GET /api/listings` same fix via `useListings` |
+| Search | `GET /api/listings/search` has no status param — results filtered client-side: `raw.filter(l => l.status === "ACTIVE")` |
+
+---
+
+### Chatbot
+- `src/screens/buyer/support/ChatbotScreen.tsx`
+- `src/hooks/buyer/support/useChatbot.ts`
+- `src/services/buyer/support/chatbotService.ts`
+- API: `POST /api/chatbot/message` — body: `{ message, lat?, lng? }`, response: `{ reply }`
+- 4 Arabic suggested-question chips, hidden after first message sent
+- Inverted FlatList, animated 3-dot typing indicator
+- Per-message RTL via `isArabicText()` helper
 
 ### Favorites
-- View all saved stores with their latest active listing (bag type, pickup window, distance, price)
-- Bell icon toggles per-store notifications (local state — no API call required)
-- Heart icon removes a store instantly with **optimistic UI** and a success toast; reverts on API failure
-- Skeleton loading state while favorites are fetched
-- Empty state with CTA to navigate to the Browse screen
-- Full Arabic RTL + English LTR layout support
+- `GET /api/favorites/me` — list of saved sellers with latest listing
+- Bell icon toggles per-store notifications (local state only)
+- Heart icon removes optimistically → `DELETE /api/favorites/:sellerId` — reverts on failure
+- Skeleton, empty state with Browse CTA, full RTL
 
 ### Seller
 | Screen | Details |
 |--------|---------|
-| Registration | Business name, type (Restaurant / Market / Bakery), map location, description, document upload with progress → `POST /api/sellers/register` |
-| SellerDashboardScreen | Listings tab: real data via `GET /api/listings?sellerId`; Mark Sold Out per listing |
-| PendingScreen | Under-review state |
-| RejectedScreen | Rejection state |
+| Registration | Business name, type, map location, description, document upload → `POST /api/sellers/register` |
+| SellerDashboardScreen | `GET /api/listings?sellerId`; Mark Sold Out per listing |
+| PendingScreen / RejectedScreen | Status states |
 
 ### Charity
-| Screen | Path | Details |
-|--------|------|---------|
-| CharityInfoScreen | `src/screens/charity/registration/CharityInfoScreen.tsx` | Step 4/5 — Collects organization name, description, region (map picker), and contact phone. Validates all fields before allowing Next. Full RTL support. |
-| CharityDocumentScreen | `src/screens/charity/registration/CharityDocumentScreen.tsx` | Step 5/5 — Document upload (JPEG/PNG, max 5 MB) with real-time progress bar. On upload success calls `POST /api/auth/register` with role `CHARITY` and all collected form data. Shows success message then navigates to CharityDashboardScreen. On upload failure shows inline error and stays on screen — register is never called. |
-| CharityDashboardScreen | `src/screens/charity/CharityDashboardScreen.tsx` | Real user name; status badge (Approved / Under Review / Rejected); quick action cards (coming soon). |
-| PendingScreen / RejectedScreen | Shared with seller flow | — |
+| Screen | Details |
+|--------|---------|
+| CharityInfoScreen | Org name, description, region (map pin), contact phone, registration number. Full RTL. |
+| CharityDocumentScreen | JPEG/PNG/PDF upload (max 5 MB), real-time progress bar → `POST /api/auth/register` (CHARITY role) |
+| CharityDashboardScreen | Real user name, status badge (Approved / Under Review / Rejected) |
 
 ---
 
@@ -254,20 +327,25 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 | POST | `/api/auth/send-otp` | PhoneEntryScreen |
 | POST | `/api/auth/verify-otp` | OTPVerificationScreen |
 | POST | `/api/auth/login` | SignInScreen |
-| POST | `/api/auth/register` | BasicInfoScreen |
-| POST | `/api/auth/refresh` | Axios 401 interceptor |
+| POST | `/api/auth/register` | BasicInfoScreen, CharityDocumentScreen |
+| POST | `/api/auth/refresh` | Axios 401 interceptor (silent) |
 | POST | `/api/sellers/register` | RoleSpecificInfoScreen |
 | GET | `/api/sellers/me` | seller.service |
 | GET | `/api/sellers/:id` | listing.service → StoreDetailsScreen |
-| POST | `/api/documents/upload` | document.service, charityRegistration.service (type: `charity_registration`) |
-| GET | `/api/listings` | useListings → HomeScreen |
-| GET | `/api/listings/search` | search.service → SearchScreen. Filter params: `category`, `freshnessBadge`, `minPrice`, `maxPrice`, `radius` (km), `sortBy`, `excludeAllergens` (comma-separated) |
+| POST | `/api/documents/upload` | document.service, charityRegistration.service |
+| GET | `/api/listings` | useListings → Home + Browse (`status=ACTIVE`) |
+| GET | `/api/listings/search` | search.service → SearchScreen (client-side ACTIVE filter) |
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |
 | PATCH | `/api/listings/:id/sold-out` | SellerDashboardScreen |
-| GET | `/api/orders/me` | order.service → OrdersScreen |
+| GET | `/api/users/me` | profileService → ProfileScreen |
+| GET | `/api/orders/me` | order.service → OrdersScreen; profileService → ProfileScreen |
+| POST | `/api/reviews` | profileService → OrderCard. Fields: `orderId`, `sellerId`, `ratingOverall`, `ratingPickup`, `ratingQuality`, `ratingVariety` (1–5 int), `comment?` |
+| GET | `/api/reviews/seller/:id` | useSellerReviews → StoreDetailsScreen (limit=10) |
 | GET | `/api/favorites/me` | favorites.service → FavoritesScreen |
-| DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic remove) |
-| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen. Body: `{ message, lat?, lng? }`. Response: `{ reply }` |
+| DELETE | `/api/favorites/:sellerId` | favorites.service → FavoritesScreen (optimistic) |
+| POST | `/api/chatbot/message` | chatbotService → ChatbotScreen |
+| GET | `/api/charities` | CharitySelectorScreen |
+| POST | `/api/orders` | order.service → CheckoutScreen (reserve + donate) |
 
 ---
 
@@ -282,47 +360,31 @@ After Basic Info (step 4/6), buyers see an **Allergy Preferences** screen (step 
 
 ## Getting Started
 
-### Prerequisites
-- Node.js 24+
-- pnpm 9+
-- Expo Go app on your phone
-
-### Installation
 ```bash
-git clone https://github.com/LeftO-Org/LeftO-mobile.git
-cd LeftO-mobile
-pnpm install
-```
+# Install
+cd LeftO-mobile && npm install
 
-### Running the app (Replit)
-```bash
-pnpm --filter @workspace/lefto-mobile run dev
-```
+# Start dev server
+npx expo start
 
-### Running the API server
-```bash
-pnpm --filter @workspace/api-server run dev
-```
-
-### Running the full workspace typecheck
-```bash
-pnpm run typecheck
+# TypeScript check
+npx tsc --noEmit
 ```
 
 ---
 
-## Listing Types, Freshness Badges & Enums
+## Listing Types, Freshness & Enums
 
 | Type | API value |
 |------|-----------|
 | Surprise Bag | `MEAL_BAG` |
 | Specific Parcel | `SPECIFIC_PARCEL` |
 
-| Badge | API value | Colour | Meaning |
-|-------|-----------|--------|---------|
-| Eat Today | `eat_today` | Green | Prepared today, consume same day |
-| Fresh Tonight | `fresh_tonight` | Orange | Best consumed tonight |
-| Good 1–2 Days | `good_1_2_days` | Red/Amber | Near expiry |
+| Freshness badge | API value | Color |
+|----------------|-----------|-------|
+| Eat Today | `eat_today` | Green |
+| Fresh Tonight | `fresh_tonight` | Orange |
+| Good 1–2 Days | `good_1_2_days` | Red |
 
 | Listing status | API value |
 |----------------|-----------|
@@ -337,7 +399,77 @@ pnpm run typecheck
 | Groceries | `GROCERIES` |
 | Mixed | `MIXED` |
 
-AllergyOption values (lowercase, as returned by `GET /api/users/me`):
-`gluten` · `dairy` · `nuts` · `eggs` · `seafood` · `soy` · `sesame` · `vegetarian` · `vegan` · `halal_only`
+---
 
+## Sprint Status
 
+### ✅ Sprint 1 — Core Buyer Flow
+- Onboarding, auth, role selection, registration
+- Home, Search, Browse (list + map), StoreDetails
+- Reserve/Donate checkout flow
+- Favorites
+- Chatbot (AI assistant)
+- Seller dashboard + registration
+- Charity registration + dashboard
+
+### ✅ Sprint 2 — Profile, Reviews & Data Quality
+
+| Feature | Status |
+|---------|--------|
+| Buyer Profile Screen (avatar, stats, badges, tabs) | ✅ Done |
+| Leave Review (4 stars + comment → POST /api/reviews) | ✅ Done |
+| 409 "already reviewed" handled correctly | ✅ Done |
+| Reviewed IDs persisted to AsyncStorage | ✅ Done |
+| Seller reviews list on StoreDetailsScreen | ✅ Done |
+| SOLD_OUT / EXPIRED listings hidden everywhere | ✅ Done |
+| Profile response unwrapping fix (was showing "?" / "—") | ✅ Done |
+| Donation + Order counts show COMPLETED only | ✅ Done |
+| Impact grid redesign (2×2, horizontal cards) | ✅ Done |
+| BadgeGrid redesign (icon-based cards, 6 standard badges) | ✅ Done |
+| Settings panel (collapsible, AI Assistant + Settings buttons) | ✅ Done |
+
+### 🔲 Sprint 3 — Pending / Next
+
+| Feature | Notes |
+|---------|-------|
+| Personal Information editing | Needs `PATCH /api/users/me` from backend (endpoint unconfirmed) |
+| Avatar photo upload | Same — needs `PATCH /api/users/me` with avatar fields |
+| Allergy preferences editing | `GET /api/users/me` returns `[]` always — backend fix needed |
+| Notification settings | No push notification API yet — backend to implement |
+| Preferred Pickup Times | No API endpoint yet |
+| Rate LeftO | Needs app store link wired in |
+| Terms & Privacy | Content/screen not yet built |
+| Seller reviews pagination | Currently loads max 10 — add "load more" |
+| Money Saved stat | `AuthUser.moneySaved` field may not be populated by backend |
+| Seller profile page | View seller's full profile + all listings |
+| Order cancellation from ProfileScreen | Currently only in OrdersScreen |
+| Push notifications | Backend needed |
+| Charity receiving flow | Charities accepting / managing incoming donations |
+
+---
+
+## Known Backend Notes
+
+| Issue | Status |
+|-------|--------|
+| `POST /api/reviews` returns HTTP 409 for "already reviewed" (Swagger says 400) | Handled on frontend (both 400 + 409 caught) |
+| `GET /api/listings/search` has no `status` filter param | Handled client-side |
+| `POST /api/auth/register` does not save `allergyPreferences` | Pending backend fix |
+| `PATCH /api/users/me` — no endpoint for profile editing | Pending backend implementation |
+
+---
+
+## Pending Tests
+
+### Charity Registration
+Requires a valid `registrationNumber` from the backend seed data (`MOI-10002` etc.).
+
+- [ ] Full flow with seeded registration number → `status: "APPROVED"`
+- [ ] Invalid registration number → 400 error surfaced correctly
+- [ ] RTL layout for Region and Registration Number fields
+
+### Reviews
+- [ ] Submit review on a COMPLETED order → 201 success, button hidden
+- [ ] Submit review twice → 409 handled, "Already reviewed" toast, button still hidden
+- [ ] Close app and reopen → reviewed orders still show no Leave Review button (AsyncStorage)
+- [ ] Seller reviews appear on StoreDetailsScreen after at least 1 review submitted

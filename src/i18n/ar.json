@@ -147,7 +147,10 @@
     "specificParcel": "طرد محدد",
     "noDescription": "لا يوجد وصف متاح.",
     "reservedSuccess": "تم الحجز بنجاح!",
-    "donatedSuccess": "تم التبرع بنجاح!"
+    "donatedSuccess": "تم التبرع بنجاح!",
+    "reviewsTitle": "التقييمات",
+    "noReviews": "لا توجد تقييمات بعد",
+    "anonymous": "مجهول"
   },
   "allergyPreferences": {
     "title": "تفضيلات الحساسية",
@@ -176,7 +179,7 @@
     "uploadDoc": "رفع وثيقة التسجيل",
     "uploadSuccess": "تم رفع الوثيقة بنجاح",
     "uploadError": "فشل رفع الوثيقة. تحقق من نوع الملف والحجم (الحد الأقصى 5 ميغابايت).",
-    "submitPending": "✅ تم إرسال طلبك! سيقوم فريقنا بمراجعة منظمتك والموافقة عليها قريباً.",
+    "submitPending": "✅ اكتمل التسجيل! تم التحقق من منظمتك وهي الآن نشطة.",
     "next": "التالي",
     "submit": "إرسال",
     "orgNamePlaceholder": "مثال: جمعية البركة الخيرية",
@@ -188,7 +191,7 @@
     "tapToChange": "اضغط للتغيير",
     "uploading": "جاري رفع الوثيقة…",
     "submitting": "جاري إرسال الطلب…",
-    "approvalNote": "سيتم مراجعة حسابك من قبل فريقنا خلال ٢٤–٤٨ ساعة قبل التفعيل.",
+    "approvalNote": "إذا تطابق رقم تسجيلك مع سجلاتنا، سيتم تفعيل حسابك فوراً.",
     "screenTitle": "تفاصيل المنظمة",
     "screenSubtitle": "أخبرنا عن منظمتك الخيرية",
     "docScreenTitle": "وثيقة التسجيل",
@@ -196,9 +199,15 @@
     "docHint": "المقبول: JPEG أو PNG أو PDF — الحد الأقصى 5 ميغابايت",
     "retryUpload": "إعادة رفع الوثيقة",
     "locationLabel": "منطقة المنظمة",
+    "registrationNumber": "رقم التسجيل",
+    "registrationNumberPlaceholder": "مثال: MOI-10002",
+    "registrationNumberHint": "رقم تسجيلكم الرسمي الصادر عن وزارة الداخلية (قانون رقم 1 لعام 2000)",
+    "regionPlaceholder": "مثال: نابلس",
     "validationOrgName": "يرجى إدخال اسم المنظمة",
     "validationDescription": "يرجى وصف منظمتك",
-    "validationLocation": "يرجى تحديد منطقة منظمتك على الخريطة",
+    "validationRegion": "يرجى إدخال المحافظة أو المنطقة",
+    "validationRegistrationNumber": "يرجى إدخال رقم التسجيل الصادر عن وزارة الداخلية",
+    "validationLocation": "يرجى تحديد موقع منظمتك على الخريطة",
     "validationPhone": "يرجى إدخال رقم التواصل",
     "validationDoc": "يرجى رفع وثيقة التسجيل"
   },
@@ -251,6 +260,43 @@
     "quantity": "الكمية",
     "pickup": "وقت الاستلام",
     "backHome": "العودة للرئيسية"
+  },
+  "profile": {
+    "title": "الملف الشخصي",
+    "points": "نقطة",
+    "co2Saved": "CO₂ موفّر",
+    "kg": "كغم",
+    "badges": "شاراتي",
+    "noBadges": "لا توجد شارات بعد",
+    "tabs": {
+      "orders": "الطلبات",
+      "donations": "التبرعات"
+    },
+    "ordersEmpty": "لا توجد طلبات مكتملة بعد",
+    "donationsEmpty": "لا توجد تبرعات بعد",
+    "leaveReview": "اترك تقييماً",
+    "status": {
+      "COMPLETED": "مكتمل",
+      "RESERVED": "محجوز",
+      "CANCELLED": "ملغى"
+    },
+    "review": {
+      "title": "قيّم تجربتك",
+      "ratingOverall": "عام",
+      "ratingPickup": "الاستلام",
+      "ratingQuality": "الجودة",
+      "ratingVariety": "التنوع",
+      "commentPlaceholder": "أضف تعليقاً (اختياري)",
+      "submit": "إرسال التقييم",
+      "submitting": "جاري الإرسال…",
+      "success": "تم إرسال التقييم!",
+      "alreadyReviewed": "تم التقييم مسبقاً",
+      "error": "حدث خطأ ما"
+    },
+    "signOut": "تسجيل الخروج",
+    "loading": "جاري تحميل الملف الشخصي…",
+    "error": "تعذّر تحميل الملف الشخصي. يرجى المحاولة مجدداً.",
+    "retry": "إعادة المحاولة"
   },
   "favorites": {
     "title": "المفضلة",
