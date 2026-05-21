@@ -227,6 +227,21 @@
     "pickup": "Pickup Window",
     "itemsAvailable": "{count} available"
   },
+  "impactCelebration": {
+    "titleReserve": "Great save!",
+    "titleDonate": "Amazing donation!",
+    "subtitleReserve": "You just rescued food from going to waste.",
+    "subtitleDonate": "You just helped feed someone in need.",
+    "co2Label": "CO₂ saved",
+    "co2Grams": "g",
+    "co2Kg": "kg",
+    "equivalent": "Like not driving {km} km",
+    "moneySaved": "₪{amount} saved",
+    "points": "+{pts} pts",
+    "badgeEarned": "New badge earned!",
+    "viewDetails": "See Order Details",
+    "backHome": "Back to Home"
+  },
   "orderConfirmed": {
     "title": "Reservation Confirmed!",
     "subtitle": "Your order is reserved. Pick it up before the window closes!",

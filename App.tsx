@@ -26,8 +26,9 @@ import ChatbotScreen          from "./src/screens/buyer/support/ChatbotScreen";
 import CheckoutScreen         from "./src/screens/buyer/reserve/CheckoutScreen";
 import OrderConfirmedScreen   from "./src/screens/buyer/reserve/OrderConfirmedScreen";
 import CharitySelectorScreen  from "./src/screens/buyer/reserve/CharitySelectorScreen";
-import DonationConfirmedScreen from "./src/screens/buyer/reserve/DonationConfirmedScreen";
-import BuyerTabNavigator      from "./src/navigation/BuyerTabNavigator";
+import DonationConfirmedScreen    from "./src/screens/buyer/reserve/DonationConfirmedScreen";
+import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebrationScreen";
+import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -60,6 +61,7 @@ type AppStep =
   | "charity-dashboard"
   | "store-details"
   | "checkout"
+  | "impact-celebration"
   | "order-confirmed"
   | "charity-selector"
   | "donation-confirmed";
@@ -407,12 +409,28 @@ function AppContent() {
             onBack={goBack}
             onReserved={(order) => {
               setConfirmedOrder(order);
-              goTo("order-confirmed");
+              goTo("impact-celebration");
             }}
             onDonate={(qty) => {
               setDonationQuantity(qty);
               goTo("charity-selector");
             }}
+          />
+        )
+      }
+
+      {step === "impact-celebration" && confirmedOrder && checkoutParams &&
+        screen(
+          <ImpactCelebrationScreen
+            co2SavedKg={checkoutParams.estimatedCo2SavedKg ?? 0.5}
+            moneySaved={checkoutParams.originalPrice - checkoutParams.discountedPrice}
+            pointsEarned={Math.round(checkoutParams.discountedPrice)}
+            isDonation={confirmedOrder.type === "DONATION"}
+            newBadge={null}
+            onViewDetails={() =>
+              goTo(confirmedOrder.type === "DONATION" ? "donation-confirmed" : "order-confirmed")
+            }
+            onGoHome={() => setStepHistory(["buyer-home"])}
           />
         )
       }
@@ -436,7 +454,7 @@ function AppContent() {
             onDonated={(charityName, order) => {
               setDonatedCharityName(charityName);
               setConfirmedOrder(order);
-              goTo("donation-confirmed");
+              goTo("impact-celebration");
             }}
           />
         )

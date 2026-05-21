@@ -23,6 +23,7 @@ import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useListings } from "../../hooks/buyer/useListings";
+import { useHomeStats } from "../../hooks/buyer/useHomeStats";
 import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
 import LeftOLogo from "../../components/shared/LeftOLogo";
 import type { Listing, StoreDetailsParams } from "../../types";
@@ -45,6 +46,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
 
   const { logout, user } = useAuth();
   const { surpriseBags, parcels, popularToday, loading, refreshing, error, onRefresh } = useListings();
+  const stats = useHomeStats();
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -122,11 +124,23 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
 
         {/* Impact strip */}
         <View style={styles.impactStrip}>
-          <ImpactStat icon="wind"       label={tr.co2Saved}   value={user?.co2Saved     != null ? `${user.co2Saved} kg` : "—"} />
+          <ImpactStat
+            icon="wind"
+            label={tr.co2Saved}
+            value={stats.loading ? "…" : stats.co2SavedKg != null ? `${stats.co2SavedKg.toFixed(1)} kg` : "—"}
+          />
           <View style={styles.impactDivider} />
-          <ImpactStat icon="dollar-sign" label={tr.moneySaved} value={user?.moneySaved  != null ? `₪${user.moneySaved}` : "—"} />
+          <ImpactStat
+            icon="dollar-sign"
+            label={tr.moneySaved}
+            value={stats.loading ? "…" : stats.moneySaved != null ? `₪${stats.moneySaved.toFixed(0)}` : "—"}
+          />
           <View style={styles.impactDivider} />
-          <ImpactStat icon="heart"       label={tr.donations}  value={user?.donationCount != null ? String(user.donationCount) : "—"} />
+          <ImpactStat
+            icon="heart"
+            label={tr.donations}
+            value={stats.loading ? "…" : stats.donationCount != null ? String(stats.donationCount) : "—"}
+          />
         </View>
 
         {/* Error state */}
