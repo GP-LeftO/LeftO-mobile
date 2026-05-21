@@ -33,12 +33,9 @@ export function useHomeStats(): HomeStats {
             const orig = order.listing?.originalPrice;
             const disc = order.listing?.discountedPrice;
             if (orig != null && disc != null) {
-              // Exact: backend returned both prices
               return acc + (orig - disc) * order.quantity;
             }
-            // Fallback: backend omits originalPrice in orders response,
-            // use totalPrice (discounted amount paid) as the savings value
-            return acc + (order.totalPrice ?? 0);
+            return acc;
           }, 0);
         setMoneySaved(saved);
       })
