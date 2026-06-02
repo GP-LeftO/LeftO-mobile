@@ -30,6 +30,7 @@ import DonationConfirmedScreen    from "./src/screens/buyer/reserve/DonationConf
 import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebrationScreen";
 import NearMeScreen              from "./src/screens/buyer/nearMe/NearMeScreen";
 import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
+import ListingFormScreen          from "./src/screens/seller/listings/ListingFormScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -38,6 +39,7 @@ import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
 import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./src/types";
 import type { CheckoutParams, Order } from "./src/types/order.types";
 import type { NearMeCoords } from "./src/types/nearMe";
+import type { SellerListing } from "./src/services/seller/seller.service";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -67,7 +69,9 @@ type AppStep =
   | "order-confirmed"
   | "charity-selector"
   | "donation-confirmed"
-  | "near-me";
+  | "near-me"
+  | "seller-create-listing"
+  | "seller-edit-listing";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -104,6 +108,8 @@ function AppContent() {
   const [donationQuantity,  setDonationQuantity]  = useState(1);
   const [donatedCharityName, setDonatedCharityName] = useState("");
   const [nearMeCoords,      setNearMeCoords]      = useState<NearMeCoords | null>(null);
+  const [listingToEdit,     setListingToEdit]     = useState<SellerListing | undefined>(undefined);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -396,7 +402,33 @@ function AppContent() {
       }
 
       {step === "seller-dashboard" &&
-        screen(<SellerDashboardScreen onLogout={handleLogout} />)
+        screen(
+          <SellerDashboardScreen
+            onLogout={handleLogout}
+            refreshKey={dashboardRefreshKey}
+            onCreateListing={() => {
+              setListingToEdit(undefined);
+              goTo("seller-create-listing");
+            }}
+            onEditListing={(listing) => {
+              setListingToEdit(listing);
+              goTo("seller-edit-listing");
+            }}
+          />
+        )
+      }
+
+      {(step === "seller-create-listing" || step === "seller-edit-listing") &&
+        screen(
+          <ListingFormScreen
+            existing={step === "seller-edit-listing" ? listingToEdit : undefined}
+            onBack={goBack}
+            onComplete={() => {
+              setDashboardRefreshKey(k => k + 1);
+              goBack();
+            }}
+          />
+        )
       }
 
       {step === "charity-dashboard" &&

@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Claude Code session notes (persist across branches, not tracked by git)
+.claude/fe-gap-analysis.md
+.claude/implementation-plan.md
