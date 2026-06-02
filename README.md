@@ -218,6 +218,7 @@ splash → language-selection → onboarding → phone-entry ←→ sign-in
 | OrdersScreen | ✅ | Real orders from `GET /api/orders/me`; Reserved / Completed tabs |
 | ProfileScreen | ✅ | Full profile — see details below |
 | ChatbotScreen | ✅ | AI assistant, suggested chips, animated typing indicator, per-message RTL |
+| NearMeScreen | ✅ | GPS-powered AI chat — finds nearby surplus food, dark theme, store cards, mic button |
 | FavoritesScreen | ✅ | Saved stores, optimistic remove, bell toggle, empty state |
 
 ---
@@ -289,6 +290,46 @@ Individual reviews now appear below the aggregate rating card on `StoreDetailsSc
 
 ---
 
+### Near Me — "اسألني الآن 📍" (Sprint 3)
+
+AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants location permission, and enters an immersive dark chat interface that automatically finds nearby surplus food listings and renders them as tappable store cards inside AI reply bubbles.
+
+**Files:**
+
+| File | Role |
+|------|------|
+| `src/screens/buyer/nearMe/NearMeScreen.tsx` | Main screen — dark navy gradient, header with pulsing pin, inverted chat FlatList, input bar + mic button |
+| `src/hooks/buyer/nearMe/useNearMe.ts` | All state: messages, loading, auto-send on mount, Haversine distance calc, sorts by distance |
+| `src/services/buyer/nearMe/nearMeService.ts` | `getNearbyListings()` → `GET /api/listings?latitude=&longitude=&radius=&status=ACTIVE`; `getChatbotNearMeReply()` → `POST /api/chatbot/message` with location coords |
+| `src/types/nearMe.ts` | `NearMeListing`, `NearMeSeller`, `NearMeMessage`, `NearMeCoords`, `NearMeQueryParams` — derived from live API |
+| `src/components/buyer/nearMe/NearMeChatBubble.tsx` | User bubble (orange, RTL) + AI bubble (dark card) with embedded horizontal FlatList of store cards |
+| `src/components/buyer/nearMe/StoreCardResult.tsx` | Dark card with orange left-border accent — shows store name, category, discount %, distance, pickup time, quantity, price |
+| `src/components/buyer/nearMe/LocationPinLoader.tsx` | 3-phase animation: pin drops (spring), bounces (squish), ripple rings expand in loop |
+| `src/components/buyer/nearMe/NearMeMicButton.tsx` | 64px circular orange button, pulse ring animation while listening, spinner while processing |
+| `src/components/shared/NearMeEntryButton.tsx` | Pulsing "اسألني الآن 📍" button on Home; handles `expo-location` permission request + branded permission dialog |
+
+**Flow:**
+1. Buyer taps "اسألني الآن 📍" on Home → `NearMeEntryButton` requests GPS permission
+2. If denied → branded modal explains why (LeftO never shares location)
+3. If granted → get coords → navigate to `NearMeScreen` passing `{ latitude, longitude }`
+4. Screen opens with `LocationPinLoader` animation (1.5 s) then auto-sends "إيش في قريب مني؟ 🗺️"
+5. Hook fires two parallel requests: `GET /api/listings` (location-filtered) + `POST /api/chatbot/message` (with lat/lng)
+6. Store results sorted by Haversine distance, shown as `StoreCardResult` inside the AI bubble
+7. Buyer can keep chatting (text or mic) to refine results; each message re-queries both endpoints
+
+**API endpoints used:**
+
+| Method | Endpoint | Params |
+|--------|----------|--------|
+| GET | `/api/listings` | `latitude`, `longitude`, `radius=10`, `status=ACTIVE`, `limit=8` |
+| POST | `/api/chatbot/message` | body: `{ message, lat, lng }` |
+
+**Navigation:** Added `"near-me"` to `AppStep` in `App.tsx`. Accessed only from Home — back button returns to Home. No bottom tab.
+
+**Visual identity:** Dark gradient `#1A1A2E → #16213E → #0F3460`. Accent `#FF6B35`. Full RTL, Arabic text throughout.
+
+---
+
 ### Chatbot
 - `src/screens/buyer/support/ChatbotScreen.tsx`
 - `src/hooks/buyer/support/useChatbot.ts`
@@ -346,6 +387,8 @@ Individual reviews now appear below the aggregate rating card on `StoreDetailsSc
 | POST | `/api/chatbot/message` | chatbotService → ChatbotScreen |
 | GET | `/api/charities` | CharitySelectorScreen |
 | POST | `/api/orders` | order.service → CheckoutScreen (reserve + donate) |
+| GET | `/api/listings` | nearMeService → NearMeScreen (with `latitude`, `longitude`, `radius`, `status=ACTIVE`) |
+| POST | `/api/chatbot/message` | nearMeService → NearMeScreen (with `lat`, `lng` for location-aware AI reply) |
 
 ---
 
@@ -428,10 +471,30 @@ npx tsc --noEmit
 | BadgeGrid redesign (icon-based cards, 6 standard badges) | ✅ Done |
 | Settings panel (collapsible, AI Assistant + Settings buttons) | ✅ Done |
 
-### 🔲 Sprint 3 — Pending / Next
+### ✅ Sprint 3 — Near Me Feature
+| Feature | Status |
+|---------|--------|
+| "اسألني الآن 📍" entry button on Home | ✅ Done |
+| GPS permission flow with branded dialog | ✅ Done |
+| NearMeScreen — dark navy gradient, immersive UI | ✅ Done |
+| LocationPinLoader animation (drop + bounce + ripple) | ✅ Done |
+| Auto-send opening message on screen open | ✅ Done |
+| AI reply + store cards in same bubble | ✅ Done |
+| Distance calculation (Haversine, sorted nearest-first) | ✅ Done |
+| StoreCardResult — discount %, distance, pickup window | ✅ Done |
+| Tapping store card opens StoreDetailsScreen | ✅ Done |
+| Mic button UI with pulse animation | ✅ Done |
+| Quick chips for common refinements | ✅ Done |
+| Full RTL layout, Arabic text throughout | ✅ Done |
+| TypeScript types from live API response shapes | ✅ Done |
+
+**Note:** Voice-to-text (mic button transcription) requires `@react-native-voice/voice` which is not yet installed. The mic button is fully UI-complete; tapping it currently focuses the text input as a fallback. Install the package and wire `SpeechResultsEvent` to `sendNearMeQuery` to activate.
+
+### 🔲 Remaining / Next
 
 | Feature | Notes |
 |---------|-------|
+| Voice recognition for mic button | Install `@react-native-voice/voice`, wire to `sendNearMeQuery` |
 | Personal Information editing | Needs `PATCH /api/users/me` from backend (endpoint unconfirmed) |
 | Avatar photo upload | Same — needs `PATCH /api/users/me` with avatar fields |
 | Allergy preferences editing | `GET /api/users/me` returns `[]` always — backend fix needed |

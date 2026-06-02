@@ -22,6 +22,7 @@ import { Colors } from "../theme";
 import { isRTL } from "../i18n";
 
 import type { StoreDetailsParams } from "../types";
+import type { NearMeCoords } from "../types/nearMe";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export interface BuyerTabNavigatorProps {
   onLogout?: () => void;
   onListingPress?: (params: StoreDetailsParams) => void;
   onOpenChatbot?: () => void;
+  onOpenNearMe?: (coords: NearMeCoords) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -64,7 +66,7 @@ export default function BuyerTabNavigator(props: BuyerTabNavigatorProps) {
 
 // ─── Inner content — has access to FavoritesContext ───────────────────────────
 
-function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot }: BuyerTabNavigatorProps) {
+function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe }: BuyerTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const botPad = Platform.OS === "web" ? 16 : insets.bottom;
   const rtl = isRTL();
@@ -84,6 +86,7 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot }: BuyerTabNa
             onLogout={onLogout}
             onListingPress={onListingPress}
             onSearchPress={goToBrowse}
+            onOpenNearMe={onOpenNearMe}
           />
         );
       case "browse":

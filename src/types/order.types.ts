@@ -8,6 +8,7 @@ export interface CheckoutParams {
   originalPrice: number;
   discountedPrice: number;
   availableQuantity: number;
+  estimatedCo2SavedKg?: number;
 }
 
 export interface CreateOrderPayload {

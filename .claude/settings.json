@@ -17,7 +17,11 @@
       "PowerShell($content = Invoke-WebRequest -Uri \"https://lefto-backend-production.up.railway.app/api/docs/swagger-ui-init.js\" -UseBasicParsing | Select-Object -ExpandProperty Content; $content | Out-File -FilePath \"$env:TEMP\\\\swagger_init.js\" -Encoding utf8; Write-Host \"Saved. Size: $\\($content.Length\\) chars\")",
       "Bash(node -e ' *)",
       "Read(//c/Users/GIGABYTE/.claude/projects/c--Users-GIGABYTE-Desktop-Projects-LeftO-LeftO-mobile/memory/**)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/GP-LeftO/lefto-backend/src/**)",
+      "Bash(gh repo *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p = require\\('./node_modules/@react-native-voice/voice/package.json'\\); console.log\\(p.version, p.main\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\GIGABYTE\\.claude\\projects\\c--Users-GIGABYTE-Desktop-Projects-LeftO-LeftO-mobile\\memory"

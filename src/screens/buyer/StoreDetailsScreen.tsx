@@ -160,14 +160,17 @@ export default function StoreDetailsScreen({
 
   const buildCheckoutParams = (): CheckoutParams => ({
     listingId,
-    listingTitle:      listing.title,
-    storeName:         seller?.businessName ?? listing.seller?.businessName ?? "",
-    pickupStart:       listing.pickupStart,
-    pickupEnd:         listing.pickupEnd,
+    listingTitle:        listing.title,
+    storeName:           seller?.businessName ?? listing.seller?.businessName ?? "",
+    pickupStart:         listing.pickupStart,
+    pickupEnd:           listing.pickupEnd,
     pickupWindow,
-    originalPrice:     listing.originalPrice,
-    discountedPrice:   listing.discountedPrice,
-    availableQuantity: listing.quantity,
+    originalPrice:       listing.originalPrice,
+    discountedPrice:     listing.discountedPrice,
+    availableQuantity:   listing.quantity,
+    estimatedCo2SavedKg: listing.estimatedCo2SavedG != null
+      ? listing.estimatedCo2SavedG / 1000
+      : undefined,
   });
 
   return (

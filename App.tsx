@@ -26,8 +26,10 @@ import ChatbotScreen          from "./src/screens/buyer/support/ChatbotScreen";
 import CheckoutScreen         from "./src/screens/buyer/reserve/CheckoutScreen";
 import OrderConfirmedScreen   from "./src/screens/buyer/reserve/OrderConfirmedScreen";
 import CharitySelectorScreen  from "./src/screens/buyer/reserve/CharitySelectorScreen";
-import DonationConfirmedScreen from "./src/screens/buyer/reserve/DonationConfirmedScreen";
-import BuyerTabNavigator      from "./src/navigation/BuyerTabNavigator";
+import DonationConfirmedScreen    from "./src/screens/buyer/reserve/DonationConfirmedScreen";
+import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebrationScreen";
+import NearMeScreen              from "./src/screens/buyer/nearMe/NearMeScreen";
+import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -35,6 +37,7 @@ import type { UserRole } from "./src/services/shared/storage";
 import type { PostLoginRoute } from "./src/screens/auth/SignInScreen";
 import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./src/types";
 import type { CheckoutParams, Order } from "./src/types/order.types";
+import type { NearMeCoords } from "./src/types/nearMe";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -60,9 +63,11 @@ type AppStep =
   | "charity-dashboard"
   | "store-details"
   | "checkout"
+  | "impact-celebration"
   | "order-confirmed"
   | "charity-selector"
-  | "donation-confirmed";
+  | "donation-confirmed"
+  | "near-me";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -98,6 +103,7 @@ function AppContent() {
   const [confirmedOrder,    setConfirmedOrder]    = useState<Order | null>(null);
   const [donationQuantity,  setDonationQuantity]  = useState(1);
   const [donatedCharityName, setDonatedCharityName] = useState("");
+  const [nearMeCoords,      setNearMeCoords]      = useState<NearMeCoords | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -198,6 +204,11 @@ function AppContent() {
   const handleListingPress = (params: StoreDetailsParams) => {
     setStoreParams(params);
     goTo("store-details");
+  };
+
+  const handleOpenNearMe = (coords: NearMeCoords) => {
+    setNearMeCoords(coords);
+    goTo("near-me");
   };
 
   // ── Wait until both auth + language are ready before showing splash ─────────
@@ -365,12 +376,23 @@ function AppContent() {
             onLogout={handleLogout}
             onListingPress={handleListingPress}
             onOpenChatbot={() => goTo("chatbot")}
+            onOpenNearMe={handleOpenNearMe}
           />
         )
       }
 
       {step === "chatbot" &&
         screen(<ChatbotScreen onBack={goBack} />)
+      }
+
+      {step === "near-me" && nearMeCoords &&
+        screen(
+          <NearMeScreen
+            coords={nearMeCoords}
+            onBack={goBack}
+            onListingPress={handleListingPress}
+          />
+        )
       }
 
       {step === "seller-dashboard" &&
@@ -407,12 +429,28 @@ function AppContent() {
             onBack={goBack}
             onReserved={(order) => {
               setConfirmedOrder(order);
-              goTo("order-confirmed");
+              goTo("impact-celebration");
             }}
             onDonate={(qty) => {
               setDonationQuantity(qty);
               goTo("charity-selector");
             }}
+          />
+        )
+      }
+
+      {step === "impact-celebration" && confirmedOrder && checkoutParams &&
+        screen(
+          <ImpactCelebrationScreen
+            co2SavedKg={checkoutParams.estimatedCo2SavedKg ?? 0.5}
+            moneySaved={checkoutParams.originalPrice - checkoutParams.discountedPrice}
+            pointsEarned={Math.round(checkoutParams.discountedPrice)}
+            isDonation={confirmedOrder.type === "DONATION"}
+            newBadge={null}
+            onViewDetails={() =>
+              goTo(confirmedOrder.type === "DONATION" ? "donation-confirmed" : "order-confirmed")
+            }
+            onGoHome={() => setStepHistory(["buyer-home"])}
           />
         )
       }
@@ -436,7 +474,7 @@ function AppContent() {
             onDonated={(charityName, order) => {
               setDonatedCharityName(charityName);
               setConfirmedOrder(order);
-              goTo("donation-confirmed");
+              goTo("impact-celebration");
             }}
           />
         )

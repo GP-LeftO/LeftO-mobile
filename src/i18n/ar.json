@@ -227,6 +227,21 @@
     "pickup": "وقت الاستلام",
     "itemsAvailable": "{count} متاح"
   },
+  "impactCelebration": {
+    "titleReserve": "عمل رائع!",
+    "titleDonate": "تبرع مذهل!",
+    "subtitleReserve": "لقد أنقذت طعاماً من الهدر للتو.",
+    "subtitleDonate": "ساعدت للتو في إطعام شخص محتاج.",
+    "co2Label": "CO₂ موفّر",
+    "co2Grams": "غ",
+    "co2Kg": "كغ",
+    "equivalent": "كأنك لم تقد السيارة {km} كم",
+    "moneySaved": "وفّرت ₪{amount}",
+    "points": "+{pts} نقطة",
+    "badgeEarned": "شارة جديدة!",
+    "viewDetails": "تفاصيل الطلب",
+    "backHome": "العودة للرئيسية"
+  },
   "orderConfirmed": {
     "title": "تم تأكيد الحجز!",
     "subtitle": "طلبك محجوز. استلمه قبل انتهاء الوقت!",

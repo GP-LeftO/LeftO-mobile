@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { UserProfile } from "../../../types";
 import type { ProfileOrder, ReviewPayload, ToastKey } from "../../../types/profile";
@@ -37,6 +37,11 @@ export function useProfile(): UseProfileResult {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastKey | null>(null);
 
+  // Track whether we have ever successfully loaded profile data.
+  // Used to decide whether a retry should show the full loading state
+  // (no data yet) vs. the pull-to-refresh spinner (data already visible).
+  const hasDataRef = useRef(false);
+
   // Load persisted reviewed IDs from AsyncStorage on mount
   useEffect(() => {
     AsyncStorage.getItem(REVIEWED_IDS_KEY)
@@ -55,23 +60,38 @@ export function useProfile(): UseProfileResult {
   }, []);
 
   const fetchAll = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    // If retrying after a failed first load (no data yet), show the full
+    // loading spinner so we don't flash an empty profile section.
+    if (isRefresh && !hasDataRef.current) {
+      setLoading(true);
+    } else if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
-    try {
-      const [profileData, ordersData] = await Promise.all([
-        fetchProfile(),
-        fetchMyOrders(),
-      ]);
-      setProfile(profileData);
-      setAllOrders(ordersData);
-    } catch {
+    // Fetch profile and orders independently so a failing orders endpoint
+    // does not prevent the profile from rendering.
+    const [profileResult, ordersResult] = await Promise.allSettled([
+      fetchProfile(),
+      fetchMyOrders(),
+    ]);
+
+    if (profileResult.status === "rejected") {
+      // Profile is the critical resource — surface the error.
       setError("error");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    } else {
+      hasDataRef.current = true;
+      setProfile(profileResult.value);
+      // Orders failure is non-fatal: show the profile with an empty list.
+      setAllOrders(
+        ordersResult.status === "fulfilled" ? ordersResult.value : [],
+      );
     }
+
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);

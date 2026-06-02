@@ -14,6 +14,7 @@ export interface ProfileOrderCharity {
 export interface ProfileOrderListing {
   id: string;
   title: string;
+  originalPrice?: number;
   discountedPrice: number;
   seller?: ProfileOrderSeller;
 }
