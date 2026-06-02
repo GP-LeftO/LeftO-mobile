@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -31,10 +33,12 @@ interface Order {
   totalPrice?: number;
   createdAt?: string;
   listing?: {
+    id?: string;
     title?: string;
     price?: number;
     pickupStart?: string;
     pickupEnd?: string;
+    qrCodeUrl?: string;
     seller?: { businessName?: string; businessType?: string };
     charity?: { name?: string };
   };
@@ -57,6 +61,8 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [qrModal,       setQrModal]       = useState<{ orderId: string; title: string; qrUrl: string } | null>(null);
+  const [qrFetching,    setQrFetching]    = useState<string | null>(null);
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -147,6 +153,30 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleShowQR = async (order: Order) => {
+    // Use cached qrCodeUrl if available on listing, otherwise fetch it
+    if (order.listing?.qrCodeUrl) {
+      setQrModal({ orderId: order.id, title: order.listing.title ?? "Order", qrUrl: order.listing.qrCodeUrl });
+      return;
+    }
+    if (!order.listing?.id) return;
+    setQrFetching(order.id);
+    try {
+      const { data } = await api.get(`/api/listings/${order.listing.id}`);
+      const listing = data.data ?? data;
+      const qrUrl = listing?.qrCodeUrl;
+      if (qrUrl) {
+        setQrModal({ orderId: order.id, title: listing?.title ?? "Order", qrUrl });
+      } else {
+        Alert.alert(rtl ? "تنبيه" : "Note", rtl ? "رمز QR غير متاح لهذا الطلب" : "QR code not available for this order");
+      }
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحميل رمز QR" : "Could not load QR code");
+    } finally {
+      setQrFetching(null);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
@@ -206,25 +236,53 @@ export default function OrdersScreen() {
                 order={order}
                 rtl={rtl}
                 actionLoading={actionLoading === order.id}
+                qrFetching={qrFetching === order.id}
                 onCancel={() => handleCancel(order.id)}
                 onConfirmPickup={() => handleConfirmPickup(order.id)}
+                onShowQR={() => handleShowQR(order)}
               />
             ))
           )}
         </ScrollView>
       )}
+
+      {/* QR Code modal */}
+      <Modal
+        visible={qrModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrModal(null)}
+      >
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrSheet}>
+            <Text style={styles.qrTitle}>{rtl ? "رمز QR للاستلام" : "Pickup QR Code"}</Text>
+            <Text style={styles.qrSubtitle} numberOfLines={1}>{qrModal?.title}</Text>
+            {qrModal?.qrUrl && (
+              <Image source={{ uri: qrModal.qrUrl }} style={styles.qrImage} resizeMode="contain" />
+            )}
+            <Text style={[styles.qrHint, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "أرِ هذا الرمز للبائع عند استلام طلبك" : "Show this code to the seller when picking up your order"}
+            </Text>
+            <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setQrModal(null)} activeOpacity={0.85}>
+              <Text style={styles.qrCloseBtnText}>{rtl ? "إغلاق" : "Close"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 function OrderCard({
-  order, rtl, actionLoading, onCancel, onConfirmPickup,
+  order, rtl, actionLoading, qrFetching, onCancel, onConfirmPickup, onShowQR,
 }: {
   order: Order;
   rtl: boolean;
   actionLoading: boolean;
+  qrFetching: boolean;
   onCancel: () => void;
   onConfirmPickup: () => void;
+  onShowQR: () => void;
 }) {
   const statusInfo = STATUS_LABELS[order.status] ?? { en: order.status, ar: order.status, color: Colors.grayMedium };
   const statusLabel = rtl ? statusInfo.ar : statusInfo.en;
@@ -299,7 +357,25 @@ function OrderCard({
       </View>
 
       {isReserved && (
-        <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
+        <>
+          {/* Show QR button */}
+          <TouchableOpacity
+            style={styles.qrBtn}
+            onPress={onShowQR}
+            disabled={qrFetching}
+            activeOpacity={0.8}
+          >
+            {qrFetching ? (
+              <ActivityIndicator size="small" color={Colors.primaryOrange} />
+            ) : (
+              <>
+                <Feather name="grid" size={14} color={Colors.primaryOrange} />
+                <Text style={styles.qrBtnText}>{rtl ? "عرض رمز QR" : "Show QR Code"}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.cancelBtn]}
             onPress={onCancel}
@@ -332,7 +408,8 @@ function OrderCard({
               </>
             )}
           </TouchableOpacity>
-        </View>
+          </View>
+        </>
       )}
     </View>
   );
@@ -460,6 +537,28 @@ const styles = StyleSheet.create({
   cancelBtnText: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
   confirmBtn: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
   confirmBtnText: { fontSize: 13, fontWeight: "700", color: Colors.greenMain },
+
+  qrBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.orangeLight, borderRadius: 10,
+    paddingVertical: 9, marginHorizontal: 16, marginBottom: 8,
+  },
+  qrBtnText: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange },
+
+  qrOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
+  qrSheet: {
+    backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl,
+    width: "86%", alignItems: "center", gap: Spacing.md,
+  },
+  qrTitle:    { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  qrSubtitle: { fontSize: 13, color: Colors.grayMedium, maxWidth: 220 },
+  qrImage:    { width: 220, height: 220, borderRadius: 12 },
+  qrHint:     { fontSize: 13, color: Colors.grayMedium, textAlign: "center", lineHeight: 19 },
+  qrCloseBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingHorizontal: 40, paddingVertical: 13, marginTop: 4,
+  },
+  qrCloseBtnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
 
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyIcon: {
