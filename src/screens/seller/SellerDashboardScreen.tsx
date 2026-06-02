@@ -10,6 +10,8 @@ import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import api from "../../services/shared/api";
+import { deleteListing } from "../../services/seller/seller.service";
+import type { SellerListing } from "../../services/seller/seller.service";
 
 // ─── Seller profile type ──────────────────────────────────────────────────────
 interface SellerProfile {
@@ -24,24 +26,14 @@ interface SellerProfile {
   activeListings?: number;
 }
 
-interface SellerListing {
-  id: string;
-  title: string;
-  price?: number;
-  discountedPrice?: number;
-  originalPrice?: number;
-  quantity: number;
-  pickupStart?: string;
-  pickupEnd?: string;
-  category?: string;
-  status?: string;
-}
-
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 type Tab = "overview" | "listings" | "settings";
 
 interface SellerDashboardScreenProps {
   onLogout?: () => void;
+  onCreateListing?: () => void;
+  onEditListing?: (listing: SellerListing) => void;
+  refreshKey?: number;
 }
 
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
@@ -56,21 +48,27 @@ const BUSINESS_TYPE_LABELS_AR: Record<string, string> = {
   BAKERY:     "مخبزة",
 };
 
-export default function SellerDashboardScreen({ onLogout }: SellerDashboardScreenProps) {
+export default function SellerDashboardScreen({
+  onLogout,
+  onCreateListing,
+  onEditListing,
+  refreshKey,
+}: SellerDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const { user, logout } = useAuth();
 
-  const [activeTab,      setActiveTab]      = useState<Tab>("overview");
-  const [profile,        setProfile]        = useState<SellerProfile | null>(null);
-  const [loading,        setLoading]        = useState(true);
-  const [refreshing,     setRefreshing]     = useState(false);
-  const [fetchError,     setFetchError]     = useState("");
-  const [listings,       setListings]       = useState<SellerListing[]>([]);
+  const [activeTab,       setActiveTab]       = useState<Tab>("overview");
+  const [profile,         setProfile]         = useState<SellerProfile | null>(null);
+  const [loading,         setLoading]         = useState(true);
+  const [refreshing,      setRefreshing]      = useState(false);
+  const [fetchError,      setFetchError]      = useState("");
+  const [listings,        setListings]        = useState<SellerListing[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
-  const [listingsError,  setListingsError]  = useState("");
-  const [soldOutLoading, setSoldOutLoading] = useState<string | null>(null);
+  const [listingsError,   setListingsError]   = useState("");
+  const [soldOutLoading,  setSoldOutLoading]  = useState<string | null>(null);
+  const [deleteLoading,   setDeleteLoading]   = useState<string | null>(null);
 
   const fetchProfile = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -119,8 +117,39 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
     }
   };
 
+  const handleDeleteListing = (listingId: string, title: string) => {
+    Alert.alert(
+      rtl ? "حذف القائمة" : "Delete Listing",
+      rtl
+        ? `هل أنت متأكد أنك تريد حذف "${title}"؟`
+        : `Are you sure you want to delete "${title}"?`,
+      [
+        { text: rtl ? "إلغاء" : "Cancel", style: "cancel" },
+        {
+          text: rtl ? "حذف" : "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleteLoading(listingId);
+            try {
+              await deleteListing(listingId);
+              await fetchListings();
+            } catch {
+              Alert.alert(
+                rtl ? "خطأ" : "Error",
+                rtl ? "تعذّر حذف القائمة" : "Could not delete listing"
+              );
+            } finally {
+              setDeleteLoading(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
   useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
+  useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey]);
 
   const handleLogout = async () => {
     await logout();
@@ -317,8 +346,8 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
                   </Text>
                   <Text style={[styles.placeholderSub, rtl && styles.rtl]}>
                     {rtl
-                      ? "أضف قوائم طعامك المخفضة لتظهر هنا"
-                      : "Your discounted food listings will appear here"}
+                      ? "اضغط على + لإضافة أول قائمة طعامك المخفضة"
+                      : "Tap + to add your first discounted food listing"}
                   </Text>
                 </View>
               ) : (
@@ -347,8 +376,15 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
                           </Text>
                         </View>
                       </View>
-                      <View style={styles.listingRight}>
+                      <View style={styles.listingActions}>
                         <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
+                        <TouchableOpacity
+                          style={styles.actionIconBtn}
+                          onPress={() => onEditListing?.(listing)}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
+                        </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.soldOutBtn}
                           onPress={() => handleMarkSoldOut(listing.id)}
@@ -358,9 +394,19 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
                           {soldOutLoading === listing.id ? (
                             <ActivityIndicator size="small" color="#ef4444" />
                           ) : (
-                            <Text style={styles.soldOutBtnText}>
-                              {rtl ? "نفد" : "Sold Out"}
-                            </Text>
+                            <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteIconBtn}
+                          onPress={() => handleDeleteListing(listing.id, listing.title)}
+                          disabled={deleteLoading === listing.id}
+                          activeOpacity={0.8}
+                        >
+                          {deleteLoading === listing.id ? (
+                            <ActivityIndicator size="small" color="#ef4444" />
+                          ) : (
+                            <Feather name="trash-2" size={14} color="#ef4444" />
                           )}
                         </TouchableOpacity>
                       </View>
@@ -386,6 +432,17 @@ export default function SellerDashboardScreen({ onLogout }: SellerDashboardScree
             </Animated.View>
           )}
         </ScrollView>
+      )}
+
+      {/* ── FAB: Add listing ── */}
+      {activeTab === "listings" && onCreateListing && (
+        <TouchableOpacity
+          style={[styles.fab, rtl ? styles.fabRTL : styles.fabLTR]}
+          onPress={onCreateListing}
+          activeOpacity={0.85}
+        >
+          <Feather name="plus" size={24} color={Colors.white} />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -511,12 +568,34 @@ const styles = StyleSheet.create({
   listingMeta: { flexDirection: "row", alignItems: "center", gap: 4 },
   listingMetaRTL: { flexDirection: "row-reverse" },
   listingMetaText: { fontSize: 12, color: Colors.grayMedium },
-  listingRight: { alignItems: "flex-end", gap: 8 },
   listingPrice: { fontSize: 15, fontWeight: "800", color: Colors.primaryOrange },
+  listingActions: { alignItems: "center", gap: 6 },
+  actionIconBtn: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: Colors.orangeLight,
+    alignItems: "center", justifyContent: "center",
+  },
   soldOutBtn: {
     borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
     backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca",
     minWidth: 60, alignItems: "center",
   },
   soldOutBtnText: { fontSize: 12, fontWeight: "700", color: "#ef4444" },
+  deleteIconBtn: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: "#fef2f2",
+    alignItems: "center", justifyContent: "center",
+  },
+
+  fab: {
+    position: "absolute", bottom: 28,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: Colors.primaryOrange,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: Colors.primaryOrange,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+  },
+  fabLTR: { right: 24 },
+  fabRTL: { left: 24 },
 });

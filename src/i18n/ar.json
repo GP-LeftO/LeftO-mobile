@@ -313,6 +313,49 @@
     "error": "تعذّر تحميل الملف الشخصي. يرجى المحاولة مجدداً.",
     "retry": "إعادة المحاولة"
   },
+  "listingForm": {
+    "createTitle": "إضافة قائمة",
+    "editTitle": "تعديل القائمة",
+    "publish": "نشر القائمة",
+    "save": "حفظ التغييرات",
+    "saving": "جاري الحفظ…",
+    "fields": {
+      "title": "عنوان القائمة",
+      "titlePlaceholder": "مثال: كيس مفاجأة المساء",
+      "type": "نوع القائمة",
+      "category": "الفئة",
+      "pricing": "السعر (₪)",
+      "original": "السعر الأصلي",
+      "discounted": "السعر المخفض",
+      "quantity": "الكمية المتاحة",
+      "pickupWindow": "نافذة الاستلام (HH:MM)",
+      "from": "من",
+      "to": "إلى",
+      "freshness": "طازجية المنتج",
+      "allergenNote": "ملاحظة المواد المسببة للحساسية",
+      "allergenPlaceholder": "مثال: يحتوي على غلوتين والمكسرات…",
+      "photoUrl": "رابط الصورة",
+      "optional": "(اختياري)"
+    },
+    "types": {
+      "MEAL_BAG": "كيس مفاجأة",
+      "SPECIFIC_PARCEL": "طرد محدد"
+    },
+    "categories": {
+      "MEALS": "وجبات",
+      "BREAD_AND_PASTRIES": "خبز ومعجنات",
+      "GROCERIES": "بقالة",
+      "MIXED": "متنوع"
+    },
+    "freshness": {
+      "eat_today": "أكله اليوم",
+      "fresh_tonight": "طازج الليلة",
+      "good_1_2_days": "يوم أو يومان"
+    },
+    "errors": {
+      "generic": "حدث خطأ ما. يرجى المحاولة مجدداً."
+    }
+  },
   "favorites": {
     "title": "المفضلة",
     "loading": "جاري تحميل المفضلة…",

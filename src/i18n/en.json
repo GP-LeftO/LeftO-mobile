@@ -313,6 +313,49 @@
     "error": "Could not load profile. Please try again.",
     "retry": "Retry"
   },
+  "listingForm": {
+    "createTitle": "New Listing",
+    "editTitle": "Edit Listing",
+    "publish": "Publish Listing",
+    "save": "Save Changes",
+    "saving": "Saving…",
+    "fields": {
+      "title": "Listing Title",
+      "titlePlaceholder": "e.g. Evening Surprise Bag",
+      "type": "Type",
+      "category": "Category",
+      "pricing": "Pricing (₪)",
+      "original": "Original",
+      "discounted": "Discounted",
+      "quantity": "Available Quantity",
+      "pickupWindow": "Pickup Window (HH:MM)",
+      "from": "From",
+      "to": "To",
+      "freshness": "Freshness",
+      "allergenNote": "Allergen Note",
+      "allergenPlaceholder": "e.g. Contains gluten, nuts…",
+      "photoUrl": "Photo URL",
+      "optional": "(optional)"
+    },
+    "types": {
+      "MEAL_BAG": "Surprise Bag",
+      "SPECIFIC_PARCEL": "Specific Parcel"
+    },
+    "categories": {
+      "MEALS": "Meals",
+      "BREAD_AND_PASTRIES": "Bread & Pastries",
+      "GROCERIES": "Groceries",
+      "MIXED": "Mixed"
+    },
+    "freshness": {
+      "eat_today": "Eat Today",
+      "fresh_tonight": "Fresh Tonight",
+      "good_1_2_days": "1–2 Days"
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again."
+    }
+  },
   "favorites": {
     "title": "Favorites",
     "loading": "Loading favorites…",
