@@ -21,21 +21,21 @@ interface ListingFormScreenProps {
 // ─── Option sets ─────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { value: "MEAL_BAG",        labelEn: "Surprise Bag",     labelAr: "كيس مفاجأة"    },
-  { value: "SPECIFIC_PARCEL", labelEn: "Specific Parcel",  labelAr: "طرد محدد"      },
+  { value: "MEAL_BAG",        icon: "gift"    as const, labelEn: "Surprise Bag",    labelAr: "كيس مفاجأة"   },
+  { value: "SPECIFIC_PARCEL", icon: "package" as const, labelEn: "Specific Parcel", labelAr: "طرد محدد"     },
 ] as const;
 
 const CATEGORIES = [
-  { value: "MEALS",              labelEn: "Meals",             labelAr: "وجبات"          },
-  { value: "BREAD_AND_PASTRIES", labelEn: "Bread & Pastries",  labelAr: "خبز ومعجنات"    },
-  { value: "GROCERIES",          labelEn: "Groceries",         labelAr: "بقالة"          },
-  { value: "MIXED",              labelEn: "Mixed",             labelAr: "متنوع"          },
+  { value: "MEALS",              labelEn: "Meals",            labelAr: "وجبات",         color: "#ef4444" },
+  { value: "BREAD_AND_PASTRIES", labelEn: "Bread & Pastries", labelAr: "خبز ومعجنات",   color: "#f59e0b" },
+  { value: "GROCERIES",          labelEn: "Groceries",        labelAr: "بقالة",         color: Colors.greenMain },
+  { value: "MIXED",              labelEn: "Mixed",            labelAr: "متنوع",         color: "#8b5cf6" },
 ] as const;
 
 const FRESHNESS = [
-  { value: "eat_today",    labelEn: "Eat Today",     labelAr: "أكله اليوم",    color: "#ef4444" },
-  { value: "fresh_tonight",labelEn: "Fresh Tonight", labelAr: "طازج الليلة",   color: Colors.primaryOrange },
-  { value: "good_1_2_days",labelEn: "1–2 Days",      labelAr: "يوم أو يومان",  color: Colors.greenMain },
+  { value: "eat_today",     labelEn: "Eat Today",     labelAr: "أكله اليوم",   color: "#ef4444", icon: "alert-circle" as const },
+  { value: "fresh_tonight", labelEn: "Fresh Tonight", labelAr: "طازج الليلة", color: Colors.primaryOrange, icon: "sun" as const },
+  { value: "good_1_2_days", labelEn: "1–2 Days",      labelAr: "يوم أو يومان", color: Colors.greenMain, icon: "check-circle" as const },
 ] as const;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -49,42 +49,36 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   const { form, errors, loading, submitError, isEdit, setField, submit } = useListingForm(existing);
 
   const handleSubmit = async () => {
-    try {
-      await submit();
-      onComplete();
-    } catch {
-      // submitError is set inside the hook
-    }
+    const success = await submit();
+    if (success) onComplete();
   };
 
-  const titleEn = isEdit ? "Edit Listing" : "New Listing";
-  const titleAr = isEdit ? "تعديل القائمة" : "إضافة قائمة";
-
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 4 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
           <Feather name={rtl ? "arrow-right" : "arrow-left"} size={20} color={Colors.grayDark} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{rtl ? titleAr : titleEn}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            {rtl ? (isEdit ? "تعديل القائمة" : "إضافة قائمة") : (isEdit ? "Edit Listing" : "New Listing")}
+          </Text>
+          <Text style={styles.headerSub}>
+            {rtl ? "أضف تفاصيل الطعام الفائض" : "Add details for your surplus food"}
+          </Text>
+        </View>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: botPadding + 100 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: botPadding + 110 }]}
         keyboardShouldPersistTaps="handled"
       >
-
-        {/* ── Title ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "عنوان القائمة" : "Listing Title"} <Text style={styles.required}>*</Text>
-          </Text>
+        {/* ── 1. Listing Title ── */}
+        <FormCard icon="type" label={rtl ? "اسم القائمة" : "Listing Title"} required rtl={rtl}>
           <TextInput
             style={[styles.input, errors.title && styles.inputError, rtl && styles.textRight]}
             placeholder={rtl ? "مثال: كيس مفاجأة المساء" : "e.g. Evening Surprise Bag"}
@@ -93,186 +87,225 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             onChangeText={v => setField("title", v)}
             textAlign={rtl ? "right" : "left"}
           />
-          {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
-        </View>
+          {errors.title && <FieldError msg={errors.title} />}
+        </FormCard>
 
-        {/* ── Type ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "نوع القائمة" : "Type"} <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.chipRow, rtl && styles.chipRowRTL]}>
+        {/* ── 2. Type ── */}
+        <FormCard icon="tag" label={rtl ? "نوع القائمة" : "Type"} required rtl={rtl}>
+          <View style={[styles.typeRow, rtl && styles.rowRTL]}>
             {TYPES.map(opt => {
               const active = form.type === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
-                  style={[styles.chip, active && styles.chipActive]}
+                  style={[styles.typeBtn, active && styles.typeBtnActive]}
                   onPress={() => setField("type", opt.value)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  <View style={[styles.typeIconWrap, active && styles.typeIconWrapActive]}>
+                    <Feather name={opt.icon} size={18} color={active ? Colors.white : Colors.grayMedium} />
+                  </View>
+                  <Text style={[styles.typeBtnText, active && styles.typeBtnTextActive]}>
                     {rtl ? opt.labelAr : opt.labelEn}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
+        </FormCard>
 
-        {/* ── Category ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "الفئة" : "Category"} <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.chipRow, styles.chipRowWrap, rtl && styles.chipRowRTL]}>
+        {/* ── 3. Category ── */}
+        <FormCard icon="grid" label={rtl ? "الفئة" : "Category"} required rtl={rtl}>
+          <View style={[styles.categoryRow, rtl && styles.rowRTL]}>
             {CATEGORIES.map(opt => {
               const active = form.category === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
-                  style={[styles.chip, active && styles.chipActive]}
+                  style={[
+                    styles.categoryChip,
+                    active && { backgroundColor: opt.color + "18", borderColor: opt.color },
+                  ]}
                   onPress={() => setField("category", opt.value)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  <Text style={[styles.categoryChipText, active && { color: opt.color, fontWeight: "700" }]}>
                     {rtl ? opt.labelAr : opt.labelEn}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
+        </FormCard>
 
-        {/* ── Pricing ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "السعر (₪)" : "Pricing (₪)"} <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.row, rtl && styles.rowRTL]}>
-            <View style={styles.halfField}>
+        {/* ── 4. Pricing ── */}
+        <FormCard icon="dollar-sign" label={rtl ? "السعر (₪)" : "Pricing (₪)"} required rtl={rtl}>
+          <View style={[styles.priceRow, rtl && styles.rowRTL]}>
+            <View style={styles.priceField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>
                 {rtl ? "السعر الأصلي" : "Original"}
               </Text>
-              <TextInput
-                style={[styles.input, errors.originalPrice && styles.inputError, rtl && styles.textRight]}
-                placeholder="0.00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="decimal-pad"
-                value={form.originalPrice}
-                onChangeText={v => setField("originalPrice", v)}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.originalPrice && <Text style={styles.errorText}>{errors.originalPrice}</Text>}
+              <View style={[styles.priceInputWrap, errors.originalPrice && styles.inputError]}>
+                <Text style={styles.currencySign}>₪</Text>
+                <TextInput
+                  style={[styles.priceInput, rtl && styles.textRight]}
+                  placeholder="0.00"
+                  placeholderTextColor={Colors.grayMedium}
+                  keyboardType="decimal-pad"
+                  value={form.originalPrice}
+                  onChangeText={v => setField("originalPrice", v)}
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {errors.originalPrice && <FieldError msg={errors.originalPrice} />}
             </View>
-            <View style={styles.halfField}>
+
+            <View style={styles.priceDivider}>
+              <Feather name="arrow-right" size={14} color={Colors.grayMedium} />
+            </View>
+
+            <View style={styles.priceField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>
                 {rtl ? "السعر المخفض" : "Discounted"}
               </Text>
-              <TextInput
-                style={[styles.input, errors.discountedPrice && styles.inputError, rtl && styles.textRight]}
-                placeholder="0.00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="decimal-pad"
-                value={form.discountedPrice}
-                onChangeText={v => setField("discountedPrice", v)}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.discountedPrice && <Text style={styles.errorText}>{errors.discountedPrice}</Text>}
+              <View style={[styles.priceInputWrap, styles.priceInputWrapGreen, errors.discountedPrice && styles.inputError]}>
+                <Text style={[styles.currencySign, styles.currencySignGreen]}>₪</Text>
+                <TextInput
+                  style={[styles.priceInput, rtl && styles.textRight]}
+                  placeholder="0.00"
+                  placeholderTextColor={Colors.grayMedium}
+                  keyboardType="decimal-pad"
+                  value={form.discountedPrice}
+                  onChangeText={v => setField("discountedPrice", v)}
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {errors.discountedPrice && <FieldError msg={errors.discountedPrice} />}
             </View>
           </View>
-        </View>
 
-        {/* ── Quantity ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "الكمية المتاحة" : "Available Quantity"} <Text style={styles.required}>*</Text>
-          </Text>
-          <TextInput
-            style={[styles.input, styles.inputShort, errors.quantity && styles.inputError, rtl && styles.textRight]}
-            placeholder="1"
-            placeholderTextColor={Colors.grayMedium}
-            keyboardType="number-pad"
-            value={form.quantity}
-            onChangeText={v => setField("quantity", v)}
-            textAlign={rtl ? "right" : "left"}
-          />
-          {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
-        </View>
+          {/* Discount badge preview */}
+          {Number(form.originalPrice) > 0 && Number(form.discountedPrice) > 0 &&
+           Number(form.discountedPrice) < Number(form.originalPrice) && (
+            <View style={styles.discountBadge}>
+              <Feather name="trending-down" size={13} color={Colors.greenMain} />
+              <Text style={styles.discountBadgeText}>
+                {Math.round((1 - Number(form.discountedPrice) / Number(form.originalPrice)) * 100)}
+                {rtl ? "٪ خصم" : "% off"}
+              </Text>
+            </View>
+          )}
+        </FormCard>
 
-        {/* ── Pickup Window ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "نافذة الاستلام (HH:MM)" : "Pickup Window (HH:MM)"} <Text style={styles.required}>*</Text>
+        {/* ── 5. Quantity ── */}
+        <FormCard icon="layers" label={rtl ? "الكمية المتاحة" : "Available Quantity"} required rtl={rtl}>
+          <View style={[styles.stepperRow, rtl && styles.rowRTL]}>
+            <TouchableOpacity
+              style={[styles.stepperBtn, form.quantity <= 1 && styles.stepperBtnDisabled]}
+              onPress={() => setField("quantity", Math.max(1, form.quantity - 1))}
+              disabled={form.quantity <= 1}
+              activeOpacity={0.8}
+            >
+              <Feather name="minus" size={18} color={form.quantity <= 1 ? Colors.grayMedium : Colors.grayDark} />
+            </TouchableOpacity>
+            <View style={styles.stepperValue}>
+              <Text style={styles.stepperValueText}>{form.quantity}</Text>
+              <Text style={styles.stepperValueSub}>{rtl ? "وحدة" : "units"}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.stepperBtn}
+              onPress={() => setField("quantity", form.quantity + 1)}
+              activeOpacity={0.8}
+            >
+              <Feather name="plus" size={18} color={Colors.grayDark} />
+            </TouchableOpacity>
+          </View>
+          {errors.quantity && <FieldError msg={errors.quantity} />}
+        </FormCard>
+
+        {/* ── 6. Pickup Window ── */}
+        <FormCard icon="clock" label={rtl ? "نافذة الاستلام" : "Pickup Window"} required rtl={rtl}>
+          <Text style={[styles.fieldHint, rtl && styles.textRight]}>
+            {rtl ? "استخدم صيغة HH:MM (مثال: 17:00)" : "Use HH:MM format (e.g. 17:00)"}
           </Text>
-          <View style={[styles.row, rtl && styles.rowRTL]}>
-            <View style={styles.halfField}>
+          <View style={[styles.timeRow, rtl && styles.rowRTL]}>
+            <View style={styles.timeField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "من" : "From"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupStart && styles.inputError, rtl && styles.textRight]}
-                placeholder="17:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                value={form.pickupStart}
-                onChangeText={v => setField("pickupStart", v)}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.pickupStart && <Text style={styles.errorText}>{errors.pickupStart}</Text>}
+              <View style={[styles.timeInputWrap, errors.pickupStart && styles.inputError]}>
+                <Feather name="clock" size={15} color={Colors.grayMedium} style={styles.timeIcon} />
+                <TextInput
+                  style={[styles.timeInput, rtl && styles.textRight]}
+                  placeholder="17:00"
+                  placeholderTextColor={Colors.grayMedium}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                  value={form.pickupStart}
+                  onChangeText={v => setField("pickupStart", v)}
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {errors.pickupStart && <FieldError msg={errors.pickupStart} />}
             </View>
-            <View style={styles.halfField}>
+            <View style={styles.timeSeparator}>
+              <Text style={styles.timeSeparatorText}>—</Text>
+            </View>
+            <View style={styles.timeField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "إلى" : "To"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupEnd && styles.inputError, rtl && styles.textRight]}
-                placeholder="20:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                value={form.pickupEnd}
-                onChangeText={v => setField("pickupEnd", v)}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.pickupEnd && <Text style={styles.errorText}>{errors.pickupEnd}</Text>}
+              <View style={[styles.timeInputWrap, errors.pickupEnd && styles.inputError]}>
+                <Feather name="clock" size={15} color={Colors.grayMedium} style={styles.timeIcon} />
+                <TextInput
+                  style={[styles.timeInput, rtl && styles.textRight]}
+                  placeholder="20:00"
+                  placeholderTextColor={Colors.grayMedium}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                  value={form.pickupEnd}
+                  onChangeText={v => setField("pickupEnd", v)}
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {errors.pickupEnd && <FieldError msg={errors.pickupEnd} />}
             </View>
           </View>
-        </View>
+        </FormCard>
 
-        {/* ── Freshness Badge ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "طازجية المنتج" : "Freshness"} <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.chipRow, rtl && styles.chipRowRTL]}>
+        {/* ── 7. Freshness ── */}
+        <FormCard icon="zap" label={rtl ? "طازجية المنتج" : "Freshness"} required rtl={rtl}>
+          <View style={styles.freshnessGrid}>
             {FRESHNESS.map(opt => {
               const active = form.freshnessBadge === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
                   style={[
-                    styles.chip,
-                    active && { backgroundColor: opt.color + "18", borderColor: opt.color },
+                    styles.freshnessBtn,
+                    { borderColor: active ? opt.color : Colors.grayLight },
+                    active && { backgroundColor: opt.color + "12" },
                   ]}
                   onPress={() => setField("freshnessBadge", opt.value)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, active && { color: opt.color, fontWeight: "700" }]}>
+                  <View style={[styles.freshnessIconWrap, { backgroundColor: opt.color + "20" }]}>
+                    <Feather name={opt.icon} size={16} color={opt.color} />
+                  </View>
+                  <Text style={[styles.freshnessBtnText, active && { color: opt.color, fontWeight: "700" }]}>
                     {rtl ? opt.labelAr : opt.labelEn}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
+        </FormCard>
 
-        {/* ── Allergen Note ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "ملاحظة المواد المسببة للحساسية" : "Allergen Note"}
-            <Text style={styles.optional}> {rtl ? "(اختياري)" : "(optional)"}</Text>
+        {/* ── 8. Additional (optional) ── */}
+        <FormCard icon="info" label={rtl ? "معلومات إضافية" : "Additional Info"} rtl={rtl}>
+          <Text style={[styles.fieldLabel, rtl && styles.textRight]}>
+            {rtl ? "ملاحظة مسببات الحساسية" : "Allergen Note"}
+            <Text style={styles.optionalTag}> {rtl ? "(اختياري)" : "(optional)"}</Text>
           </Text>
           <TextInput
-            style={[styles.input, styles.inputMultiline, rtl && styles.textRight]}
-            placeholder={rtl ? "مثال: يحتوي على غلوتين والحبوب..." : "e.g. Contains gluten, nuts..."}
+            style={[styles.input, styles.inputMulti, rtl && styles.textRight]}
+            placeholder={rtl ? "مثال: يحتوي على غلوتين والمكسرات…" : "e.g. Contains gluten, nuts…"}
             placeholderTextColor={Colors.grayMedium}
             multiline
             numberOfLines={3}
@@ -281,25 +314,25 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             textAlign={rtl ? "right" : "left"}
             textAlignVertical="top"
           />
-        </View>
 
-        {/* ── Photo URL ── */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
+          <Text style={[styles.fieldLabel, { marginTop: Spacing.md }, rtl && styles.textRight]}>
             {rtl ? "رابط الصورة" : "Photo URL"}
-            <Text style={styles.optional}> {rtl ? "(اختياري)" : "(optional)"}</Text>
+            <Text style={styles.optionalTag}> {rtl ? "(اختياري)" : "(optional)"}</Text>
           </Text>
-          <TextInput
-            style={[styles.input, rtl && styles.textRight]}
-            placeholder="https://..."
-            placeholderTextColor={Colors.grayMedium}
-            autoCapitalize="none"
-            keyboardType="url"
-            value={form.photoUrl}
-            onChangeText={v => setField("photoUrl", v)}
-            textAlign={rtl ? "right" : "left"}
-          />
-        </View>
+          <View style={[styles.urlInputWrap, rtl && styles.rowRTL]}>
+            <Feather name="image" size={16} color={Colors.grayMedium} />
+            <TextInput
+              style={[styles.urlInput, rtl && styles.textRight]}
+              placeholder="https://..."
+              placeholderTextColor={Colors.grayMedium}
+              autoCapitalize="none"
+              keyboardType="url"
+              value={form.photoUrl}
+              onChangeText={v => setField("photoUrl", v)}
+              textAlign={rtl ? "right" : "left"}
+            />
+          </View>
+        </FormCard>
 
         {/* ── Submit error ── */}
         {submitError !== "" && (
@@ -308,11 +341,10 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             <Text style={styles.submitErrorText}>{submitError}</Text>
           </View>
         )}
-
       </ScrollView>
 
-      {/* ── Submit button ── */}
-      <View style={[styles.footer, { paddingBottom: botPadding + 12 }]}>
+      {/* ── Footer ── */}
+      <View style={[styles.footer, { paddingBottom: botPadding + 8 }]}>
         <TouchableOpacity
           style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
           onPress={handleSubmit}
@@ -322,11 +354,12 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           {loading ? (
             <ActivityIndicator color={Colors.white} size="small" />
           ) : (
-            <Text style={styles.submitBtnText}>
-              {rtl
-                ? (isEdit ? "حفظ التغييرات" : "نشر القائمة")
-                : (isEdit ? "Save Changes"  : "Publish Listing")}
-            </Text>
+            <>
+              <Feather name={isEdit ? "save" : "upload-cloud"} size={18} color={Colors.white} />
+              <Text style={styles.submitBtnText}>
+                {rtl ? (isEdit ? "حفظ التغييرات" : "نشر القائمة") : (isEdit ? "Save Changes" : "Publish Listing")}
+              </Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -334,89 +367,207 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   );
 }
 
+// ─── FormCard ─────────────────────────────────────────────────────────────────
+
+function FormCard({
+  icon, label, required, children, rtl,
+}: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  rtl: boolean;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={[styles.cardHeader, rtl && styles.rowRTL]}>
+        <View style={styles.cardIconWrap}>
+          <Feather name={icon} size={14} color={Colors.primaryOrange} />
+        </View>
+        <Text style={[styles.cardLabel, rtl && styles.textRight]}>
+          {label}
+          {required && <Text style={styles.required}> *</Text>}
+        </Text>
+      </View>
+      <View style={styles.cardBody}>{children}</View>
+    </View>
+  );
+}
+
+// ─── FieldError ───────────────────────────────────────────────────────────────
+
+function FieldError({ msg }: { msg: string }) {
+  return (
+    <View style={styles.fieldErrorRow}>
+      <Feather name="alert-circle" size={12} color="#ef4444" />
+      <Text style={styles.fieldErrorText}>{msg}</Text>
+    </View>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background },
+  root: { flex: 1, backgroundColor: "#F5F5F0" },
   textRight: { textAlign: "right" },
+  rowRTL: { flexDirection: "row-reverse" },
 
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.md,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
     backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.grayLight,
+    borderBottomWidth: 1, borderBottomColor: Colors.grayLight,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.grayLight, alignItems: "center", justifyContent: "center",
+  },
+  headerCenter: { flex: 1, alignItems: "center" },
+  headerTitle:  { fontSize: 17, fontWeight: "800", color: Colors.grayDark },
+  headerSub:    { fontSize: 12, color: Colors.grayMedium, marginTop: 1 },
+
+  scroll: { padding: Spacing.lg, gap: Spacing.md },
+
+  // Form card
+  card: {
+    backgroundColor: Colors.white, borderRadius: 20,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
+    overflow: "hidden",
+  },
+  cardHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.grayLight,
+  },
+  cardIconWrap: {
+    width: 26, height: 26, borderRadius: 8,
+    backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center",
+  },
+  cardLabel:  { fontSize: 13, fontWeight: "700", color: Colors.grayDark, textTransform: "uppercase", letterSpacing: 0.5 },
+  required:   { color: "#ef4444", fontWeight: "700" },
+  cardBody:   { padding: Spacing.md },
+
+  // Inputs
+  input: {
+    backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: "transparent",
+    borderRadius: 12, paddingHorizontal: Spacing.md, paddingVertical: 12,
+    fontSize: 15, color: Colors.grayDark,
+  },
+  inputError:  { borderColor: "#ef4444", backgroundColor: "#fef2f2" },
+  inputMulti:  { minHeight: 80, paddingTop: 10 },
+
+  fieldLabel:   { fontSize: 12, fontWeight: "600", color: Colors.grayMedium, marginBottom: 6 },
+  fieldHint:    { fontSize: 12, color: Colors.grayMedium, marginBottom: 8 },
+  optionalTag:  { fontSize: 11, fontWeight: "400", color: Colors.grayMedium },
+
+  fieldErrorRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  fieldErrorText: { fontSize: 12, color: "#ef4444" },
+
+  // Type buttons
+  typeRow: { flexDirection: "row", gap: 10 },
+  typeBtn: {
+    flex: 1, flexDirection: "column", alignItems: "center", gap: 8,
+    paddingVertical: Spacing.md, borderRadius: 14,
+    backgroundColor: Colors.grayLight, borderWidth: 1.5, borderColor: "transparent",
+  },
+  typeBtnActive: { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
+  typeIconWrap: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white,
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: Colors.grayDark },
+  typeIconWrapActive: { backgroundColor: Colors.primaryOrange },
+  typeBtnText:       { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
+  typeBtnTextActive: { color: Colors.primaryOrange, fontWeight: "700" },
 
-  scroll: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, gap: 4 },
-
-  section: { marginBottom: Spacing.lg },
-  sectionLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldLabel:   { fontSize: 12, fontWeight: "600", color: Colors.grayMedium, marginBottom: 6 },
-  required:     { color: "#ef4444" },
-  optional:     { fontSize: 12, fontWeight: "400", color: Colors.grayMedium, textTransform: "none" },
-
-  input: {
-    backgroundColor: Colors.white,
-    borderWidth: 1.5,
-    borderColor: Colors.grayLight,
-    borderRadius: 14,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: Colors.grayDark,
+  // Category chips
+  categoryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  categoryChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1.5, borderColor: Colors.grayLight,
+    backgroundColor: Colors.grayLight,
   },
-  inputError:     { borderColor: "#ef4444" },
-  inputShort:     { width: 120 },
-  inputMultiline: { minHeight: 90, paddingTop: 12 },
+  categoryChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
 
-  errorText: { fontSize: 12, color: "#ef4444", marginTop: 4 },
-
-  row:    { flexDirection: "row",         gap: 12 },
-  rowRTL: { flexDirection: "row-reverse", gap: 12 },
-  halfField: { flex: 1 },
-
-  chipRow:     { flexDirection: "row",         flexWrap: "nowrap", gap: 8 },
-  chipRowRTL:  { flexDirection: "row-reverse", flexWrap: "nowrap", gap: 8 },
-  chipRowWrap: { flexWrap: "wrap" },
-
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 22, borderWidth: 1.5, borderColor: Colors.grayLight,
-    backgroundColor: Colors.white,
+  // Pricing
+  priceRow:  { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  priceField: { flex: 1 },
+  priceDivider: { paddingTop: 32, alignItems: "center" },
+  priceInputWrap: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.grayLight, borderRadius: 12, borderWidth: 1.5, borderColor: "transparent",
+    paddingHorizontal: 10,
   },
-  chipActive:     { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
-  chipText:       { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
-  chipTextActive: { color: Colors.primaryOrange },
+  priceInputWrapGreen: { backgroundColor: "#f0fdf4" },
+  currencySign:      { fontSize: 16, fontWeight: "700", color: Colors.grayMedium, marginRight: 4 },
+  currencySignGreen: { color: Colors.greenMain },
+  priceInput:        { flex: 1, paddingVertical: 12, fontSize: 16, fontWeight: "700", color: Colors.grayDark },
+  discountBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "#f0fdf4", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+    alignSelf: "flex-start", marginTop: 8,
+  },
+  discountBadgeText: { fontSize: 13, fontWeight: "700", color: Colors.greenMain },
 
+  // Quantity stepper
+  stepperRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16,
+  },
+  stepperBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: Colors.grayLight, alignItems: "center", justifyContent: "center",
+  },
+  stepperBtnDisabled: { opacity: 0.4 },
+  stepperValue: { alignItems: "center", minWidth: 60 },
+  stepperValueText: { fontSize: 28, fontWeight: "800", color: Colors.grayDark },
+  stepperValueSub:  { fontSize: 11, color: Colors.grayMedium, marginTop: -2 },
+
+  // Pickup time
+  timeRow:  { flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 4 },
+  timeField: { flex: 1 },
+  timeSeparator: { paddingTop: 30, alignItems: "center" },
+  timeSeparatorText: { fontSize: 16, color: Colors.grayMedium },
+  timeInputWrap: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.grayLight, borderRadius: 12, borderWidth: 1.5, borderColor: "transparent",
+    paddingHorizontal: 10,
+  },
+  timeIcon:  { marginRight: 6 },
+  timeInput: { flex: 1, paddingVertical: 12, fontSize: 16, fontWeight: "600", color: Colors.grayDark },
+
+  // Freshness
+  freshnessGrid: { flexDirection: "row", gap: 8 },
+  freshnessBtn: {
+    flex: 1, alignItems: "center", gap: 8,
+    paddingVertical: 12, borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.grayLight, backgroundColor: Colors.grayLight,
+  },
+  freshnessIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  freshnessBtnText: { fontSize: 11, fontWeight: "600", color: Colors.grayMedium, textAlign: "center" },
+
+  // URL input
+  urlInputWrap: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.grayLight, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 2,
+  },
+  urlInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: Colors.grayDark },
+
+  // Submit error
   submitErrorBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#fef2f2", borderRadius: 12,
-    padding: Spacing.md, marginBottom: Spacing.md,
+    backgroundColor: "#fef2f2", borderRadius: 14, padding: Spacing.md,
   },
   submitErrorText: { fontSize: 13, color: "#ef4444", flex: 1 },
 
+  // Footer
   footer: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg, paddingTop: Spacing.md,
     backgroundColor: Colors.white,
-    borderTopWidth: 1,
-    borderTopColor: Colors.grayLight,
+    borderTopWidth: 1, borderTopColor: Colors.grayLight,
   },
   submitBtn: {
-    backgroundColor: Colors.primaryOrange,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
+    backgroundColor: Colors.primaryOrange, borderRadius: 16,
+    paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    shadowColor: Colors.primaryOrange, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 5,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText:     { fontSize: 16, fontWeight: "800", color: Colors.white },

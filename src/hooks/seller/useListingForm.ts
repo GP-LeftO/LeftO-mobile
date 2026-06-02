@@ -29,7 +29,7 @@ export interface ListingFormState {
   category: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice: string;
   discountedPrice: string;
-  quantity: string;
+  quantity: number;
   pickupStart: string;
   pickupEnd: string;
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
@@ -45,17 +45,17 @@ export function useListingForm(existing?: SellerListing) {
   const isEdit = Boolean(existing?.id);
 
   const [form, setForm] = useState<ListingFormState>({
-    title:          existing?.title ?? "",
-    type:           existing?.type ?? "MEAL_BAG",
-    category:       existing?.category ?? "MEALS",
-    originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
-    discountedPrice: (existing?.discountedPrice)?.toString() ?? "",
-    quantity:       existing?.quantity?.toString() ?? "",
-    pickupStart:    existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
-    pickupEnd:      existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
-    freshnessBadge: existing?.freshnessBadge ?? "eat_today",
-    allergenNote:   existing?.allergenNote ?? "",
-    photoUrl:       existing?.photoUrl ?? "",
+    title:           existing?.title ?? "",
+    type:            existing?.type ?? "MEAL_BAG",
+    category:        existing?.category ?? "MEALS",
+    originalPrice:   (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
+    discountedPrice: existing?.discountedPrice?.toString() ?? "",
+    quantity:        existing?.quantity ?? 1,
+    pickupStart:     existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
+    pickupEnd:       existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
+    freshnessBadge:  existing?.freshnessBadge ?? "eat_today",
+    allergenNote:    existing?.allergenNote ?? "",
+    photoUrl:        existing?.photoUrl ?? "",
   });
 
   const [errors,      setErrors]      = useState<FormErrors>({});
@@ -69,43 +69,45 @@ export function useListingForm(existing?: SellerListing) {
 
   const validate = (): boolean => {
     const e: FormErrors = {};
-    if (!form.title.trim())                                    e.title = "Required";
-    if (!form.originalPrice || isNaN(Number(form.originalPrice)))  e.originalPrice = "Enter a valid price";
-    if (!form.discountedPrice || isNaN(Number(form.discountedPrice))) e.discountedPrice = "Enter a valid price";
-    if (Number(form.discountedPrice) >= Number(form.originalPrice))   e.discountedPrice = "Must be less than original price";
-    if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) < 1) e.quantity = "Min 1";
+    if (!form.title.trim())                                                   e.title           = "Required";
+    if (!form.originalPrice || isNaN(Number(form.originalPrice)))             e.originalPrice   = "Enter a valid price";
+    if (!form.discountedPrice || isNaN(Number(form.discountedPrice)))         e.discountedPrice = "Enter a valid price";
+    if (Number(form.discountedPrice) >= Number(form.originalPrice))           e.discountedPrice = "Must be less than original";
+    if (form.quantity < 1)                                                    e.quantity        = "Min 1";
     if (!/^\d{2}:\d{2}$/.test(form.pickupStart)) e.pickupStart = "Use HH:MM (e.g. 17:00)";
     if (!/^\d{2}:\d{2}$/.test(form.pickupEnd))   e.pickupEnd   = "Use HH:MM (e.g. 20:00)";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const submit = async (): Promise<void> => {
-    if (!validate()) return;
+  // Returns true on success, false if validation failed — callers must check
+  const submit = async (): Promise<boolean> => {
+    if (!validate()) return false;
     setLoading(true);
     setSubmitError("");
     try {
       const payload: ListingFormData = {
-        title:          form.title.trim(),
-        type:           form.type,
-        category:       form.category,
-        originalPrice:  Number(form.originalPrice),
+        title:           form.title.trim(),
+        type:            form.type,
+        category:        form.category,
+        originalPrice:   Number(form.originalPrice),
         discountedPrice: Number(form.discountedPrice),
-        quantity:       Number(form.quantity),
-        pickupStart:    hhmmToIso(form.pickupStart),
-        pickupEnd:      hhmmToIso(form.pickupEnd),
-        freshnessBadge: form.freshnessBadge,
-        allergenNote:   form.allergenNote.trim() || undefined,
-        photoUrl:       form.photoUrl.trim() || undefined,
+        quantity:        form.quantity,
+        pickupStart:     hhmmToIso(form.pickupStart),
+        pickupEnd:       hhmmToIso(form.pickupEnd),
+        freshnessBadge:  form.freshnessBadge,
+        allergenNote:    form.allergenNote.trim() || undefined,
+        photoUrl:        form.photoUrl.trim()     || undefined,
       };
       if (isEdit && existing?.id) {
         await updateListing(existing.id, payload);
       } else {
         await createListing(payload);
       }
+      return true;
     } catch {
       setSubmitError("Something went wrong. Please try again.");
-      throw new Error("submit_failed");
+      return false;
     } finally {
       setLoading(false);
     }
