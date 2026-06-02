@@ -105,8 +105,11 @@ export function useListingForm(existing?: SellerListing) {
         await createListing(payload);
       }
       return true;
-    } catch {
-      setSubmitError("Something went wrong. Please try again.");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string; errors?: string[] } } };
+      const apiMsg   = axiosErr?.response?.data?.message
+                    ?? axiosErr?.response?.data?.errors?.[0];
+      setSubmitError(apiMsg ?? "Something went wrong. Please try again.");
       return false;
     } finally {
       setLoading(false);

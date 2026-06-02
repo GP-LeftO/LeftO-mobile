@@ -72,6 +72,14 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
         <View style={{ width: 40 }} />
       </View>
 
+      {/* ── Submit error banner (always visible, above scroll) ── */}
+      {submitError !== "" && (
+        <View style={styles.errorBanner}>
+          <Feather name="alert-circle" size={16} color="#fff" />
+          <Text style={styles.errorBannerText} numberOfLines={3}>{submitError}</Text>
+        </View>
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: botPadding + 110 }]}
@@ -334,13 +342,6 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           </View>
         </FormCard>
 
-        {/* ── Submit error ── */}
-        {submitError !== "" && (
-          <View style={styles.submitErrorBox}>
-            <Feather name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.submitErrorText}>{submitError}</Text>
-          </View>
-        )}
       </ScrollView>
 
       {/* ── Footer ── */}
@@ -551,12 +552,12 @@ const styles = StyleSheet.create({
   },
   urlInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: Colors.grayDark },
 
-  // Submit error
-  submitErrorBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#fef2f2", borderRadius: 14, padding: Spacing.md,
+  // Error banner (pinned below header)
+  errorBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "#ef4444", padding: Spacing.md,
   },
-  submitErrorText: { fontSize: 13, color: "#ef4444", flex: 1 },
+  errorBannerText: { fontSize: 13, fontWeight: "600", color: "#fff", flex: 1, lineHeight: 18 },
 
   // Footer
   footer: {
