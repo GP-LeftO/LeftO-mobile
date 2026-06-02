@@ -8,6 +8,8 @@ import {
   RefreshControl,
   StyleSheet,
   Platform,
+  Modal,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -15,6 +17,7 @@ import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useProfile, ProfileTab } from "../../hooks/buyer/profile/useProfile";
+import { updateAvatar } from "../../services/buyer/profile/profileService";
 import BadgeGrid from "../../components/buyer/profile/BadgeGrid";
 import OrderCard from "../../components/buyer/profile/OrderCard";
 import DonationCard from "../../components/buyer/profile/DonationCard";
@@ -115,7 +118,9 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
   const rtl        = isRTL();
   const tr         = t();
 
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [settingsExpanded,  setSettingsExpanded]  = useState(false);
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
+  const [avatarUpdating,     setAvatarUpdating]     = useState(false);
 
   const { user, logout } = useAuth();
   const {
@@ -152,6 +157,21 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
         { month: "long", year: "numeric" }
       )
     : null;
+
+  const AVATAR_COLORS = ["#DE985A","#3B82F6","#8B5CF6","#16A34A","#EF4444","#EC4899","#0D9488","#374151"];
+
+  const handleAvatarSelect = async (color: string) => {
+    setAvatarUpdating(true);
+    try {
+      await updateAvatar(color);
+      setAvatarModalVisible(false);
+      onRefresh();
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تغيير الصورة" : "Could not update avatar");
+    } finally {
+      setAvatarUpdating(false);
+    }
+  };
 
   // Impact stats — use actual order counts from fetched data, not profile counters
   const impactStats = [
@@ -222,8 +242,12 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
               <View style={[styles.avatar, profile?.avatarColor ? { backgroundColor: profile.avatarColor } : null]}>
                 <Text style={styles.avatarInitials}>{initials}</Text>
               </View>
-              <TouchableOpacity style={styles.avatarEditBtn} disabled activeOpacity={0.6}>
-                <Feather name="camera" size={13} color={Colors.white} />
+              <TouchableOpacity
+                style={styles.avatarEditBtn}
+                onPress={() => setAvatarModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="edit-2" size={12} color={Colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -405,6 +429,49 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
       />
 
       {toastMessage && <ToastBanner message={toastMessage} />}
+
+      {/* ── Avatar color picker modal ── */}
+      <Modal
+        visible={avatarModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAvatarModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => !avatarUpdating && setAvatarModalVisible(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={[styles.modalTitle, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "اختر لون الصورة الرمزية" : "Choose Avatar Color"}
+            </Text>
+            <View style={styles.colorGrid}>
+              {AVATAR_COLORS.map(color => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: color },
+                    profile?.avatarColor === color && styles.colorSwatchActive,
+                  ]}
+                  onPress={() => handleAvatarSelect(color)}
+                  disabled={avatarUpdating}
+                  activeOpacity={0.8}
+                >
+                  {avatarUpdating && profile?.avatarColor === color && (
+                    <ActivityIndicator size="small" color="#fff" />
+                  )}
+                  {profile?.avatarColor === color && !avatarUpdating && (
+                    <Feather name="check" size={16} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -445,10 +512,30 @@ const styles = StyleSheet.create({
   avatarEditBtn: {
     position: "absolute", bottom: 0, right: 0,
     width: 30, height: 30, borderRadius: 15,
-    backgroundColor: Colors.grayMedium,
+    backgroundColor: Colors.primaryOrange,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: Colors.background, opacity: 0.6,
+    borderWidth: 2, borderColor: Colors.background,
   },
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: Spacing.xl, paddingBottom: 40, gap: Spacing.lg,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.grayLight,
+    alignSelf: "center", marginBottom: 4,
+  },
+  modalTitle: { fontSize: 17, fontWeight: "800", color: Colors.grayDark },
+  colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center" },
+  colorSwatch: {
+    width: 52, height: 52, borderRadius: 26,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
+  },
+  colorSwatchActive: { borderWidth: 3, borderColor: Colors.white, transform: [{ scale: 1.1 }] },
   userName:    { fontSize: 22, fontWeight: "800", color: Colors.grayDark },
   contactLine: { fontSize: 13, color: Colors.grayMedium },
   roleBadge: {
