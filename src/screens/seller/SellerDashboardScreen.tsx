@@ -11,7 +11,9 @@ import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import api from "../../services/shared/api";
 import { deleteListing } from "../../services/seller/seller.service";
+import { useSellerDonations } from "../../hooks/seller/useSellerDonations";
 import type { SellerListing } from "../../services/seller/seller.service";
+import type { SellerDonation } from "../../services/seller/donation.service";
 
 // ─── Seller profile type ──────────────────────────────────────────────────────
 interface SellerProfile {
@@ -27,13 +29,15 @@ interface SellerProfile {
 }
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
-type Tab = "overview" | "listings" | "settings";
+type Tab = "overview" | "listings" | "donations" | "settings";
 
 interface SellerDashboardScreenProps {
   onLogout?: () => void;
   onCreateListing?: () => void;
   onEditListing?: (listing: SellerListing) => void;
+  onDonateFromListing?: (listing: SellerListing) => void;
   refreshKey?: number;
+  openDonationsTab?: boolean;
 }
 
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
@@ -52,7 +56,9 @@ export default function SellerDashboardScreen({
   onLogout,
   onCreateListing,
   onEditListing,
+  onDonateFromListing,
   refreshKey,
+  openDonationsTab,
 }: SellerDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
@@ -147,9 +153,16 @@ export default function SellerDashboardScreen({
     );
   };
 
+  const {
+    donations, loading: donationsLoading, refreshing: donationsRefreshing,
+    error: donationsError, hasMore: donationsHasMore, fetchDonations,
+  } = useSellerDonations();
+
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
-  useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
+  useEffect(() => { if (activeTab === "listings")  fetchListings();        }, [activeTab, fetchListings]);
+  useEffect(() => { if (activeTab === "donations") fetchDonations(true);   }, [activeTab]);
   useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey]);
+  useEffect(() => { if (openDonationsTab) setActiveTab("donations"); },    [openDonationsTab]);
 
   const handleLogout = async () => {
     await logout();
@@ -158,9 +171,10 @@ export default function SellerDashboardScreen({
 
   // ── Tabs config ──────────────────────────────────────────────────────────────
   const TABS: { key: Tab; label: string; labelAr: string; icon: keyof typeof Feather.glyphMap }[] = [
-    { key: "overview",  label: "Overview",  labelAr: "نظرة عامة", icon: "grid"     },
-    { key: "listings",  label: "Listings",  labelAr: "القوائم",   icon: "package"  },
-    { key: "settings",  label: "Settings",  labelAr: "الإعدادات", icon: "settings" },
+    { key: "overview",   label: "Overview",  labelAr: "عام",       icon: "grid"     },
+    { key: "listings",   label: "Listings",  labelAr: "القوائم",   icon: "package"  },
+    { key: "donations",  label: "Donations", labelAr: "التبرعات",  icon: "gift"     },
+    { key: "settings",   label: "Settings",  labelAr: "الإعدادات", icon: "settings" },
   ];
 
   // ── Stat cards ───────────────────────────────────────────────────────────────
@@ -386,6 +400,13 @@ export default function SellerDashboardScreen({
                           <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
                         </TouchableOpacity>
                         <TouchableOpacity
+                          style={styles.donateIconBtn}
+                          onPress={() => onDonateFromListing?.(listing)}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="gift" size={14} color={Colors.greenMain} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
                           style={styles.soldOutBtn}
                           onPress={() => handleMarkSoldOut(listing.id)}
                           disabled={soldOutLoading === listing.id}
@@ -417,6 +438,55 @@ export default function SellerDashboardScreen({
             </Animated.View>
           )}
 
+          {/* ── DONATIONS TAB ── */}
+          {activeTab === "donations" && (
+            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+              {donationsLoading && donations.length === 0 ? (
+                <View style={styles.loadingWrap}>
+                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                </View>
+              ) : donationsError ? (
+                <View style={styles.errorWrap}>
+                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                  <Text style={[styles.errorText, rtl && styles.rtl]}>{donationsError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={() => fetchDonations(true)} activeOpacity={0.8}>
+                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : donations.length === 0 ? (
+                <View style={styles.placeholderPane}>
+                  <Text style={styles.placeholderEmoji}>🤝</Text>
+                  <Text style={[styles.placeholderTitle, rtl && styles.rtl]}>
+                    {rtl ? "لا توجد تبرعات بعد" : "No donations yet"}
+                  </Text>
+                  <Text style={[styles.placeholderSub, rtl && styles.rtl]}>
+                    {rtl
+                      ? "اضغط على أيقونة الهدية في أي قائمة لتبرع الطعام الفائض"
+                      : "Tap the gift icon on any listing to donate surplus food"}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {donations.map((donation) => (
+                    <DonationHistoryCard key={donation.id} donation={donation} rtl={rtl} />
+                  ))}
+                  {donationsHasMore && (
+                    <TouchableOpacity
+                      style={styles.loadMoreBtn}
+                      onPress={() => fetchDonations(false)}
+                      disabled={donationsLoading}
+                      activeOpacity={0.8}
+                    >
+                      {donationsLoading
+                        ? <ActivityIndicator size="small" color={Colors.primaryOrange} />
+                        : <Text style={styles.loadMoreBtnText}>{rtl ? "تحميل المزيد" : "Load more"}</Text>}
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </Animated.View>
+          )}
+
           {/* ── SETTINGS TAB ── */}
           {activeTab === "settings" && (
             <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.placeholderPane}>
@@ -444,6 +514,48 @@ export default function SellerDashboardScreen({
           <Feather name="plus" size={24} color={Colors.white} />
         </TouchableOpacity>
       )}
+    </View>
+  );
+}
+
+// ─── DonationHistoryCard ──────────────────────────────────────────────────────
+
+const DONATION_STATUS: Record<string, { labelEn: string; labelAr: string; color: string; icon: string }> = {
+  PENDING:   { labelEn: "Incoming",  labelAr: "قادم",        color: Colors.primaryOrange, icon: "clock"        },
+  PICKED_UP: { labelEn: "Picked Up", labelAr: "تم الاستلام", color: "#8b5cf6",            icon: "truck"        },
+  CONFIRMED: { labelEn: "Confirmed", labelAr: "مكتمل",       color: Colors.greenMain,     icon: "check-circle" },
+};
+
+function formatDonationDate(iso: string): string {
+  try { return new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" }); }
+  catch { return ""; }
+}
+
+function DonationHistoryCard({ donation, rtl }: { donation: SellerDonation; rtl: boolean }) {
+  const cfg = DONATION_STATUS[donation.status] ?? DONATION_STATUS.PENDING;
+  return (
+    <View style={styles.donationCard}>
+      <View style={[styles.donationCardInner, rtl && styles.donationCardInnerRTL]}>
+        <View style={[styles.donationStatusIcon, { backgroundColor: cfg.color + "18" }]}>
+          <Feather name={cfg.icon as "clock"} size={18} color={cfg.color} />
+        </View>
+        <View style={styles.donationBody}>
+          <Text style={[styles.donationTitle, rtl && styles.rtl]} numberOfLines={1}>
+            {donation.listing?.title ?? (rtl ? "تبرع" : "Donation")}
+          </Text>
+          <Text style={[styles.donationMeta, rtl && styles.rtl]}>
+            {donation.charity?.orgName ?? "—"}
+            {"  ·  "}
+            {rtl ? `الكمية: ${donation.quantity}` : `Qty: ${donation.quantity}`}
+          </Text>
+          <Text style={[styles.donationDate, rtl && styles.rtl]}>{formatDonationDate(donation.createdAt)}</Text>
+        </View>
+        <View style={[styles.donationStatusBadge, { backgroundColor: cfg.color + "18" }]}>
+          <Text style={[styles.donationStatusText, { color: cfg.color }]}>
+            {rtl ? cfg.labelAr : cfg.labelEn}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -586,6 +698,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#fef2f2",
     alignItems: "center", justifyContent: "center",
   },
+  donateIconBtn: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // Donation history cards
+  donationCard: {
+    backgroundColor: Colors.white, borderRadius: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    overflow: "hidden",
+  },
+  donationCardInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
+  donationCardInnerRTL: { flexDirection: "row-reverse" },
+  donationStatusIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  donationBody: { flex: 1, gap: 3 },
+  donationTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  donationMeta:  { fontSize: 12, color: Colors.grayMedium },
+  donationDate:  { fontSize: 11, color: Colors.grayMedium, marginTop: 2 },
+  donationStatusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, flexShrink: 0 },
+  donationStatusText: { fontSize: 11, fontWeight: "700" },
+
+  loadMoreBtn: {
+    alignItems: "center", paddingVertical: 14,
+    backgroundColor: Colors.white, borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
+  loadMoreBtnText: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
 
   fab: {
     position: "absolute", bottom: 28,

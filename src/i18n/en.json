@@ -313,6 +313,24 @@
     "error": "Could not load profile. Please try again.",
     "retry": "Retry"
   },
+  "sellerDonations": {
+    "tabLabel": "Donations",
+    "emptyTitle": "No donations yet",
+    "emptySub": "Tap the gift icon on any listing to donate surplus food",
+    "donateBtn": "Donate Surplus",
+    "formTitle": "Donate Surplus",
+    "quantity": "Quantity to Donate",
+    "maxHint": "Max: {max}",
+    "pickupWindow": "Pickup Window (HH:MM)",
+    "selectCharity": "Select a Charity",
+    "confirmBtn": "Confirm Donation",
+    "historyTitle": "Donations History",
+    "statusPending": "Incoming",
+    "statusPickedUp": "Picked Up",
+    "statusConfirmed": "Confirmed",
+    "loadMore": "Load more",
+    "errorSubmit": "Could not submit donation. Please try again."
+  },
   "listingForm": {
     "createTitle": "New Listing",
     "editTitle": "Edit Listing",

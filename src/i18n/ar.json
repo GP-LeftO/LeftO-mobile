@@ -313,6 +313,24 @@
     "error": "تعذّر تحميل الملف الشخصي. يرجى المحاولة مجدداً.",
     "retry": "إعادة المحاولة"
   },
+  "sellerDonations": {
+    "tabLabel": "التبرعات",
+    "emptyTitle": "لا توجد تبرعات بعد",
+    "emptySub": "اضغط على أيقونة الهدية في أي قائمة لتبرع الطعام الفائض",
+    "donateBtn": "تبرع بالفائض",
+    "formTitle": "تبرع بالفائض",
+    "quantity": "الكمية للتبرع",
+    "maxHint": "الحد الأقصى: {max}",
+    "pickupWindow": "وقت الاستلام (HH:MM)",
+    "selectCharity": "اختر جمعية خيرية",
+    "confirmBtn": "تأكيد التبرع",
+    "historyTitle": "سجل التبرعات",
+    "statusPending": "قادم",
+    "statusPickedUp": "تم الاستلام",
+    "statusConfirmed": "مكتمل",
+    "loadMore": "تحميل المزيد",
+    "errorSubmit": "تعذّر إرسال التبرع. يرجى المحاولة مجدداً."
+  },
   "listingForm": {
     "createTitle": "إضافة قائمة",
     "editTitle": "تعديل القائمة",
