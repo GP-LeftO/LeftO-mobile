@@ -1,6 +1,6 @@
 // BuyerTabNavigator — custom 5-tab bottom navigation for the buyer flow
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { FavoritesProvider, useFavoritesContext } from "../context/shared/Favori
 
 import { Colors } from "../theme";
 import { isRTL } from "../i18n";
+import { fetchNotifications } from "../services/buyer/notifications.service";
 
 import type { StoreDetailsParams } from "../types";
 import type { NearMeCoords } from "../types/nearMe";
@@ -40,6 +41,7 @@ export interface BuyerTabNavigatorProps {
   onListingPress?: (params: StoreDetailsParams) => void;
   onOpenChatbot?: () => void;
   onOpenNearMe?: (coords: NearMeCoords) => void;
+  onOpenNotifications?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,14 +68,24 @@ export default function BuyerTabNavigator(props: BuyerTabNavigatorProps) {
 
 // ─── Inner content — has access to FavoritesContext ───────────────────────────
 
-function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe }: BuyerTabNavigatorProps) {
+function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe, onOpenNotifications }: BuyerTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const botPad = Platform.OS === "web" ? 16 : insets.bottom;
   const rtl = isRTL();
 
-  const [activeTab, setActiveTab] = useState<BuyerTab>("home");
+  const [activeTab,   setActiveTab]   = useState<BuyerTab>("home");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const { toastMessage } = useFavoritesContext();
+
+  // Poll unread count every time the user is on home tab
+  useEffect(() => {
+    let cancelled = false;
+    fetchNotifications(1, 1)
+      .then(r => { if (!cancelled) setUnreadCount(r.unreadCount); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeTab]);
 
   const goToBrowse     = useCallback(() => setActiveTab("browse"), []);
   const handleTabPress = useCallback((key: BuyerTab) => setActiveTab(key), []);
@@ -153,6 +165,24 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe
 
       {/* ── Safe-area spacer ── */}
       <View style={[styles.safeAreaSpacer, { height: botPad }]} />
+
+      {/* ── Notification bell (floating above tab bar) ── */}
+      {onOpenNotifications && (
+        <TouchableOpacity
+          style={[styles.notifBtn, rtl ? styles.notifBtnRTL : styles.notifBtnLTR]}
+          onPress={onOpenNotifications}
+          activeOpacity={0.85}
+        >
+          <Feather name="bell" size={20} color={Colors.grayDark} />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>
+                {unreadCount > 99 ? "99+" : String(unreadCount)}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* ── Global toast (shown on any tab when favorites API succeeds/fails) ── */}
       {toastMessage !== null && (
@@ -243,4 +273,25 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   toastText: { fontSize: 14, fontWeight: "600", color: Colors.white },
+
+  notifBtn: {
+    position: "absolute", bottom: 68,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: Colors.white,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 6,
+    borderWidth: 1, borderColor: Colors.grayLight,
+  },
+  notifBtnLTR: { right: 16 },
+  notifBtnRTL: { left: 16 },
+  notifBadge: {
+    position: "absolute", top: -2, right: -2,
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#ef4444",
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5, borderColor: Colors.white,
+  },
+  notifBadgeText: { fontSize: 9, fontWeight: "800", color: Colors.white },
 });

@@ -31,6 +31,7 @@ import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebra
 import NearMeScreen              from "./src/screens/buyer/nearMe/NearMeScreen";
 import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
 import ListingFormScreen          from "./src/screens/seller/listings/ListingFormScreen";
+import NotificationsScreen        from "./src/screens/buyer/NotificationsScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -71,7 +72,8 @@ type AppStep =
   | "donation-confirmed"
   | "near-me"
   | "seller-create-listing"
-  | "seller-edit-listing";
+  | "seller-edit-listing"
+  | "notifications";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -383,8 +385,13 @@ function AppContent() {
             onListingPress={handleListingPress}
             onOpenChatbot={() => goTo("chatbot")}
             onOpenNearMe={handleOpenNearMe}
+            onOpenNotifications={() => goTo("notifications")}
           />
         )
+      }
+
+      {step === "notifications" &&
+        screen(<NotificationsScreen onBack={goBack} />)
       }
 
       {step === "chatbot" &&
