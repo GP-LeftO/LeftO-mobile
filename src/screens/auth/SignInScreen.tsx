@@ -23,11 +23,12 @@ interface SignInScreenProps {
   onSuccess?: (route: PostLoginRoute) => void;
   onBack?: () => void;
   onRegister?: () => void;
+  onForgotPassword?: () => void;
   navigation?: any;
   role?: "buyer" | "seller" | "charity";
 }
 
-export default function SignInScreen({ onSuccess, onBack, onRegister, navigation, role }: SignInScreenProps) {
+export default function SignInScreen({ onSuccess, onBack, onRegister, onForgotPassword, navigation, role }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -194,6 +195,12 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
           />
         </Animated.View>
 
+        <Animated.View entering={FadeInDown.delay(370).duration(500).springify()} style={styles.forgotRow}>
+          <TouchableOpacity onPress={onForgotPassword} disabled={loginState.loading} activeOpacity={0.7}>
+            <Text style={styles.forgotLink}>{rtl ? "نسيت كلمة المرور؟" : "Forgot password?"}</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(400).duration(500).springify()} style={styles.registerRow}>
           <Text style={styles.registerLabel}>{rtl ? "ليس لديك حساب؟" : "Don't have an account?"}</Text>
           <TouchableOpacity onPress={onRegister} disabled={loginState.loading}>
@@ -262,6 +269,8 @@ const styles = StyleSheet.create({
   },
   apiErrorText: { flex: 1, fontSize: 13, color: "#dc2626", lineHeight: 18 },
 
+  forgotRow:  { alignItems: "center" },
+  forgotLink: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
   registerRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   registerLabel: { fontSize: 14, color: Colors.grayMedium },
   registerLink: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },

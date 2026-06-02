@@ -31,6 +31,8 @@ import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebra
 import NearMeScreen              from "./src/screens/buyer/nearMe/NearMeScreen";
 import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
 import ListingFormScreen          from "./src/screens/seller/listings/ListingFormScreen";
+import ForgotPasswordScreen       from "./src/screens/auth/ForgotPasswordScreen";
+import ResetPasswordScreen        from "./src/screens/auth/ResetPasswordScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -71,7 +73,9 @@ type AppStep =
   | "donation-confirmed"
   | "near-me"
   | "seller-create-listing"
-  | "seller-edit-listing";
+  | "seller-edit-listing"
+  | "forgot-password"
+  | "reset-password";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -108,8 +112,9 @@ function AppContent() {
   const [donationQuantity,  setDonationQuantity]  = useState(1);
   const [donatedCharityName, setDonatedCharityName] = useState("");
   const [nearMeCoords,      setNearMeCoords]      = useState<NearMeCoords | null>(null);
-  const [listingToEdit,     setListingToEdit]     = useState<SellerListing | undefined>(undefined);
+  const [listingToEdit,       setListingToEdit]       = useState<SellerListing | undefined>(undefined);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [forgotPhone,         setForgotPhone]         = useState("");
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -372,6 +377,26 @@ function AppContent() {
             onBack={goBack}
             onSuccess={handlePostLogin}
             onRegister={() => goBack()}
+            onForgotPassword={() => goTo("forgot-password")}
+          />
+        )
+      }
+
+      {step === "forgot-password" &&
+        screen(
+          <ForgotPasswordScreen
+            onBack={goBack}
+            onCodeSent={(ph) => { setForgotPhone(ph); goTo("reset-password"); }}
+          />
+        )
+      }
+
+      {step === "reset-password" &&
+        screen(
+          <ResetPasswordScreen
+            phone={forgotPhone}
+            onBack={goBack}
+            onSuccess={() => setStepHistory(["sign-in"])}
           />
         )
       }
