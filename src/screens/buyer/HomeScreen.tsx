@@ -26,19 +26,22 @@ import { useListings } from "../../hooks/buyer/useListings";
 import { useHomeStats } from "../../hooks/buyer/useHomeStats";
 import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
 import LeftOLogo from "../../components/shared/LeftOLogo";
+import NearMeEntryButton from "../../components/shared/NearMeEntryButton";
 import type { Listing, StoreDetailsParams } from "../../types";
+import type { NearMeCoords } from "../../types/nearMe";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface HomeScreenProps {
-  onLogout?:       () => void;
-  onListingPress?: (params: StoreDetailsParams) => void;
-  onSearchPress?:  () => void;
+  onLogout?:        () => void;
+  onListingPress?:  (params: StoreDetailsParams) => void;
+  onSearchPress?:   () => void;
+  onOpenNearMe?:    (coords: NearMeCoords) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: HomeScreenProps) {
+export default function HomeScreen({ onLogout, onListingPress, onSearchPress, onOpenNearMe }: HomeScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl        = isRTL();
@@ -121,6 +124,11 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress }: 
             <Feather name="sliders" size={14} color={Colors.primaryOrange} />
           </View>
         </TouchableOpacity>
+
+        {/* Near Me — AI location-based discovery */}
+        {onOpenNearMe && (
+          <NearMeEntryButton onPress={onOpenNearMe} />
+        )}
 
         {/* Impact strip */}
         <View style={styles.impactStrip}>

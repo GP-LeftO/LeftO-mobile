@@ -2,6 +2,7 @@
   "expo": {
     "name": "LeftO",
     "slug": "lefto",
+    "scheme": "lefto",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
@@ -15,14 +16,23 @@
       }
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "LeftO يستخدم التعرف على الكلام للبحث عن العروض القريبة منك.",
+        "NSMicrophoneUsageDescription": "LeftO يحتاج إلى الميكروفون لتحويل صوتك إلى نص."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#DE985A"
       },
-      "package": "com.anonymous.lefto"
+      "package": "com.anonymous.lefto",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/logo.png"
@@ -31,7 +41,16 @@
       "expo-localization",
       [
         "expo-location",
-         { "locationWhenInUsePermission": "LeftO needs your location to show nearby sellers." }]
-    ]
+        {
+          "locationWhenInUsePermission": "LeftO needs your location to show nearby sellers."
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "53fdcedd-7456-48a7-a831-bf5c6fde5a52"
+      }
+    }
   }
 }
