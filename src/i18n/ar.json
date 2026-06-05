@@ -356,6 +356,137 @@
       "generic": "حدث خطأ ما. يرجى المحاولة مجدداً."
     }
   },
+  "community": {
+    "suspendedMeals": "وجبات معلقة 💚",
+    "suspendedMealsBadge": "مجاناً",
+    "ramadanBags": "أكياس رمضان 🌙",
+    "ramadanBanner": "رمضان مبارك — شارك إفطارك",
+    "postMeal": "شارك وجبة مجانية",
+    "postMealTitle": "عنوان الوجبة",
+    "postMealTitlePlaceholder": "مثال: غداء منزلي اليوم",
+    "postMealQty": "الكمية",
+    "postMealPickupFrom": "وقت الاستلام من (HH:MM)",
+    "postMealPickupTo": "وقت الاستلام إلى (HH:MM)",
+    "postMealSubmit": "مشاركة الوجبة",
+    "postMealSubmitting": "جاري المشاركة…",
+    "postMealSuccess": "تمت المشاركة! سيأخذها أحد قريباً.",
+    "postMealError": "تعذّر مشاركة الوجبة. يرجى المحاولة مجدداً.",
+    "claim": "احجز",
+    "claiming": "جاري الحجز…",
+    "claimSuccess": "تم الحجز! استلمها قريباً.",
+    "claimError": "تعذّر الحجز. يرجى المحاولة مجدداً.",
+    "freeLabel": "مجاناً",
+    "empty": "لا توجد وجبات مجانية الآن",
+    "emptySub": "كن أول من يشارك!",
+    "emptyRamadan": "لا توجد أكياس رمضان الآن"
+  },
+  "sellerOrders": {
+    "title": "الطلبات",
+    "loading": "جاري تحميل الطلبات…",
+    "error": "تعذّر تحميل الطلبات. يرجى المحاولة مجدداً.",
+    "retry": "إعادة المحاولة",
+    "empty": "لا توجد طلبات بعد",
+    "emptySub": "ستظهر هنا طلبات المشترين",
+    "buyer": "المشتري",
+    "qty": "الكمية",
+    "total": "المجموع",
+    "status": {
+      "RESERVED": "محجوز",
+      "COMPLETED": "تم الاستلام",
+      "CANCELLED": "ملغى",
+      "DONATED": "تم التبرع"
+    }
+  },
+  "sellerSettings": {
+    "title": "إعدادات المتجر",
+    "businessName": "اسم المتجر",
+    "description": "الوصف",
+    "phone": "رقم التواصل",
+    "website": "الموقع الإلكتروني",
+    "save": "حفظ التغييرات",
+    "saving": "جاري الحفظ…",
+    "success": "تم حفظ الإعدادات!",
+    "error": "تعذّر حفظ الإعدادات. يرجى المحاولة مجدداً."
+  },
+  "sellerDonate": {
+    "title": "التبرع بالفائض",
+    "subtitle": "اختر جمعية خيرية لاستقبال تبرعك من الطعام الفائض",
+    "selectCharity": "اختر جمعية خيرية",
+    "quantity": "الكمية للتبرع",
+    "selectListing": "اختر القائمة",
+    "donate": "تبرع الآن",
+    "donating": "جاري التبرع…",
+    "success": "تم إرسال التبرع بنجاح!",
+    "error": "تعذّر إرسال التبرع. يرجى المحاولة مجدداً.",
+    "loading": "جاري تحميل الجمعيات…",
+    "fetchError": "تعذّر تحميل الجمعيات.",
+    "noCharities": "لا توجد جمعيات متاحة"
+  },
+  "charityDashboard": {
+    "title": "لوحة تحكم الجمعية",
+    "tabs": {
+      "pending": "قيد الانتظار",
+      "history": "السجل"
+    },
+    "stats": {
+      "total": "المجموع",
+      "pending": "قيد الانتظار",
+      "confirmed": "مؤكدة",
+      "pickedUp": "تم الاستلام"
+    },
+    "empty": {
+      "pending": "لا توجد تبرعات معلقة",
+      "pendingSub": "ستظهر هنا تبرعات البائعين",
+      "history": "لا يوجد سجل تبرعات بعد",
+      "historySub": "ستظهر هنا التبرعات المؤكدة والمكتملة"
+    },
+    "donationFrom": "من",
+    "qty": "الكمية",
+    "pickup": "وقت الاستلام",
+    "status": {
+      "PENDING": "قيد الانتظار",
+      "CONFIRMED": "مؤكدة",
+      "PICKED_UP": "تم الاستلام",
+      "CANCELLED": "ملغاة"
+    },
+    "actions": {
+      "confirmPickup": "تأكيد الاستلام",
+      "uploadProof": "رفع إثبات",
+      "confirmWithProof": "تأكيد مع إثبات",
+      "confirming": "جاري التأكيد…"
+    },
+    "proofUploaded": "تم رفع الإثبات",
+    "successPickup": "تم تأكيد استلام التبرع!",
+    "successProof": "تم تأكيد التبرع مع الإثبات!",
+    "error": "حدث خطأ ما. يرجى المحاولة مجدداً.",
+    "loading": "جاري تحميل التبرعات…",
+    "fetchError": "تعذّر تحميل التبرعات. يرجى المحاولة مجدداً.",
+    "retry": "إعادة المحاولة"
+  },
+  "forgotPassword": {
+    "title": "نسيت كلمة المرور؟",
+    "subtitle": "أدخل رقم هاتفك وسنرسل لك رمز إعادة التعيين",
+    "phonePlaceholder": "أدخل رقم هاتفك",
+    "sendCode": "إرسال رمز التحقق",
+    "sending": "جاري الإرسال…",
+    "success": "تم إرسال الرمز إلى هاتفك",
+    "invalidPhone": "يرجى إدخال رقم هاتف صحيح (10 أرقام)",
+    "error": "تعذّر إرسال الرمز. يرجى المحاولة مجدداً."
+  },
+  "resetPassword": {
+    "title": "إعادة تعيين كلمة المرور",
+    "subtitle": "أدخل الرمز الذي أرسلناه واختر كلمة مرور جديدة",
+    "otpPlaceholder": "رمز مكوّن من 6 أرقام",
+    "newPasswordPlaceholder": "كلمة المرور الجديدة",
+    "confirmPasswordPlaceholder": "تأكيد كلمة المرور",
+    "reset": "إعادة تعيين كلمة المرور",
+    "resetting": "جاري التحديث…",
+    "success": "تم تغيير كلمة المرور. يرجى تسجيل الدخول.",
+    "invalidOtp": "يرجى إدخال رمز التحقق المكوّن من 6 أرقام",
+    "invalidPassword": "يجب أن تتكوّن كلمة المرور من 6 أحرف على الأقل",
+    "passwordMismatch": "كلمتا المرور غير متطابقتين",
+    "error": "تعذّر إعادة تعيين كلمة المرور. يرجى المحاولة مجدداً."
+  },
   "favorites": {
     "title": "المفضلة",
     "loading": "جاري تحميل المفضلة…",

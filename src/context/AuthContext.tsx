@@ -27,6 +27,9 @@ interface AuthContextValue {
   charityStatus: SellerStatus;
   isAuthenticated: boolean;
   isInitializing: boolean;
+  viewMode: "seller" | "buyer";
+  switchToBuyerMode: () => void;
+  switchToSellerMode: () => void;
   saveSession: (params: {
     user: AuthUser;
     accessToken: string;
@@ -47,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sellerStatus, setSellerStatus] = useState<SellerStatus>(null);
   const [charityStatus, setCharityStatus] = useState<SellerStatus>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [viewMode, setViewMode] = useState<"seller" | "buyer">("seller");
 
   useEffect(() => {
     (async () => {
@@ -111,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRefreshToken(null);
     setSellerStatus(null);
     setCharityStatus(null);
+    setViewMode("seller");
   };
 
   const updateUser = (updated: AuthUser) => {
@@ -128,6 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         charityStatus,
         isAuthenticated: !!user && !!accessToken,
         isInitializing,
+        viewMode,
+        switchToBuyerMode:  () => setViewMode("buyer"),
+        switchToSellerMode: () => setViewMode("seller"),
         saveSession,
         clearSession,
         updateUser,

@@ -356,6 +356,137 @@
       "generic": "Something went wrong. Please try again."
     }
   },
+  "community": {
+    "suspendedMeals": "Free Meals 💚",
+    "suspendedMealsBadge": "Free",
+    "ramadanBags": "Ramadan Bags 🌙",
+    "ramadanBanner": "Ramadan Mubarak — Share your iftar",
+    "postMeal": "Share a Free Meal",
+    "postMealTitle": "Meal title",
+    "postMealTitlePlaceholder": "e.g. Homemade lunch today",
+    "postMealQty": "Quantity",
+    "postMealPickupFrom": "Pickup from (HH:MM)",
+    "postMealPickupTo": "Pickup to (HH:MM)",
+    "postMealSubmit": "Share Meal",
+    "postMealSubmitting": "Sharing…",
+    "postMealSuccess": "Meal shared! Someone will claim it soon.",
+    "postMealError": "Could not share meal. Please try again.",
+    "claim": "Claim",
+    "claiming": "Claiming…",
+    "claimSuccess": "Claimed! Pick it up soon.",
+    "claimError": "Could not claim. Please try again.",
+    "freeLabel": "FREE",
+    "empty": "No free meals right now",
+    "emptySub": "Be the first to share one!",
+    "emptyRamadan": "No Ramadan bags right now"
+  },
+  "sellerOrders": {
+    "title": "Orders",
+    "loading": "Loading orders…",
+    "error": "Could not load orders. Please try again.",
+    "retry": "Retry",
+    "empty": "No orders yet",
+    "emptySub": "Orders placed by buyers will appear here",
+    "buyer": "Buyer",
+    "qty": "Qty",
+    "total": "Total",
+    "status": {
+      "RESERVED": "Reserved",
+      "COMPLETED": "Picked Up",
+      "CANCELLED": "Cancelled",
+      "DONATED": "Donated"
+    }
+  },
+  "sellerSettings": {
+    "title": "Store Settings",
+    "businessName": "Business Name",
+    "description": "Description",
+    "phone": "Contact Phone",
+    "website": "Website",
+    "save": "Save Changes",
+    "saving": "Saving…",
+    "success": "Settings saved!",
+    "error": "Could not save settings. Please try again."
+  },
+  "sellerDonate": {
+    "title": "Donate Surplus Food",
+    "subtitle": "Select a charity to receive your surplus food donation",
+    "selectCharity": "Select a Charity",
+    "quantity": "Quantity to Donate",
+    "selectListing": "Select a Listing",
+    "donate": "Donate Now",
+    "donating": "Donating…",
+    "success": "Donation sent successfully!",
+    "error": "Could not send donation. Please try again.",
+    "loading": "Loading charities…",
+    "fetchError": "Could not load charities.",
+    "noCharities": "No charities available"
+  },
+  "charityDashboard": {
+    "title": "Charity Dashboard",
+    "tabs": {
+      "pending": "Pending",
+      "history": "History"
+    },
+    "stats": {
+      "total": "Total",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "pickedUp": "Picked Up"
+    },
+    "empty": {
+      "pending": "No pending donations",
+      "pendingSub": "Donations from sellers will appear here",
+      "history": "No donation history yet",
+      "historySub": "Confirmed and completed donations will appear here"
+    },
+    "donationFrom": "From",
+    "qty": "Qty",
+    "pickup": "Pickup",
+    "status": {
+      "PENDING": "Pending",
+      "CONFIRMED": "Confirmed",
+      "PICKED_UP": "Picked Up",
+      "CANCELLED": "Cancelled"
+    },
+    "actions": {
+      "confirmPickup": "Confirm Pickup",
+      "uploadProof": "Upload Proof",
+      "confirmWithProof": "Confirm with Proof",
+      "confirming": "Confirming…"
+    },
+    "proofUploaded": "Proof uploaded",
+    "successPickup": "Donation marked as picked up!",
+    "successProof": "Donation confirmed with proof!",
+    "error": "Something went wrong. Please try again.",
+    "loading": "Loading donations…",
+    "fetchError": "Could not load donations. Please try again.",
+    "retry": "Retry"
+  },
+  "forgotPassword": {
+    "title": "Forgot Password?",
+    "subtitle": "Enter your phone number and we'll send you a reset code",
+    "phonePlaceholder": "Enter your phone number",
+    "sendCode": "Send Reset Code",
+    "sending": "Sending…",
+    "success": "Code sent to your phone",
+    "invalidPhone": "Please enter a valid 10-digit phone number",
+    "error": "Could not send code. Please try again."
+  },
+  "resetPassword": {
+    "title": "Reset Password",
+    "subtitle": "Enter the code we sent you and set a new password",
+    "otpPlaceholder": "6-digit code",
+    "newPasswordPlaceholder": "New password",
+    "confirmPasswordPlaceholder": "Confirm new password",
+    "reset": "Reset Password",
+    "resetting": "Resetting…",
+    "success": "Password reset successfully. Please sign in.",
+    "invalidOtp": "Please enter the 6-digit code",
+    "invalidPassword": "Password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "error": "Could not reset password. Please try again."
+  },
   "favorites": {
     "title": "Favorites",
     "loading": "Loading favorites…",

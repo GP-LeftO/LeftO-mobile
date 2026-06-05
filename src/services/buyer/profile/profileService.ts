@@ -23,6 +23,15 @@ export function submitReview(payload: ReviewPayload): Promise<void> {
   return api.post("/api/reviews", payload).then(() => undefined);
 }
 
+export function updateUserProfile(params: {
+  avatarColor?: string;
+  avatarStyle?: string;
+  name?: string;
+  email?: string;
+}): Promise<void> {
+  return api.patch("/api/users/me", params).then(() => undefined);
+}
+
 export function fetchSellerReviews(sellerId: string, limit = 10): Promise<SellerReview[]> {
   return api
     .get(`/api/reviews/seller/${sellerId}`, { params: { limit } })

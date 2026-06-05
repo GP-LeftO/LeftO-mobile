@@ -9,14 +9,14 @@ export async function fetchFavorites(): Promise<FavoriteSeller[]> {
   const payload = data?.data ?? data;
   const items: Record<string, unknown>[] = Array.isArray(payload) ? payload : [];
 
+  // API returns [{ sellerId, seller: { businessName, rating, listings } }]
+  // sellerId is at the ROOT of each item — not inside seller object
   return items.map((item) => {
-    // Backend returns { id, sellerId, notify, seller: { id, businessName, ... } }
-    // Fall back to flat shape in case the backend ever returns seller fields directly.
-    const s = (item.seller as Record<string, unknown> | undefined) ?? item;
+    const s = (item.seller as Record<string, unknown> | undefined) ?? {};
     return {
-      id:           (s.id           ?? item.sellerId ?? "") as string,
-      businessName: (s.businessName ?? s.name        ?? "") as string,
-      businessType: (s.businessType ?? s.type        ?? "") as string,
+      id:           (item.sellerId ?? "") as string,
+      businessName: (s.businessName ?? s.name ?? "") as string,
+      businessType: (s.businessType ?? s.type ?? "") as string,
       logoUrl:      s.logoUrl as string | undefined,
       distanceKm:   item.distanceKm as number | undefined,
       activeListing: (item.activeListing ?? s.activeListing) as FavoriteSeller["activeListing"],

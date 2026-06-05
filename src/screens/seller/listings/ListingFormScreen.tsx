@@ -188,49 +188,56 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
             {rtl ? "الكمية المتاحة" : "Available Quantity"} <Text style={styles.required}>*</Text>
           </Text>
-          <TextInput
-            style={[styles.input, styles.inputShort, errors.quantity && styles.inputError, rtl && styles.textRight]}
-            placeholder="1"
-            placeholderTextColor={Colors.grayMedium}
-            keyboardType="number-pad"
-            value={form.quantity}
-            onChangeText={v => setField("quantity", v)}
-            textAlign={rtl ? "right" : "left"}
-          />
+          <View style={styles.stepperRow}>
+            <TouchableOpacity
+              style={[styles.stepperBtn, { borderRadius: 0, borderTopLeftRadius: 12, borderBottomLeftRadius: 12, borderRightWidth: 0 }]}
+              onPress={() => {
+                const v = Math.max(1, Number(form.quantity) - 1);
+                setField("quantity", String(v));
+              }}
+              activeOpacity={0.7}
+            >
+              <Feather name="minus" size={18} color={Colors.primaryOrange} />
+            </TouchableOpacity>
+            <TextInput
+              style={[styles.stepperInput, errors.quantity && { borderColor: "#ef4444" }]}
+              keyboardType="number-pad"
+              value={form.quantity}
+              onChangeText={v => setField("quantity", v.replace(/\D/g, ""))}
+              textAlign="center"
+            />
+            <TouchableOpacity
+              style={[styles.stepperBtn, { borderRadius: 0, borderTopRightRadius: 12, borderBottomRightRadius: 12, borderLeftWidth: 0 }]}
+              onPress={() => setField("quantity", String(Number(form.quantity) + 1))}
+              activeOpacity={0.7}
+            >
+              <Feather name="plus" size={18} color={Colors.primaryOrange} />
+            </TouchableOpacity>
+          </View>
           {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
         </View>
 
         {/* ── Pickup Window ── */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "نافذة الاستلام (HH:MM)" : "Pickup Window (HH:MM)"} <Text style={styles.required}>*</Text>
+            {rtl ? "نافذة الاستلام" : "Pickup Window"} <Text style={styles.required}>*</Text>
           </Text>
           <View style={[styles.row, rtl && styles.rowRTL]}>
             <View style={styles.halfField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "من" : "From"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupStart && styles.inputError, rtl && styles.textRight]}
-                placeholder="17:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
+              <TimeStepperInput
                 value={form.pickupStart}
-                onChangeText={v => setField("pickupStart", v)}
-                textAlign={rtl ? "right" : "left"}
+                onChange={v => setField("pickupStart", v)}
+                hasError={!!errors.pickupStart}
               />
               {errors.pickupStart && <Text style={styles.errorText}>{errors.pickupStart}</Text>}
             </View>
             <View style={styles.halfField}>
               <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "إلى" : "To"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupEnd && styles.inputError, rtl && styles.textRight]}
-                placeholder="20:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
+              <TimeStepperInput
                 value={form.pickupEnd}
-                onChangeText={v => setField("pickupEnd", v)}
-                textAlign={rtl ? "right" : "left"}
+                onChange={v => setField("pickupEnd", v)}
+                hasError={!!errors.pickupEnd}
               />
               {errors.pickupEnd && <Text style={styles.errorText}>{errors.pickupEnd}</Text>}
             </View>
@@ -334,6 +341,92 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   );
 }
 
+// ─── Time stepper ─────────────────────────────────────────────────────────────
+
+function parseHHMM(raw: string): { h: number; m: number } {
+  const [hStr = "0", mStr = "0"] = raw.split(":");
+  return { h: Math.min(23, Math.max(0, parseInt(hStr, 10) || 0)), m: Math.min(59, Math.max(0, parseInt(mStr, 10) || 0)) };
+}
+
+function formatHHMM(h: number, m: number) {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function TimeStepperInput({ value, onChange, hasError }: { value: string; onChange: (v: string) => void; hasError: boolean }) {
+  const { h, m } = parseHHMM(value);
+
+  const adjustH = (delta: number) => onChange(formatHHMM((h + delta + 24) % 24, m));
+  const adjustM = (delta: number) => {
+    let newM = m + delta;
+    let newH = h;
+    if (newM < 0)  { newM += 60; newH = (newH - 1 + 24) % 24; }
+    if (newM >= 60){ newM -= 60; newH = (newH + 1) % 24; }
+    onChange(formatHHMM(newH, newM));
+  };
+
+  return (
+    <View style={[timeStyles.wrap, hasError && timeStyles.wrapError]}>
+      {/* Hours */}
+      <View style={timeStyles.unit}>
+        <TouchableOpacity onPress={() => adjustH(1)} style={timeStyles.arrow} activeOpacity={0.7}>
+          <Feather name="chevron-up" size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+        <TextInput
+          style={timeStyles.digit}
+          value={String(h).padStart(2, "0")}
+          keyboardType="number-pad"
+          maxLength={2}
+          textAlign="center"
+          onChangeText={(v) => {
+            const n = parseInt(v, 10);
+            onChange(formatHHMM(isNaN(n) ? h : Math.min(23, n), m));
+          }}
+        />
+        <TouchableOpacity onPress={() => adjustH(-1)} style={timeStyles.arrow} activeOpacity={0.7}>
+          <Feather name="chevron-down" size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+      </View>
+      <Text style={timeStyles.colon}>:</Text>
+      {/* Minutes */}
+      <View style={timeStyles.unit}>
+        <TouchableOpacity onPress={() => adjustM(5)} style={timeStyles.arrow} activeOpacity={0.7}>
+          <Feather name="chevron-up" size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+        <TextInput
+          style={timeStyles.digit}
+          value={String(m).padStart(2, "0")}
+          keyboardType="number-pad"
+          maxLength={2}
+          textAlign="center"
+          onChangeText={(v) => {
+            const n = parseInt(v, 10);
+            onChange(formatHHMM(h, isNaN(n) ? m : Math.min(59, n)));
+          }}
+        />
+        <TouchableOpacity onPress={() => adjustM(-5)} style={timeStyles.arrow} activeOpacity={0.7}>
+          <Feather name="chevron-down" size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const timeStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+    borderRadius: 14, paddingVertical: 4, paddingHorizontal: 12, gap: 4,
+  },
+  wrapError: { borderColor: "#ef4444" },
+  unit: { alignItems: "center", gap: 0 },
+  arrow: { padding: 4 },
+  digit: {
+    fontSize: 22, fontWeight: "700", color: Colors.grayDark,
+    width: 40, textAlign: "center",
+  },
+  colon: { fontSize: 22, fontWeight: "700", color: Colors.grayDark, marginBottom: 2 },
+});
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -380,6 +473,18 @@ const styles = StyleSheet.create({
   inputMultiline: { minHeight: 90, paddingTop: 12 },
 
   errorText: { fontSize: 12, color: "#ef4444", marginTop: 4 },
+
+  stepperRow: { flexDirection: "row", alignItems: "center", gap: 0, alignSelf: "flex-start" },
+  stepperBtn: {
+    width: 44, height: 48, borderWidth: 1.5, borderColor: Colors.grayLight,
+    backgroundColor: Colors.white, alignItems: "center", justifyContent: "center",
+    borderRadius: 0,
+  },
+  stepperInput: {
+    width: 72, height: 48,
+    backgroundColor: Colors.white, borderTopWidth: 1.5, borderBottomWidth: 1.5,
+    borderColor: Colors.grayLight, fontSize: 16, fontWeight: "700", color: Colors.grayDark,
+  },
 
   row:    { flexDirection: "row",         gap: 12 },
   rowRTL: { flexDirection: "row-reverse", gap: 12 },
