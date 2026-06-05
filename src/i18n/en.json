@@ -313,6 +313,27 @@
     "error": "Could not load profile. Please try again.",
     "retry": "Retry"
   },
+  "sellerSettings": {
+    "title": "Store Settings",
+    "businessName": "Business Name",
+    "description": "Description",
+    "phone": "Phone",
+    "website": "Website",
+    "socialMedia": "Social Media",
+    "address": "Address",
+    "save": "Save Changes",
+    "saving": "Saving…",
+    "saved": "Changes saved successfully",
+    "error": "Could not save changes. Please try again."
+  },
+  "sellerOrders": {
+    "title": "Orders",
+    "empty": "No orders yet",
+    "emptySub": "Buyer reservations will appear here",
+    "loadMore": "Load more",
+    "buyer": "Buyer",
+    "qty": "Qty"
+  },
   "listingForm": {
     "createTitle": "New Listing",
     "editTitle": "Edit Listing",

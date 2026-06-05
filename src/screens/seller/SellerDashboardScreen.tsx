@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  StyleSheet, Text, View, Platform, Switch,
-  TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert, TextInput, Modal,
+  StyleSheet, Text, View, Platform, TextInput,
+  TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -11,14 +12,10 @@ import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useAuthContext } from "../../context/AuthContext";
 import api from "../../services/shared/api";
-import {
-  deleteListing, getSellerOrders, updateSellerProfile,
-  createDonation, updateKaramParticipation,
-  sponsorKaramMealAsSeller, claimKaramMeal,
-  getMySellerDonations,
-} from "../../services/seller/seller.service";
-import type { SellerListing, SellerOrder, SellerDonation } from "../../services/seller/seller.service";
-import { fetchSellerKaramBalance } from "../../services/shared/community.service";
+import { deleteListing } from "../../services/seller/seller.service";
+import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
+import type { SellerListing } from "../../services/seller/seller.service";
+import type { SellerOrder } from "../../hooks/seller/useSellerOrders";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,43 +39,54 @@ interface SellerProfile {
   rating?: number;
 }
 
-interface KaramBalance { sponsored: number; claimed: number; available: number }
-interface Charity { id: string; name: string }
+interface SettingsForm {
+  businessName: string;
+  description: string;
+  phone: string;
+  website: string;
+  socialMedia: string;
+  address: string;
+}
 
-type Tab = "overview" | "listings" | "orders" | "donations" | "settings";
-type OrderFilter = "RESERVED" | "COMPLETED" | "CANCELLED";
-
-// ─── Config ───────────────────────────────────────────────────────────────────
-
-const ORDER_STATUS_CONFIG: Record<string, { en: string; ar: string; color: string; bg: string }> = {
-  RESERVED:  { en: "Reserved",  ar: "محجوز",       color: Colors.primaryOrange, bg: Colors.orangeLight },
-  COMPLETED: { en: "Picked Up", ar: "تم الاستلام",  color: Colors.greenMain,     bg: Colors.greenLight  },
-  CANCELLED: { en: "Cancelled", ar: "ملغى",          color: "#ef4444",            bg: "#fef2f2"          },
-  DONATED:   { en: "Donated",   ar: "تبرع",         color: "#8b5cf6",            bg: "#ede9fe"          },
-};
-
-const DONATION_STATUS_CONFIG: Record<string, { en: string; ar: string; color: string; bg: string }> = {
-  PENDING:   { en: "Pending",   ar: "قيد الانتظار", color: Colors.primaryOrange, bg: Colors.orangeLight },
-  PICKED_UP: { en: "Picked Up", ar: "تم الاستلام",  color: "#8b5cf6",            bg: "#ede9fe"          },
-  CONFIRMED: { en: "Confirmed", ar: "مؤكد",          color: Colors.greenMain,     bg: Colors.greenLight  },
-  CANCELLED: { en: "Cancelled", ar: "ملغى",          color: "#ef4444",            bg: "#fef2f2"          },
-};
-
-const BIZ_TYPES = [
-  { value: "RESTAURANT", en: "Restaurant", ar: "مطعم"   },
-  { value: "BAKERY",     en: "Bakery",     ar: "مخبزة"  },
-  { value: "MARKET",     en: "Market",     ar: "سوق"    },
-  { value: "GROCERY",    en: "Grocery",    ar: "بقالة"  },
-] as const;
-
-const BUSINESS_TYPE_LABELS:    Record<string, string> = { RESTAURANT: "Restaurant", MARKET: "Market", BAKERY: "Bakery", GROCERY: "Grocery" };
-const BUSINESS_TYPE_LABELS_AR: Record<string, string> = { RESTAURANT: "مطعم", MARKET: "سوق", BAKERY: "مخبزة", GROCERY: "بقالة" };
+type Tab = "overview" | "listings" | "orders" | "settings";
 
 interface SellerDashboardScreenProps {
   onLogout?: () => void;
   onCreateListing?: () => void;
   onEditListing?: (listing: SellerListing) => void;
   refreshKey?: number;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BUSINESS_TYPE_LABELS: Record<string, string> = {
+  RESTAURANT: "Restaurant", MARKET: "Market", BAKERY: "Bakery",
+};
+const BUSINESS_TYPE_LABELS_AR: Record<string, string> = {
+  RESTAURANT: "مطعم", MARKET: "سوق", BAKERY: "مخبزة",
+};
+
+const ORDER_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string }> = {
+  RESERVED:  { labelEn: "Reserved",  labelAr: "محجوز",  color: Colors.primaryOrange },
+  COMPLETED: { labelEn: "Completed", labelAr: "مكتمل",  color: Colors.greenMain     },
+  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",   color: Colors.grayMedium    },
+};
+
+function formatPickup(start?: string, end?: string): string {
+  if (!start || !end) return "—";
+  try {
+    const fmt = (iso: string) =>
+      new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `${fmt(start)} – ${fmt(end)}`;
+  } catch {
+    return "—";
+  }
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" });
+  } catch { return ""; }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -89,70 +97,57 @@ export default function SellerDashboardScreen({
   onEditListing,
   refreshKey,
 }: SellerDashboardScreenProps) {
-  const insets = useSafeAreaInsets();
-  const rtl = isRTL();
+  const insets     = useSafeAreaInsets();
+  const rtl        = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const { user, logout } = useAuth();
   const { switchToBuyerMode } = useAuthContext();
 
+  // ── Profile state ──────────────────────────────────────────────────────────
   const [activeTab,       setActiveTab]       = useState<Tab>("overview");
   const [profile,         setProfile]         = useState<SellerProfile | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [refreshing,      setRefreshing]      = useState(false);
   const [fetchError,      setFetchError]      = useState("");
 
-  // Listings
+  // ── Listings state ────────────────────────────────────────────────────────
   const [listings,        setListings]        = useState<SellerListing[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError,   setListingsError]   = useState("");
   const [soldOutLoading,  setSoldOutLoading]  = useState<string | null>(null);
   const [deleteLoading,   setDeleteLoading]   = useState<string | null>(null);
 
-  // Orders
-  const [orders,          setOrders]          = useState<SellerOrder[]>([]);
-  const [ordersLoading,   setOrdersLoading]   = useState(false);
-  const [ordersError,     setOrdersError]     = useState("");
-  const [ordersFilter,    setOrdersFilter]    = useState<OrderFilter>("RESERVED");
+  // ── Settings form state ───────────────────────────────────────────────────
+  const [settingsForm,    setSettingsForm]    = useState<SettingsForm>({
+    businessName: "", description: "", phone: "", website: "", socialMedia: "", address: "",
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaved,   setSettingsSaved]   = useState(false);
+  const [settingsError,   setSettingsError]   = useState("");
 
-  // Donations history
-  const [donations,       setDonations]       = useState<SellerDonation[]>([]);
-  const [donationsLoading, setDonationsLoading] = useState(false);
-  const [donationsError,  setDonationsError]  = useState("");
+  // ── Orders hook ───────────────────────────────────────────────────────────
+  const {
+    orders, loading: ordersLoading, refreshing: ordersRefreshing,
+    error: ordersError, hasMore: ordersHasMore, fetchOrders,
+  } = useSellerOrders();
 
-  // Karam
-  const [karamBalance,    setKaramBalance]    = useState<KaramBalance | null>(null);
-  const [karamActing,     setKaramActing]     = useState<"sponsor" | "claim" | null>(null);
-  const [karamToggling,   setKaramToggling]   = useState(false);
-
-  // Settings
-  const [settingsDesc,    setSettingsDesc]    = useState("");
-  const [settingsBizType, setSettingsBizType] = useState<SellerProfile["businessType"]>("RESTAURANT");
-  const [settingsPhone,   setSettingsPhone]   = useState("");
-  const [settingsWebsite, setSettingsWebsite] = useState("");
-  const [settingsSocial,  setSettingsSocial]  = useState("");
-  const [settingsAddress, setSettingsAddress] = useState("");
-  const [settingsHours,   setSettingsHours]   = useState("");
-  const [settingsKaram,   setSettingsKaram]   = useState(false);
-  const [settingsSaving,  setSettingsSaving]  = useState(false);
-  const [settingsMsg,     setSettingsMsg]     = useState("");
-
-  // Donate surplus modal
-  const [donateModal,     setDonateModal]     = useState(false);
-  const [charities,       setCharities]       = useState<Charity[]>([]);
-  const [charitiesLoading, setCharitiesLoading] = useState(false);
-  const [selectedCharity, setSelectedCharity] = useState<Charity | null>(null);
-  const [selectedListing, setSelectedListing] = useState<SellerListing | null>(null);
-  const [donateQty,       setDonateQty]       = useState("1");
-  const [donating,        setDonating]        = useState(false);
-
-  // ─── Data fetchers ──────────────────────────────────────────────────────────
+  // ─── Data fetching ─────────────────────────────────────────────────────────
 
   const fetchProfile = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setFetchError("");
     try {
       const { data } = await api.get("/api/sellers/me");
-      setProfile(data.data as SellerProfile);
+      const p = data.data as SellerProfile;
+      setProfile(p);
+      setSettingsForm({
+        businessName: p.businessName ?? "",
+        description:  p.description  ?? "",
+        phone:        p.contactInfo?.phone        ?? "",
+        website:      p.contactInfo?.website      ?? "",
+        socialMedia:  p.contactInfo?.socialMedia  ?? "",
+        address:      p.location?.address         ?? "",
+      });
     } catch {
       setFetchError(rtl ? "تعذّر تحميل بيانات المتجر" : "Could not load store data");
     } finally {
@@ -368,6 +363,13 @@ export default function SellerDashboardScreen({
     }
   };
 
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
+  useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab]);
+  useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey]);
+
+  // ─── Listing actions ───────────────────────────────────────────────────────
+
   const handleMarkSoldOut = async (listingId: string) => {
     setSoldOutLoading(listingId);
     try {
@@ -404,44 +406,55 @@ export default function SellerDashboardScreen({
     );
   };
 
-  const handleDonate = async () => {
-    if (!selectedCharity || !selectedListing) return;
-    const qty = parseInt(donateQty, 10);
-    if (!qty || qty < 1) return;
-    setDonating(true);
+  // ─── Settings actions ──────────────────────────────────────────────────────
+
+  const handleSaveSettings = async () => {
+    setSettingsLoading(true);
+    setSettingsError("");
+    setSettingsSaved(false);
     try {
-      await createDonation({ listingId: selectedListing.id, charityId: selectedCharity.id, quantity: qty });
-      setDonateModal(false);
-      setSelectedCharity(null);
-      setSelectedListing(null);
-      setDonateQty("1");
-      Alert.alert(rtl ? "تم!" : "Done!", rtl ? "تم إرسال التبرع بنجاح!" : "Donation sent successfully!");
+      await api.patch("/api/sellers/me", {
+        businessName: settingsForm.businessName.trim() || undefined,
+        description:  settingsForm.description.trim()  || undefined,
+        contactInfo: {
+          phone:       settingsForm.phone.trim()       || undefined,
+          website:     settingsForm.website.trim()     || undefined,
+          socialMedia: settingsForm.socialMedia.trim() || undefined,
+        },
+        location: settingsForm.address.trim()
+          ? { address: settingsForm.address.trim() }
+          : undefined,
+      });
+      setSettingsSaved(true);
+      await fetchProfile();
+      setTimeout(() => setSettingsSaved(false), 3000);
     } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر إرسال التبرع" : "Could not send donation");
+      setSettingsError(rtl ? "تعذّر حفظ التغييرات" : "Could not save changes. Please try again.");
     } finally {
-      setDonating(false);
+      setSettingsLoading(false);
     }
   };
 
-  // ─── Tabs + stats ────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await logout();
+    onLogout?.();
+  };
 
-  const TABS: { key: Tab; label: string; labelAr: string; icon: keyof typeof Feather.glyphMap }[] = [
-    { key: "overview",   label: "Overview",  labelAr: "نظرة عامة", icon: "grid"         },
-    { key: "listings",   label: "Listings",  labelAr: "القوائم",   icon: "package"      },
-    { key: "orders",     label: "Orders",    labelAr: "الطلبات",   icon: "shopping-bag" },
-    { key: "donations",  label: "Donated",   labelAr: "التبرعات",  icon: "gift"         },
-    { key: "settings",   label: "Settings",  labelAr: "الإعدادات", icon: "settings"     },
+  // ─── Tabs config ───────────────────────────────────────────────────────────
+
+  const TABS: { key: Tab; labelEn: string; labelAr: string; icon: keyof typeof Feather.glyphMap }[] = [
+    { key: "overview",  labelEn: "Overview",  labelAr: "عام",       icon: "grid"         },
+    { key: "listings",  labelEn: "Listings",  labelAr: "القوائم",   icon: "package"      },
+    { key: "orders",    labelEn: "Orders",    labelAr: "الطلبات",   icon: "shopping-bag" },
+    { key: "settings",  labelEn: "Settings",  labelAr: "الإعدادات", icon: "settings"     },
   ];
 
   const STATS = [
-    { icon: "package"       as const, color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCount  ?? 0 },
-    { icon: "shopping-bag"  as const, color: "#8b5cf6",            label: rtl ? "طلبات هذا الشهر"  : "This Month",         value: profile?.currentMonthOrders   ?? 0 },
-    { icon: "check-circle"  as const, color: Colors.greenMain,     label: rtl ? "طلبات مكتملة"     : "Completed Orders",   value: profile?.totalOrdersCompleted ?? 0 },
+    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListings ?? 0 },
+    { icon: "heart" as const,    color: Colors.greenMain,     label: rtl ? "إجمالي التبرعات"  : "Total Donations",     value: profile?.totalDonations  ?? 0 },
   ];
 
-  const filteredOrders = orders.filter((o) => o.status === ordersFilter);
-
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.container, { paddingTop: topPadding }]}>
@@ -486,13 +499,9 @@ export default function SellerDashboardScreen({
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.8}
           >
-            <Feather
-              name={tab.icon}
-              size={14}
-              color={activeTab === tab.key ? Colors.primaryOrange : Colors.grayMedium}
-            />
-            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]} numberOfLines={1}>
-              {rtl ? tab.labelAr : tab.label}
+            <Feather name={tab.icon} size={14} color={activeTab === tab.key ? Colors.primaryOrange : Colors.grayMedium} />
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {rtl ? tab.labelAr : tab.labelEn}
             </Text>
           </TouchableOpacity>
         ))}
@@ -500,12 +509,11 @@ export default function SellerDashboardScreen({
 
       {/* ── Loading / error ── */}
       {loading ? (
-        <View style={styles.centeredState}>
+        <View style={styles.centered}>
           <ActivityIndicator color={Colors.primaryOrange} size="large" />
-          <Text style={[styles.stateText, rtl && styles.rtl]}>{rtl ? "جاري التحميل…" : "Loading…"}</Text>
         </View>
       ) : fetchError ? (
-        <View style={styles.centeredState}>
+        <View style={styles.centered}>
           <Feather name="wifi-off" size={40} color={Colors.grayMedium} />
           <Text style={[styles.stateText, rtl && styles.rtl]}>{fetchError}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={() => fetchProfile()} activeOpacity={0.8}>
@@ -513,194 +521,179 @@ export default function SellerDashboardScreen({
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.tabContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchProfile(true)} tintColor={Colors.primaryOrange} />}
-        >
-
-          {/* ══════════ OVERVIEW TAB ══════════ */}
+        <>
+          {/* ── OVERVIEW TAB ── */}
           {activeTab === "overview" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-              {/* Stats */}
-              <View style={styles.statsGrid}>
-                {STATS.map((stat, i) => (
-                  <View key={i} style={styles.statCard}>
-                    <View style={[styles.statIcon, { backgroundColor: stat.color + "18" }]}>
-                      <Feather name={stat.icon} size={18} color={stat.color} />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.tabContent}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchProfile(true)} tintColor={Colors.primaryOrange} />}
+            >
+              <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+                <View style={styles.statsGrid}>
+                  {STATS.map((stat, i) => (
+                    <View key={i} style={styles.statCard}>
+                      <View style={[styles.statIcon, { backgroundColor: stat.color + "18" }]}>
+                        <Feather name={stat.icon} size={18} color={stat.color} />
+                      </View>
+                      <Text style={styles.statValue}>{stat.value}</Text>
+                      <Text style={[styles.statLabel, rtl && styles.rtl]}>{stat.label}</Text>
                     </View>
-                    <Text style={styles.statValue}>{stat.value}</Text>
-                    <Text style={[styles.statLabel, rtl && styles.rtl]}>{stat.label}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Karam card */}
-              {profile?.participatesInKaram && (
-                <View style={styles.karamCard}>
-                  <View style={[styles.karamHeader, rtl && styles.karamHeaderRTL]}>
-                    <View style={styles.karamIconWrap}>
-                      <Feather name="heart" size={16} color={Colors.greenMain} />
-                    </View>
-                    <Text style={[styles.karamTitle, rtl && styles.rtl]}>
-                      {rtl ? "برنامج كرم 🤝" : "Karam Program 🤝"}
-                    </Text>
-                  </View>
-                  <View style={[styles.karamStats, rtl && styles.karamStatsRTL]}>
-                    <View style={styles.karamStat}>
-                      <Text style={styles.karamStatValue}>{karamBalance?.sponsored ?? 0}</Text>
-                      <Text style={[styles.karamStatLabel, rtl && styles.rtl]}>{rtl ? "ممولة" : "Sponsored"}</Text>
-                    </View>
-                    <View style={styles.karamStatDivider} />
-                    <View style={styles.karamStat}>
-                      <Text style={styles.karamStatValue}>{karamBalance?.claimed ?? 0}</Text>
-                      <Text style={[styles.karamStatLabel, rtl && styles.rtl]}>{rtl ? "مُستلمة" : "Claimed"}</Text>
-                    </View>
-                    <View style={styles.karamStatDivider} />
-                    <View style={styles.karamStat}>
-                      <Text style={[styles.karamStatValue, { color: Colors.greenMain }]}>{karamBalance?.available ?? 0}</Text>
-                      <Text style={[styles.karamStatLabel, rtl && styles.rtl]}>{rtl ? "متاحة" : "Available"}</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.karamActions, rtl && styles.karamActionsRTL]}>
-                    <TouchableOpacity
-                      style={[styles.karamBtn, styles.karamBtnSponsor]}
-                      onPress={handleSponsorKaram}
-                      disabled={karamActing !== null}
-                      activeOpacity={0.8}
-                    >
-                      {karamActing === "sponsor"
-                        ? <ActivityIndicator size="small" color={Colors.white} />
-                        : <Text style={styles.karamBtnText}>{rtl ? "مول وجبة 💚" : "Sponsor Meal 💚"}</Text>
-                      }
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.karamBtn, styles.karamBtnClaim]}
-                      onPress={handleClaimKaram}
-                      disabled={karamActing !== null}
-                      activeOpacity={0.8}
-                    >
-                      {karamActing === "claim"
-                        ? <ActivityIndicator size="small" color={Colors.greenMain} />
-                        : <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>{rtl ? "وجبة مُستلمة" : "Mark Claimed"}</Text>
-                      }
-                    </TouchableOpacity>
-                  </View>
+                  ))}
                 </View>
-              )}
-
-              {/* About card */}
-              {profile?.description && (
-                <View style={styles.infoCard}>
-                  <Text style={[styles.infoCardTitle, rtl && styles.rtl]}>{rtl ? "عن المتجر" : "About"}</Text>
-                  <Text style={[styles.infoCardBody, rtl && styles.rtl]}>{profile.description}</Text>
-                </View>
-              )}
-
-              {/* Location */}
-              {profile?.location?.address && (
-                <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
-                  <Feather name="map-pin" size={14} color={Colors.primaryOrange} />
-                  <Text style={[styles.metaText, rtl && styles.rtl]} numberOfLines={2}>{profile.location.address}</Text>
-                </View>
-              )}
-
-              {/* Phone */}
-              {profile?.contactInfo?.phone && (
-                <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
-                  <Feather name="phone" size={14} color={Colors.primaryOrange} />
-                  <Text style={[styles.metaText, rtl && styles.rtl]}>{profile.contactInfo.phone}</Text>
-                </View>
-              )}
-
-              {/* Donate surplus button */}
-              <TouchableOpacity
-                style={styles.donateSurplusBtn}
-                onPress={() => { fetchCharities(); setDonateModal(true); }}
-                activeOpacity={0.85}
-              >
-                <Feather name="gift" size={18} color={Colors.white} />
-                <Text style={styles.donateSurplusBtnText}>{rtl ? "تبرع بالفائض" : "Donate Surplus Food"}</Text>
-              </TouchableOpacity>
-            </Animated.View>
+                {profile?.description && (
+                  <View style={styles.infoCard}>
+                    <Text style={[styles.infoCardTitle, rtl && styles.rtl]}>{rtl ? "عن المتجر" : "About"}</Text>
+                    <Text style={[styles.infoCardBody, rtl && styles.rtl]}>{profile.description}</Text>
+                  </View>
+                )}
+                {profile?.location?.address && (
+                  <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
+                    <Feather name="map-pin" size={14} color={Colors.primaryOrange} />
+                    <Text style={[styles.metaText, rtl && styles.rtl]} numberOfLines={2}>{profile.location.address}</Text>
+                  </View>
+                )}
+                {profile?.contactInfo?.phone && (
+                  <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
+                    <Feather name="phone" size={14} color={Colors.primaryOrange} />
+                    <Text style={[styles.metaText, rtl && styles.rtl]}>{profile.contactInfo.phone}</Text>
+                  </View>
+                )}
+              </Animated.View>
+            </ScrollView>
           )}
 
           {/* ══════════ LISTINGS TAB ══════════ */}
           {activeTab === "listings" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-              {listingsLoading ? (
-                <View style={styles.centeredState}>
-                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
-                </View>
-              ) : listingsError ? (
-                <View style={styles.centeredState}>
-                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
-                  <Text style={[styles.stateText, rtl && styles.rtl]}>{listingsError}</Text>
-                  <TouchableOpacity style={styles.retryBtn} onPress={fetchListings} activeOpacity={0.8}>
-                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : listings.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyEmoji}>📦</Text>
-                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد قوائم" : "No listings yet"}</Text>
-                  <Text style={[styles.emptySub, rtl && styles.rtl]}>
-                    {rtl ? "اضغط على + لإضافة أول قائمة" : "Tap + to add your first listing"}
-                  </Text>
-                </View>
-              ) : (
-                listings.map((listing) => (
-                  <View key={listing.id} style={styles.listingCard}>
-                    <View style={[styles.listingInner, rtl && styles.listingInnerRTL]}>
-                      <View style={styles.listingIconWrap}>
-                        <Feather name="package" size={18} color={Colors.primaryOrange} />
-                      </View>
-                      <View style={styles.listingBody}>
-                        <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>{listing.title}</Text>
-                        {listing.pickupStart && listing.pickupEnd && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
+              <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+                {listingsLoading ? (
+                  <View style={styles.centered}>
+                    <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                  </View>
+                ) : listingsError ? (
+                  <View style={styles.centered}>
+                    <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                    <Text style={[styles.errorText, rtl && styles.rtl]}>{listingsError}</Text>
+                    <TouchableOpacity style={styles.retryBtn} onPress={fetchListings} activeOpacity={0.8}>
+                      <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : listings.length === 0 ? (
+                  <View style={styles.emptyPane}>
+                    <Text style={styles.emptyEmoji}>📦</Text>
+                    <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد قوائم" : "No listings yet"}</Text>
+                    <Text style={[styles.emptySub, rtl && styles.rtl]}>
+                      {rtl ? "اضغط على + لإضافة أول قائمة" : "Tap + to add your first listing"}
+                    </Text>
+                  </View>
+                ) : (
+                  listings.map((listing) => (
+                    <View key={listing.id} style={styles.listingCard}>
+                      <View style={[styles.listingCardInner, rtl && styles.listingCardInnerRTL]}>
+                        <View style={styles.listingIconWrap}>
+                          <Feather name="package" size={18} color={Colors.primaryOrange} />
+                        </View>
+                        <View style={styles.listingBody}>
+                          <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>{listing.title}</Text>
+                          {listing.pickupStart && listing.pickupEnd && (
+                            <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
+                              <Feather name="clock" size={12} color={Colors.grayMedium} />
+                              <Text style={styles.listingMetaText}>{formatPickup(listing.pickupStart, listing.pickupEnd)}</Text>
+                            </View>
+                          )}
                           <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                            <Feather name="clock" size={12} color={Colors.grayMedium} />
-                            <Text style={styles.listingMetaText}>{listing.pickupStart} – {listing.pickupEnd}</Text>
+                            <Feather name="layers" size={12} color={Colors.grayMedium} />
+                            <Text style={styles.listingMetaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
                           </View>
-                        )}
-                        <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                          <Feather name="layers" size={12} color={Colors.grayMedium} />
-                          <Text style={styles.listingMetaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
+                        </View>
+                        <View style={styles.listingActions}>
+                          <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
+                          <TouchableOpacity style={styles.actionIconBtn} onPress={() => onEditListing?.(listing)} activeOpacity={0.8}>
+                            <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.soldOutBtn}
+                            onPress={() => handleMarkSoldOut(listing.id)}
+                            disabled={soldOutLoading === listing.id}
+                            activeOpacity={0.8}
+                          >
+                            {soldOutLoading === listing.id
+                              ? <ActivityIndicator size="small" color="#ef4444" />
+                              : <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.deleteIconBtn}
+                            onPress={() => handleDeleteListing(listing.id, listing.title)}
+                            disabled={deleteLoading === listing.id}
+                            activeOpacity={0.8}
+                          >
+                            {deleteLoading === listing.id
+                              ? <ActivityIndicator size="small" color="#ef4444" />
+                              : <Feather name="trash-2" size={14} color="#ef4444" />}
+                          </TouchableOpacity>
                         </View>
                       </View>
-                      <View style={styles.listingActions}>
-                        <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
-                        <TouchableOpacity style={styles.actionIconBtn} onPress={() => onEditListing?.(listing)} activeOpacity={0.8}>
-                          <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.soldOutBtn}
-                          onPress={() => handleMarkSoldOut(listing.id)}
-                          disabled={soldOutLoading === listing.id}
-                          activeOpacity={0.8}
-                        >
-                          {soldOutLoading === listing.id
-                            ? <ActivityIndicator size="small" color="#ef4444" />
-                            : <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>
-                          }
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteIconBtn}
-                          onPress={() => handleDeleteListing(listing.id, listing.title)}
-                          disabled={deleteLoading === listing.id}
-                          activeOpacity={0.8}
-                        >
-                          {deleteLoading === listing.id
-                            ? <ActivityIndicator size="small" color="#ef4444" />
-                            : <Feather name="trash-2" size={14} color="#ef4444" />
-                          }
-                        </TouchableOpacity>
-                      </View>
                     </View>
+                  ))
+                )}
+              </Animated.View>
+            </ScrollView>
+          )}
+
+          {/* ── ORDERS TAB ── */}
+          {activeTab === "orders" && (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.tabContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={ordersRefreshing}
+                  onRefresh={() => fetchOrders(true)}
+                  tintColor={Colors.primaryOrange}
+                />
+              }
+            >
+              <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+                {ordersLoading && orders.length === 0 ? (
+                  <View style={styles.centered}>
+                    <ActivityIndicator color={Colors.primaryOrange} size="large" />
                   </View>
-                ))
-              )}
-            </Animated.View>
+                ) : ordersError ? (
+                  <View style={styles.centered}>
+                    <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                    <Text style={[styles.errorText, rtl && styles.rtl]}>{ordersError}</Text>
+                    <TouchableOpacity style={styles.retryBtn} onPress={() => fetchOrders(true)} activeOpacity={0.8}>
+                      <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : orders.length === 0 ? (
+                  <View style={styles.emptyPane}>
+                    <Text style={styles.emptyEmoji}>🛍️</Text>
+                    <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد طلبات" : "No orders yet"}</Text>
+                    <Text style={[styles.emptySub, rtl && styles.rtl]}>
+                      {rtl ? "ستظهر هنا طلبات المشترين" : "Buyer reservations will appear here"}
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    {orders.map((order) => <SellerOrderCard key={order.id} order={order} rtl={rtl} />)}
+                    {ordersHasMore && (
+                      <TouchableOpacity
+                        style={styles.loadMoreBtn}
+                        onPress={() => fetchOrders(false)}
+                        disabled={ordersLoading}
+                        activeOpacity={0.8}
+                      >
+                        {ordersLoading
+                          ? <ActivityIndicator size="small" color={Colors.primaryOrange} />
+                          : <Text style={styles.loadMoreText}>{rtl ? "تحميل المزيد" : "Load more"}</Text>}
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </Animated.View>
+            </ScrollView>
           )}
 
           {/* ══════════ ORDERS TAB ══════════ */}
@@ -839,258 +832,88 @@ export default function SellerDashboardScreen({
 
           {/* ══════════ SETTINGS TAB ══════════ */}
           {activeTab === "settings" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent} keyboardShouldPersistTaps="handled">
+                <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
 
-              {/* Business name — read-only */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "اسم المتجر" : "Business Name"}</Text>
-                <View style={[styles.settingsInput, { justifyContent: "center", opacity: 0.7 }]}>
-                  <Text style={[{ fontSize: 14, color: Colors.grayMedium }, rtl && styles.rtl]}>{profile?.businessName ?? "—"}</Text>
-                </View>
-                <Text style={[{ fontSize: 11, color: Colors.grayMedium, marginTop: 3 }, rtl && styles.rtl]}>
-                  {rtl ? "لا يمكن تغيير اسم المتجر. تواصل مع الدعم." : "Business name cannot be changed. Contact support."}
-                </Text>
-              </View>
+                  {settingsSaved && (
+                    <View style={styles.successBanner}>
+                      <Feather name="check-circle" size={16} color={Colors.greenMain} />
+                      <Text style={styles.successBannerText}>{rtl ? "تم حفظ التغييرات بنجاح" : "Changes saved successfully"}</Text>
+                    </View>
+                  )}
+                  {settingsError !== "" && (
+                    <View style={styles.errorBanner}>
+                      <Feather name="alert-circle" size={16} color="#ef4444" />
+                      <Text style={styles.errorBannerText}>{settingsError}</Text>
+                    </View>
+                  )}
 
-              {/* Business type */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "نوع المتجر" : "Business Type"}</Text>
-                <View style={[styles.bizTypeRow, rtl && styles.bizTypeRowRTL]}>
-                  {BIZ_TYPES.map((bt) => (
-                    <TouchableOpacity
-                      key={bt.value}
-                      style={[styles.bizTypeChip, settingsBizType === bt.value && styles.bizTypeChipActive]}
-                      onPress={() => setSettingsBizType(bt.value)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.bizTypeChipText, settingsBizType === bt.value && styles.bizTypeChipTextActive]}>
-                        {rtl ? bt.ar : bt.en}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+                  <SettingsField
+                    label={rtl ? "اسم المتجر" : "Business Name"}
+                    value={settingsForm.businessName}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, businessName: v }))}
+                    placeholder={rtl ? "اسم متجرك" : "Your store name"}
+                    rtl={rtl}
+                  />
+                  <SettingsField
+                    label={rtl ? "وصف المتجر" : "Description"}
+                    value={settingsForm.description}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, description: v }))}
+                    placeholder={rtl ? "صِف متجرك ومنتجاتك…" : "Describe your store and products…"}
+                    multiline
+                    rtl={rtl}
+                  />
+                  <SettingsField
+                    label={rtl ? "رقم الهاتف" : "Phone"}
+                    value={settingsForm.phone}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, phone: v }))}
+                    placeholder="+970-5-XXXXXXX"
+                    keyboardType="phone-pad"
+                    rtl={rtl}
+                  />
+                  <SettingsField
+                    label={rtl ? "الموقع الإلكتروني" : "Website"}
+                    value={settingsForm.website}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, website: v }))}
+                    placeholder="https://..."
+                    keyboardType="url"
+                    rtl={rtl}
+                  />
+                  <SettingsField
+                    label={rtl ? "وسائل التواصل الاجتماعي" : "Social Media"}
+                    value={settingsForm.socialMedia}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, socialMedia: v }))}
+                    placeholder={rtl ? "@حساب_انستغرام" : "@instagram_handle"}
+                    rtl={rtl}
+                  />
+                  <SettingsField
+                    label={rtl ? "العنوان" : "Address"}
+                    value={settingsForm.address}
+                    onChangeText={v => setSettingsForm(f => ({ ...f, address: v }))}
+                    placeholder={rtl ? "مثال: شارع النزهة، رام الله" : "e.g. 14 Al-Nuzha St, Ramallah"}
+                    rtl={rtl}
+                  />
 
-              {/* Description */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "الوصف" : "Description"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, styles.settingsTextArea, rtl && styles.rtlInput]}
-                  value={settingsDesc}
-                  onChangeText={setSettingsDesc}
-                  placeholder={rtl ? "صف متجرك…" : "Describe your store…"}
-                  placeholderTextColor={Colors.grayMedium}
-                  multiline
-                  numberOfLines={3}
-                  textAlign={rtl ? "right" : "left"}
-                  textAlignVertical="top"
-                />
-              </View>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, settingsLoading && styles.saveBtnDisabled]}
+                    onPress={handleSaveSettings}
+                    disabled={settingsLoading}
+                    activeOpacity={0.85}
+                  >
+                    {settingsLoading
+                      ? <ActivityIndicator color={Colors.white} size="small" />
+                      : <Text style={styles.saveBtnText}>{rtl ? "حفظ التغييرات" : "Save Changes"}</Text>}
+                  </TouchableOpacity>
 
-              {/* Phone */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "رقم التواصل" : "Contact Phone"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, rtl && styles.rtlInput]}
-                  value={settingsPhone}
-                  onChangeText={setSettingsPhone}
-                  placeholder="0590000000"
-                  placeholderTextColor={Colors.grayMedium}
-                  keyboardType="phone-pad"
-                  textAlign={rtl ? "right" : "left"}
-                />
-              </View>
-
-              {/* Website */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "الموقع الإلكتروني" : "Website"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, rtl && styles.rtlInput]}
-                  value={settingsWebsite}
-                  onChangeText={setSettingsWebsite}
-                  placeholder="https://..."
-                  placeholderTextColor={Colors.grayMedium}
-                  keyboardType="url"
-                  autoCapitalize="none"
-                  textAlign={rtl ? "right" : "left"}
-                />
-              </View>
-
-              {/* Social Media */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "السوشيال ميديا" : "Social Media"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, rtl && styles.rtlInput]}
-                  value={settingsSocial}
-                  onChangeText={setSettingsSocial}
-                  placeholder="@handle"
-                  placeholderTextColor={Colors.grayMedium}
-                  autoCapitalize="none"
-                  textAlign={rtl ? "right" : "left"}
-                />
-              </View>
-
-              {/* Address */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "العنوان" : "Address"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, rtl && styles.rtlInput]}
-                  value={settingsAddress}
-                  onChangeText={setSettingsAddress}
-                  placeholder={rtl ? "شارع، مدينة" : "Street, City"}
-                  placeholderTextColor={Colors.grayMedium}
-                  textAlign={rtl ? "right" : "left"}
-                />
-              </View>
-
-              {/* Operating Hours */}
-              <View style={styles.settingsField}>
-                <Text style={[styles.settingsLabel, rtl && styles.rtl]}>{rtl ? "ساعات العمل" : "Operating Hours"}</Text>
-                <TextInput
-                  style={[styles.settingsInput, rtl && styles.rtlInput]}
-                  value={settingsHours}
-                  onChangeText={setSettingsHours}
-                  placeholder={rtl ? "9 ص – 10 م يومياً" : "9 AM – 10 PM daily"}
-                  placeholderTextColor={Colors.grayMedium}
-                  textAlign={rtl ? "right" : "left"}
-                />
-              </View>
-
-              {/* Save message */}
-              {settingsMsg ? (
-                <View style={[styles.settingsMsg, settingsMsg.startsWith("✓") ? styles.settingsMsgSuccess : styles.settingsMsgError]}>
-                  <Text style={[styles.settingsMsgText, rtl && styles.rtl]}>{settingsMsg}</Text>
-                </View>
-              ) : null}
-
-              {/* Save button */}
-              <TouchableOpacity
-                style={[styles.saveBtn, settingsSaving && { opacity: 0.6 }]}
-                onPress={handleSaveSettings}
-                disabled={settingsSaving}
-                activeOpacity={0.85}
-              >
-                {settingsSaving
-                  ? <ActivityIndicator size="small" color={Colors.white} />
-                  : <Text style={styles.saveBtnText}>{rtl ? "حفظ التغييرات" : "Save Changes"}</Text>
-                }
-              </TouchableOpacity>
-
-              {/* Karam toggle */}
-              <View style={styles.karamToggleCard}>
-                <View style={[styles.karamToggleRow, rtl && styles.karamToggleRowRTL]}>
-                  <View style={[styles.karamToggleInfo, rtl && { alignItems: "flex-end" }]}>
-                    <Text style={[styles.karamToggleTitle, rtl && styles.rtl]}>
-                      {rtl ? "أشارك في برنامج كرم" : "Participate in Karam"}
-                    </Text>
-                    <Text style={[styles.karamToggleSub, rtl && styles.rtl]}>
-                      {rtl
-                        ? "يتيح للمشترين تمويل وجبات لمن يحتاج"
-                        : "Let buyers sponsor meals for those in need"}
-                    </Text>
-                  </View>
-                  {karamToggling
-                    ? <ActivityIndicator size="small" color={Colors.greenMain} />
-                    : <Switch
-                        value={settingsKaram}
-                        onValueChange={handleKaramToggle}
-                        trackColor={{ false: Colors.grayLight, true: Colors.greenMain }}
-                        thumbColor={Colors.white}
-                      />
-                  }
-                </View>
-              </View>
-
-              {/* Switch to buyer mode */}
-              <TouchableOpacity
-                style={styles.switchBuyerBtn}
-                onPress={switchToBuyerMode}
-                activeOpacity={0.85}
-              >
-                <Feather name="shopping-bag" size={18} color={Colors.primaryOrange} />
-                <Text style={styles.switchBuyerBtnText}>{rtl ? "تصفح كمشتري 🛍️" : "Browse as Buyer 🛍️"}</Text>
-              </TouchableOpacity>
-
-            </Animated.View>
+                </Animated.View>
+              </ScrollView>
+            </KeyboardAvoidingView>
           )}
-
-        </ScrollView>
+        </>
       )}
 
-      {/* ── Donate Surplus Modal ── */}
-      <Modal visible={donateModal} transparent animationType="slide" onRequestClose={() => setDonateModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDonateModal(false)} />
-        <View style={styles.modalSheet}>
-          <View style={[styles.modalHeader, rtl && styles.modalHeaderRTL]}>
-            <Text style={[styles.modalTitle, rtl && styles.rtl]}>{rtl ? "تبرع بالفائض" : "Donate Surplus Food"}</Text>
-            <TouchableOpacity onPress={() => setDonateModal(false)}>
-              <Feather name="x" size={22} color={Colors.grayDark} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[styles.modalSub, rtl && styles.rtl]}>{rtl ? "اختر جمعية خيرية وقائمة للتبرع" : "Select a charity and listing"}</Text>
-
-          <Text style={[styles.modalLabel, rtl && styles.rtl]}>{rtl ? "القائمة" : "Listing"}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {listings.map((l) => (
-              <TouchableOpacity
-                key={l.id}
-                style={[styles.chip, selectedListing?.id === l.id && styles.chipSelected]}
-                onPress={() => setSelectedListing(l)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, selectedListing?.id === l.id && styles.chipTextSelected]} numberOfLines={1}>{l.title}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Text style={[styles.modalLabel, rtl && styles.rtl]}>{rtl ? "الجمعية الخيرية" : "Charity"}</Text>
-          {charitiesLoading ? (
-            <ActivityIndicator color={Colors.primaryOrange} />
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-              {charities.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.chip, selectedCharity?.id === c.id && styles.chipSelected]}
-                  onPress={() => setSelectedCharity(c)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, selectedCharity?.id === c.id && styles.chipTextSelected]} numberOfLines={1}>{c.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-
-          <Text style={[styles.modalLabel, rtl && styles.rtl]}>{rtl ? "الكمية" : "Quantity"}</Text>
-          <TextInput
-            style={[styles.settingsInput, rtl && styles.rtlInput]}
-            value={donateQty}
-            onChangeText={setDonateQty}
-            keyboardType="number-pad"
-            placeholder="1"
-            placeholderTextColor={Colors.grayMedium}
-            textAlign={rtl ? "right" : "left"}
-          />
-
-          <TouchableOpacity
-            style={[styles.donateConfirmBtn, (!selectedCharity || !selectedListing || donating) && { opacity: 0.5 }]}
-            onPress={handleDonate}
-            disabled={!selectedCharity || !selectedListing || donating}
-            activeOpacity={0.85}
-          >
-            {donating
-              ? <ActivityIndicator size="small" color={Colors.white} />
-              : <>
-                  <Feather name="gift" size={16} color={Colors.white} />
-                  <Text style={styles.donateConfirmBtnText}>{rtl ? "تبرع الآن" : "Donate Now"}</Text>
-                </>
-            }
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* ── FAB: Add listing ── */}
+      {/* FAB: Add listing */}
       {activeTab === "listings" && onCreateListing && (
         <TouchableOpacity
           style={[styles.fab, rtl ? styles.fabRTL : styles.fabLTR]}
@@ -1104,13 +927,78 @@ export default function SellerDashboardScreen({
   );
 }
 
+// ─── SellerOrderCard ──────────────────────────────────────────────────────────
+
+function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
+  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
+  return (
+    <View style={styles.orderCard}>
+      <View style={[styles.orderCardInner, rtl && styles.orderCardInnerRTL]}>
+        <View style={[styles.orderStatusDot, { backgroundColor: cfg.color }]} />
+        <View style={styles.orderBody}>
+          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
+            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+          </Text>
+          <Text style={[styles.orderMeta, rtl && styles.rtl]}>
+            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
+            {" · "}
+            {rtl ? `الكمية: ${order.quantity}` : `Qty: ${order.quantity}`}
+          </Text>
+          <Text style={[styles.orderMeta, rtl && styles.rtl]}>
+            {formatPickup(order.pickupStart, order.pickupEnd)}
+            {"  ·  "}
+            {formatDate(order.createdAt)}
+          </Text>
+        </View>
+        <View style={[styles.orderStatusBadge, { backgroundColor: cfg.color + "18" }]}>
+          <Text style={[styles.orderStatusText, { color: cfg.color }]}>
+            {rtl ? cfg.labelAr : cfg.labelEn}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── SettingsField ────────────────────────────────────────────────────────────
+
+function SettingsField({
+  label, value, onChangeText, placeholder, multiline, keyboardType, rtl,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: "default" | "phone-pad" | "url";
+  rtl: boolean;
+}) {
+  return (
+    <View style={styles.settingsField}>
+      <Text style={[styles.settingsFieldLabel, rtl && styles.rtl]}>{label}</Text>
+      <TextInput
+        style={[styles.settingsInput, multiline && styles.settingsInputMulti, rtl && styles.rtl]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.grayMedium}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+        keyboardType={keyboardType ?? "default"}
+        textAlign={rtl ? "right" : "left"}
+        textAlignVertical={multiline ? "top" : "center"}
+        autoCapitalize="none"
+      />
+    </View>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   rtl: { textAlign: "right" },
 
-  // Header
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, paddingBottom: Spacing.md,
@@ -1137,7 +1025,6 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
 
-  // Tab bar
   tabBar: {
     flexDirection: "row", marginHorizontal: Spacing.xl,
     backgroundColor: Colors.white, borderRadius: 16,
@@ -1146,30 +1033,24 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 3, paddingVertical: 10,
+    gap: 4, paddingVertical: 10,
   },
   tabItemActive: { backgroundColor: Colors.orangeLight },
-  tabLabel: { fontSize: 10, fontWeight: "600", color: Colors.grayMedium },
+  tabLabel: { fontSize: 11, fontWeight: "600", color: Colors.grayMedium },
   tabLabelActive: { color: Colors.primaryOrange },
 
-  // States
-  centeredState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingTop: 60 },
-  stateText: { fontSize: 14, color: Colors.grayMedium, textAlign: "center" },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: Spacing.xl },
+  errorText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
   retryBtn: { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 12 },
   retryBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
-  tabContent: { paddingHorizontal: Spacing.xl, paddingBottom: 40, gap: Spacing.md },
+  tabContent: { paddingHorizontal: Spacing.xl, paddingBottom: 100, gap: Spacing.md },
   tabPane: { gap: Spacing.md },
 
-  emptyState: { paddingTop: 60, alignItems: "center", gap: Spacing.sm },
-  emptyEmoji: { fontSize: 52, marginBottom: 4 },
-  emptyTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark, textAlign: "center" },
-  emptySub: { fontSize: 14, color: Colors.grayMedium, lineHeight: 20, textAlign: "center" },
-
-  // Overview
   statsGrid: { flexDirection: "row", gap: 10 },
   statCard: {
-    flex: 1, backgroundColor: Colors.white, borderRadius: 18, padding: Spacing.md, gap: 4,
+    flex: 1, backgroundColor: Colors.white, borderRadius: 18,
+    padding: Spacing.md, gap: 4, alignItems: "flex-start",
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
   statIcon: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", marginBottom: 2 },
@@ -1216,13 +1097,11 @@ const styles = StyleSheet.create({
   metaRowRTL: { flexDirection: "row-reverse" },
   metaText: { flex: 1, fontSize: 13, color: Colors.grayDark, lineHeight: 18 },
 
-  donateSurplusBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.greenMain, borderRadius: 14, paddingVertical: 13, marginTop: 4,
-  },
-  donateSurplusBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+  emptyPane: { alignItems: "center", paddingTop: 48, gap: Spacing.md },
+  emptyEmoji: { fontSize: 56, marginBottom: 4 },
+  emptyTitle: { fontSize: 20, fontWeight: "800", color: Colors.grayDark, textAlign: "center" },
+  emptySub: { fontSize: 14, color: Colors.grayMedium, lineHeight: 20, textAlign: "center" },
 
-  // Listings
   listingCard: {
     backgroundColor: Colors.white, borderRadius: 18,
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
@@ -1231,8 +1110,8 @@ const styles = StyleSheet.create({
   listingInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
   listingInnerRTL: { flexDirection: "row-reverse" },
   listingIconWrap: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: Colors.orangeLight,
-    alignItems: "center", justifyContent: "center",
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center",
   },
   listingBody: { flex: 1, gap: 4 },
   listingTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
@@ -1242,8 +1121,8 @@ const styles = StyleSheet.create({
   listingPrice: { fontSize: 15, fontWeight: "800", color: Colors.primaryOrange },
   listingActions: { alignItems: "center", gap: 6 },
   actionIconBtn: {
-    width: 30, height: 30, borderRadius: 9, backgroundColor: Colors.orangeLight,
-    alignItems: "center", justifyContent: "center",
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center",
   },
   soldOutBtn: {
     borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
@@ -1252,50 +1131,57 @@ const styles = StyleSheet.create({
   },
   soldOutBtnText: { fontSize: 12, fontWeight: "700", color: "#ef4444" },
   deleteIconBtn: {
-    width: 30, height: 30, borderRadius: 9, backgroundColor: "#fef2f2",
-    alignItems: "center", justifyContent: "center",
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: "#fef2f2", alignItems: "center", justifyContent: "center",
   },
-
-  // Orders
-  filterRow: { flexDirection: "row", gap: 8 },
-  filterRowRTL: { flexDirection: "row-reverse" },
-  filterPill: {
-    flex: 1, borderRadius: 12, paddingVertical: 9, alignItems: "center",
-    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
-  },
-  filterPillActive: { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
-  filterPillText: { fontSize: 12, fontWeight: "600", color: Colors.grayMedium },
-  filterPillTextActive: { color: Colors.primaryOrange },
 
   orderCard: {
-    backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    backgroundColor: Colors.white, borderRadius: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    overflow: "hidden",
   },
-  orderInner: { flexDirection: "row", alignItems: "center", gap: 10 },
-  orderInnerRTL: { flexDirection: "row-reverse" },
-  orderIconWrap: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.orangeLight,
-    alignItems: "center", justifyContent: "center",
-  },
-  orderBody: { flex: 1, gap: 2 },
+  orderCardInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
+  orderCardInnerRTL: { flexDirection: "row-reverse" },
+  orderStatusDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  orderBody: { flex: 1, gap: 3 },
   orderTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
-  orderSub: { fontSize: 12, color: Colors.grayMedium },
-  orderPrice: { fontSize: 14, fontWeight: "800", color: Colors.primaryOrange, marginTop: 6 },
+  orderMeta: { fontSize: 12, color: Colors.grayMedium, lineHeight: 16 },
+  orderStatusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  orderStatusText: { fontSize: 11, fontWeight: "700" },
 
-  // Donations history
-  donationCard: {
-    backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+  loadMoreBtn: {
+    alignItems: "center", paddingVertical: 14,
+    backgroundColor: Colors.white, borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
   },
-  donationInner: { flexDirection: "row", alignItems: "center", gap: 10 },
-  donationInnerRTL: { flexDirection: "row-reverse" },
-  donationIconWrap: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.greenLight,
-    alignItems: "center", justifyContent: "center",
+  loadMoreText: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
+
+  settingsField: { gap: 6, marginBottom: 4 },
+  settingsFieldLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
+  settingsInput: {
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+    borderRadius: 14, paddingHorizontal: Spacing.md, paddingVertical: 13,
+    fontSize: 15, color: Colors.grayDark,
   },
-  donationBody: { flex: 1, gap: 2 },
-  donationTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
-  donationSub: { fontSize: 12, color: Colors.grayMedium },
+  settingsInputMulti: { minHeight: 90, paddingTop: 12 },
+
+  successBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#f0fdf4", borderRadius: 12, padding: Spacing.md,
+  },
+  successBannerText: { fontSize: 13, fontWeight: "600", color: Colors.greenMain },
+  errorBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#fef2f2", borderRadius: 12, padding: Spacing.md,
+  },
+  errorBannerText: { fontSize: 13, color: "#ef4444", flex: 1 },
+
+  saveBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 16,
+    paddingVertical: 16, alignItems: "center", marginTop: Spacing.md,
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
 
   // Status pill (shared)
   statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
