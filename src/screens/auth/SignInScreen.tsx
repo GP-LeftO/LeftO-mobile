@@ -23,11 +23,12 @@ interface SignInScreenProps {
   onSuccess?: (route: PostLoginRoute) => void;
   onBack?: () => void;
   onRegister?: () => void;
+  onForgotPassword?: () => void;
   navigation?: any;
   role?: "buyer" | "seller" | "charity";
 }
 
-export default function SignInScreen({ onSuccess, onBack, onRegister, navigation, role }: SignInScreenProps) {
+export default function SignInScreen({ onSuccess, onBack, onRegister, onForgotPassword, navigation, role }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -173,6 +174,11 @@ export default function SignInScreen({ onSuccess, onBack, onRegister, navigation
               </TouchableOpacity>
             </View>
             {!!errors.password && <Text style={[styles.errorText, rtl && styles.rtl]}>{errors.password}</Text>}
+            {onForgotPassword && (
+              <TouchableOpacity onPress={onForgotPassword} style={[styles.forgotRow, rtl && styles.forgotRowRTL]} disabled={loginState.loading}>
+                <Text style={styles.forgotLink}>{rtl ? "نسيت كلمة المرور؟" : "Forgot password?"}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* API error */}
@@ -265,4 +271,7 @@ const styles = StyleSheet.create({
   registerRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   registerLabel: { fontSize: 14, color: Colors.grayMedium },
   registerLink: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
+  forgotRow: { alignSelf: "flex-end", marginTop: 4 },
+  forgotRowRTL: { alignSelf: "flex-start" },
+  forgotLink: { fontSize: 13, fontWeight: "600", color: Colors.primaryOrange },
 });

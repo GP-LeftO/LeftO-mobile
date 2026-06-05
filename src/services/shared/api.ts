@@ -33,12 +33,17 @@ const processQueue = (error: unknown, token: string | null) => {
   failedQueue = [];
 };
 
+// Auth endpoints that should NEVER be intercepted for token refresh
+const AUTH_ENDPOINTS = ["/api/auth/login", "/api/auth/refresh", "/api/auth/forgot-password", "/api/auth/reset-password"];
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config as typeof error.config & { _retry?: boolean };
 
-    if (error.response?.status !== 401 || original._retry) {
+    // Skip refresh for auth endpoints — a 401 here means bad credentials, not expired token
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((path) => original?.url?.includes(path));
+    if (error.response?.status !== 401 || original._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 

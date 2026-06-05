@@ -21,7 +21,13 @@
       "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/GP-LeftO/lefto-backend/src/**)",
       "Bash(gh repo *)",
       "Bash(npm install *)",
-      "Bash(node -e \"const p = require\\('./node_modules/@react-native-voice/voice/package.json'\\); console.log\\(p.version, p.main\\)\")"
+      "Bash(node -e \"const p = require\\('./node_modules/@react-native-voice/voice/package.json'\\); console.log\\(p.version, p.main\\)\")",
+      "Bash(git log *)",
+      "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/lefto-web/**)",
+      "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/GP-LeftO/lefto-backend/prisma/**)",
+      "Bash(xargs grep -l \"donation\")",
+      "Bash(grep -r \"api/donations\" \"c:\\\\Users\\\\GIGABYTE\\\\Desktop\\\\Projects\\\\LeftO\\\\GP-LeftO\\\\lefto-backend\" 2>/dev/null || echo \"No /api/donations routes found\")",
+      "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/GP-LeftO/lefto-backend/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\GIGABYTE\\.claude\\projects\\c--Users-GIGABYTE-Desktop-Projects-LeftO-LeftO-mobile\\memory"

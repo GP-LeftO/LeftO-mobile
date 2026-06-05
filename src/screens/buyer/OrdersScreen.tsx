@@ -9,12 +9,17 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
+  Image,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
 import api from "../../services/shared/api";
+import { submitReview } from "../../services/buyer/profile/profileService";
 
 type ApiOrderStatus = "RESERVED" | "COMPLETED" | "CANCELLED" | "DONATED";
 type TabKey = "active" | "completed" | "cancelled";
@@ -31,11 +36,13 @@ interface Order {
   totalPrice?: number;
   createdAt?: string;
   listing?: {
+    id?: string;
     title?: string;
     price?: number;
     pickupStart?: string;
     pickupEnd?: string;
-    seller?: { businessName?: string; businessType?: string };
+    qrCodeUrl?: string;
+    seller?: { id?: string; businessName?: string; businessType?: string };
     charity?: { name?: string };
   };
 }
@@ -47,7 +54,11 @@ const STATUS_LABELS: Record<ApiOrderStatus, { en: string; ar: string; color: str
   DONATED:   { en: "Donated",        ar: "تم التبرع",     color: "#8b5cf6" },
 };
 
-export default function OrdersScreen() {
+interface OrdersScreenProps {
+  onOpenQRScan?: (params: { orderId: string; orderTitle?: string }) => void;
+}
+
+export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl = isRTL();
@@ -57,6 +68,15 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [qrModal,       setQrModal]       = useState<{ orderId: string; title: string; qrUrl: string } | null>(null);
+  const [qrFetching,    setQrFetching]    = useState<string | null>(null);
+
+  // Review state
+  const [reviewOrder,   setReviewOrder]   = useState<Order | null>(null);
+  const [reviewedIds,   setReviewedIds]   = useState<Set<string>>(new Set());
+  const [reviewRatings, setReviewRatings] = useState({ overall: 0, pickup: 0, quality: 0, variety: 0 });
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -147,6 +167,60 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleOpenReview = (order: Order) => {
+    setReviewRatings({ overall: 0, pickup: 0, quality: 0, variety: 0 });
+    setReviewComment("");
+    setReviewOrder(order);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewOrder) return;
+    const sellerId = reviewOrder.listing?.seller?.id ?? "";
+    if (!sellerId) return;
+    setReviewSubmitting(true);
+    try {
+      await submitReview({
+        orderId: reviewOrder.id,
+        sellerId,
+        ratingOverall:  reviewRatings.overall,
+        ratingPickup:   reviewRatings.pickup,
+        ratingQuality:  reviewRatings.quality,
+        ratingVariety:  reviewRatings.variety,
+        comment: reviewComment.trim() || undefined,
+      });
+      setReviewedIds((prev) => new Set([...prev, reviewOrder.id]));
+      setReviewOrder(null);
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر إرسال التقييم" : "Could not submit review");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleShowQR = async (order: Order) => {
+    // Use cached qrCodeUrl if available on listing, otherwise fetch it
+    if (order.listing?.qrCodeUrl) {
+      setQrModal({ orderId: order.id, title: order.listing.title ?? "Order", qrUrl: order.listing.qrCodeUrl });
+      return;
+    }
+    if (!order.listing?.id) return;
+    setQrFetching(order.id);
+    try {
+      const { data } = await api.get(`/api/listings/${order.listing.id}`);
+      const listing = data.data ?? data;
+      const qrUrl = listing?.qrCodeUrl;
+      if (qrUrl) {
+        setQrModal({ orderId: order.id, title: listing?.title ?? "Order", qrUrl });
+      } else {
+        Alert.alert(rtl ? "تنبيه" : "Note", rtl ? "رمز QR غير متاح لهذا الطلب" : "QR code not available for this order");
+      }
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحميل رمز QR" : "Could not load QR code");
+    } finally {
+      setQrFetching(null);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
@@ -206,25 +280,120 @@ export default function OrdersScreen() {
                 order={order}
                 rtl={rtl}
                 actionLoading={actionLoading === order.id}
+                qrFetching={qrFetching === order.id}
                 onCancel={() => handleCancel(order.id)}
                 onConfirmPickup={() => handleConfirmPickup(order.id)}
+                onShowQR={() => handleShowQR(order)}
+                onScanQR={onOpenQRScan ? () => onOpenQRScan({ orderId: order.id, orderTitle: order.listing?.title }) : undefined}
+                onLeaveReview={order.status === "COMPLETED" && !reviewedIds.has(order.id) ? () => handleOpenReview(order) : undefined}
               />
             ))
           )}
         </ScrollView>
       )}
+
+      {/* Review modal */}
+      <Modal visible={!!reviewOrder} transparent animationType="slide" onRequestClose={() => setReviewOrder(null)}>
+        <KeyboardAvoidingView style={reviewStyles.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <TouchableOpacity style={reviewStyles.backdrop} activeOpacity={1} onPress={() => setReviewOrder(null)} />
+          <View style={reviewStyles.sheet}>
+            <View style={reviewStyles.handle} />
+            <View style={[reviewStyles.header, rtl && { flexDirection: "row-reverse" as const }]}>
+              <Text style={[reviewStyles.title, rtl && { textAlign: "right" as const }]}>
+                {rtl ? "قيّم تجربتك" : "Rate Your Experience"}
+              </Text>
+              <TouchableOpacity onPress={() => setReviewOrder(null)}>
+                <Feather name="x" size={20} color={Colors.grayDark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {([
+                { key: "overall" as const, en: "Overall",  ar: "عام" },
+                { key: "pickup"  as const, en: "Pickup",   ar: "الاستلام" },
+                { key: "quality" as const, en: "Quality",  ar: "الجودة" },
+                { key: "variety" as const, en: "Variety",  ar: "التنوع" },
+              ]).map(({ key, en, ar }) => (
+                <View key={key} style={[reviewStyles.ratingRow, rtl && { flexDirection: "row-reverse" as const }]}>
+                  <Text style={[reviewStyles.ratingLabel, rtl && { textAlign: "right" as const }]}>
+                    {rtl ? ar : en}
+                  </Text>
+                  <View style={reviewStyles.starsRow}>
+                    {[1,2,3,4,5].map((s) => (
+                      <TouchableOpacity key={s} onPress={() => setReviewRatings((p) => ({ ...p, [key]: s }))} activeOpacity={0.7}>
+                        <Feather name="star" size={26} color={s <= reviewRatings[key] ? Colors.primaryOrange : Colors.grayLight} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              <TextInput
+                style={[reviewStyles.commentInput, rtl && { textAlign: "right" as const }]}
+                placeholder={rtl ? "أضف تعليقاً (اختياري)" : "Add a comment (optional)"}
+                placeholderTextColor={Colors.grayMedium}
+                value={reviewComment}
+                onChangeText={setReviewComment}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+
+              <TouchableOpacity
+                style={[reviewStyles.submitBtn, (reviewRatings.overall === 0 || reviewSubmitting) && reviewStyles.submitBtnDisabled]}
+                onPress={handleSubmitReview}
+                disabled={reviewRatings.overall === 0 || reviewSubmitting}
+                activeOpacity={0.85}
+              >
+                {reviewSubmitting
+                  ? <ActivityIndicator color={Colors.white} size="small" />
+                  : <Text style={reviewStyles.submitBtnText}>{rtl ? "إرسال التقييم" : "Submit Review"}</Text>
+                }
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* QR Code modal */}
+      <Modal
+        visible={qrModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrModal(null)}
+      >
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrSheet}>
+            <Text style={styles.qrTitle}>{rtl ? "رمز QR للاستلام" : "Pickup QR Code"}</Text>
+            <Text style={styles.qrSubtitle} numberOfLines={1}>{qrModal?.title}</Text>
+            {qrModal?.qrUrl && (
+              <Image source={{ uri: qrModal.qrUrl }} style={styles.qrImage} resizeMode="contain" />
+            )}
+            <Text style={[styles.qrHint, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "أرِ هذا الرمز للبائع عند استلام طلبك" : "Show this code to the seller when picking up your order"}
+            </Text>
+            <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setQrModal(null)} activeOpacity={0.85}>
+              <Text style={styles.qrCloseBtnText}>{rtl ? "إغلاق" : "Close"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 function OrderCard({
-  order, rtl, actionLoading, onCancel, onConfirmPickup,
+  order, rtl, actionLoading, qrFetching, onCancel, onConfirmPickup, onShowQR, onScanQR, onLeaveReview,
 }: {
   order: Order;
   rtl: boolean;
   actionLoading: boolean;
+  qrFetching: boolean;
   onCancel: () => void;
   onConfirmPickup: () => void;
+  onShowQR: () => void;
+  onScanQR?: () => void;
+  onLeaveReview?: () => void;
 }) {
   const statusInfo = STATUS_LABELS[order.status] ?? { en: order.status, ar: order.status, color: Colors.grayMedium };
   const statusLabel = rtl ? statusInfo.ar : statusInfo.en;
@@ -299,7 +468,37 @@ function OrderCard({
       </View>
 
       {isReserved && (
-        <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
+        <>
+          {/* QR buttons row */}
+          <View style={[styles.qrButtonsRow, rtl && styles.qrButtonsRowRTL]}>
+            <TouchableOpacity
+              style={[styles.qrBtn, { flex: 1 }]}
+              onPress={onShowQR}
+              disabled={qrFetching}
+              activeOpacity={0.8}
+            >
+              {qrFetching ? (
+                <ActivityIndicator size="small" color={Colors.primaryOrange} />
+              ) : (
+                <>
+                  <Feather name="grid" size={14} color={Colors.primaryOrange} />
+                  <Text style={styles.qrBtnText}>{rtl ? "عرض رمز QR" : "Show QR"}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            {onScanQR && (
+              <TouchableOpacity
+                style={[styles.qrBtn, styles.qrScanBtn, { flex: 1 }]}
+                onPress={onScanQR}
+                activeOpacity={0.8}
+              >
+                <Feather name="camera" size={14} color="#7c3aed" />
+                <Text style={[styles.qrBtnText, { color: "#7c3aed" }]}>{rtl ? "مسح QR" : "Scan QR"}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.cancelBtn]}
             onPress={onCancel}
@@ -332,7 +531,15 @@ function OrderCard({
               </>
             )}
           </TouchableOpacity>
-        </View>
+          </View>
+        </>
+      )}
+
+      {onLeaveReview && (
+        <TouchableOpacity style={[styles.reviewBtn, rtl && { flexDirection: "row-reverse" as const }]} onPress={onLeaveReview} activeOpacity={0.8}>
+          <Feather name="star" size={14} color={Colors.white} />
+          <Text style={styles.reviewBtnText}>{rtl ? "اترك تقييماً" : "Leave Review"}</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -461,6 +668,34 @@ const styles = StyleSheet.create({
   confirmBtn: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
   confirmBtnText: { fontSize: 13, fontWeight: "700", color: Colors.greenMain },
 
+  qrButtonsRow: {
+    flexDirection: "row", gap: 8,
+    marginHorizontal: 16, marginBottom: 8,
+  },
+  qrButtonsRowRTL: { flexDirection: "row-reverse" },
+  qrBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.orangeLight, borderRadius: 10,
+    paddingVertical: 9,
+  },
+  qrScanBtn: { backgroundColor: "#ede9fe" },
+  qrBtnText: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange },
+
+  qrOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
+  qrSheet: {
+    backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl,
+    width: "86%", alignItems: "center", gap: Spacing.md,
+  },
+  qrTitle:    { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  qrSubtitle: { fontSize: 13, color: Colors.grayMedium, maxWidth: 220 },
+  qrImage:    { width: 220, height: 220, borderRadius: 12 },
+  qrHint:     { fontSize: 13, color: Colors.grayMedium, textAlign: "center", lineHeight: 19 },
+  qrCloseBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingHorizontal: 40, paddingVertical: 13, marginTop: 4,
+  },
+  qrCloseBtnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
+
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyIcon: {
     width: 72, height: 72, borderRadius: 20,
@@ -469,4 +704,47 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.grayDark },
   emptySub: { fontSize: 14, color: Colors.grayMedium, textAlign: "center", maxWidth: 240, lineHeight: 20 },
+
+  reviewBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.primaryOrange, borderRadius: 10,
+    paddingVertical: 9, marginHorizontal: 16, marginBottom: 8,
+  },
+  reviewBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+});
+
+const reviewStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: Spacing.xl, paddingBottom: 40, paddingTop: Spacing.sm,
+    maxHeight: "88%",
+  },
+  handle: {
+    alignSelf: "center", width: 40, height: 4, borderRadius: 2,
+    backgroundColor: Colors.grayLight, marginBottom: Spacing.md,
+  },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  title: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  ratingRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  ratingLabel: { fontSize: 15, fontWeight: "500", color: Colors.grayDark },
+  starsRow: { flexDirection: "row", gap: 6 },
+  commentInput: {
+    backgroundColor: Colors.grayLight, borderRadius: 12,
+    padding: Spacing.md, fontSize: 14, color: Colors.grayDark,
+    minHeight: 80, marginBottom: Spacing.lg,
+  },
+  submitBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingVertical: 14, alignItems: "center", marginBottom: Spacing.sm,
+  },
+  submitBtnDisabled: { opacity: 0.45 },
+  submitBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
 });

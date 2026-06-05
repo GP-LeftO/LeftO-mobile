@@ -10,6 +10,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
+import { useAuthContext } from "../../context/AuthContext";
 import api from "../../services/shared/api";
 import { deleteListing } from "../../services/seller/seller.service";
 import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
@@ -21,13 +22,21 @@ import type { SellerOrder } from "../../hooks/seller/useSellerOrders";
 interface SellerProfile {
   id: string;
   businessName: string;
-  businessType: "RESTAURANT" | "MARKET" | "BAKERY";
+  businessType: "RESTAURANT" | "MARKET" | "BAKERY" | "GROCERY";
   status: "PENDING" | "APPROVED" | "REJECTED";
+  verifiedBadge?: boolean;
   description?: string;
-  location?: { latitude: number; longitude: number; address?: string };
+  operatingHours?: string;
+  location?: { latitude?: number; longitude?: number; address?: string };
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
+  activeListingsCount?: number;
+  totalOrdersCompleted?: number;
+  currentMonthOrders?: number;
+  totalRevenue?: number;
+  totalItemsSaved?: number;
   totalDonations?: number;
-  activeListings?: number;
+  participatesInKaram?: boolean;
+  rating?: number;
 }
 
 interface SettingsForm {
@@ -92,6 +101,7 @@ export default function SellerDashboardScreen({
   const rtl        = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const { user, logout } = useAuth();
+  const { switchToBuyerMode } = useAuthContext();
 
   // ── Profile state ──────────────────────────────────────────────────────────
   const [activeTab,       setActiveTab]       = useState<Tab>("overview");
@@ -146,23 +156,212 @@ export default function SellerDashboardScreen({
     }
   }, [rtl]);
 
+  const fetchKaramBalance = useCallback(async (sellerId: string) => {
+    try {
+      const bal = await fetchSellerKaramBalance(sellerId);
+      setKaramBalance(bal.today ?? bal as unknown as KaramBalance);
+    } catch {
+      // Karam balance is non-critical, silently fail
+    }
+  }, []);
+
   const fetchListings = useCallback(async () => {
-    if (!user?.id) return;
+    const sellerId = profile?.id ?? user?.id;
+    if (!sellerId) return;
     setListingsLoading(true);
     setListingsError("");
     try {
-      const { data } = await api.get("/api/listings", { params: { sellerId: user.id } });
-      const payload = data.data ?? data;
-      const items: SellerListing[] = Array.isArray(payload)
-        ? payload
-        : (payload?.listings ?? payload?.items ?? payload?.data ?? []);
+      let items: SellerListing[] = [];
+      try {
+        const { data } = await api.get("/api/sellers/me/listings");
+        const payload = data?.data ?? data;
+        items = Array.isArray(payload) ? payload : (payload?.listings ?? payload?.items ?? payload?.data ?? []);
+      } catch {
+        const { data } = await api.get("/api/listings", { params: { sellerId } });
+        const payload = data?.data ?? data;
+        items = Array.isArray(payload) ? payload : (payload?.listings ?? payload?.items ?? payload?.data ?? []);
+      }
       setListings(items);
     } catch {
       setListingsError(rtl ? "تعذّر تحميل القوائم" : "Could not load listings");
     } finally {
       setListingsLoading(false);
     }
-  }, [user?.id, rtl]);
+  }, [profile?.id, user?.id, rtl]);
+
+  const fetchOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    setOrdersError("");
+    try {
+      const data = await getSellerOrders();
+      setOrders(data);
+    } catch {
+      setOrdersError(rtl ? "تعذّر تحميل الطلبات" : "Could not load orders");
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [rtl]);
+
+  const fetchDonations = useCallback(async () => {
+    setDonationsLoading(true);
+    setDonationsError("");
+    try {
+      const data = await getMySellerDonations();
+      setDonations(data);
+    } catch {
+      setDonationsError(rtl ? "تعذّر تحميل التبرعات" : "Could not load donations");
+    } finally {
+      setDonationsLoading(false);
+    }
+  }, [rtl]);
+
+  const fetchCharities = useCallback(async () => {
+    setCharitiesLoading(true);
+    try {
+      const { data } = await api.get("/api/charities");
+      const payload = data?.data ?? data;
+      const arr = Array.isArray(payload) ? payload : payload?.charities ?? payload?.items ?? [];
+      setCharities(arr.map((c: { id: string; name?: string; orgName?: string; organizationName?: string }) => ({
+        id: c.id,
+        name: c.name ?? c.orgName ?? c.organizationName ?? "Charity",
+      })));
+    } catch {
+      setCharities([]);
+    } finally {
+      setCharitiesLoading(false);
+    }
+  }, []);
+
+  // ─── Effects ────────────────────────────────────────────────────────────────
+
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  useEffect(() => {
+    if (profile?.participatesInKaram && profile?.id) {
+      fetchKaramBalance(profile.id);
+    }
+  }, [profile?.id, profile?.participatesInKaram, fetchKaramBalance]);
+
+  useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
+  useEffect(() => { if (activeTab === "orders") fetchOrders(); }, [activeTab, fetchOrders]);
+  useEffect(() => { if (activeTab === "donations") fetchDonations(); }, [activeTab, fetchDonations]);
+  useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey, activeTab, fetchListings]);
+
+  // Pre-populate settings on first profile load
+  useEffect(() => {
+    if (profile) {
+      setSettingsDesc(profile.description ?? "");
+      setSettingsBizType(profile.businessType ?? "RESTAURANT");
+      setSettingsPhone(profile.contactInfo?.phone ?? "");
+      setSettingsWebsite(profile.contactInfo?.website ?? "");
+      setSettingsSocial(profile.contactInfo?.socialMedia ?? "");
+      setSettingsAddress(profile.location?.address ?? "");
+      setSettingsHours(profile.operatingHours ?? "");
+      setSettingsKaram(profile.participatesInKaram ?? false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!profile]);
+
+  // ─── Actions ────────────────────────────────────────────────────────────────
+
+  const handleLogout = async () => {
+    await logout();
+    onLogout?.();
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsMsg("");
+    try {
+      const body: Parameters<typeof updateSellerProfile>[0] = {};
+      if (settingsDesc)    body.description    = settingsDesc;
+      if (settingsBizType) body.businessType   = settingsBizType;
+      if (settingsHours)   body.operatingHours = settingsHours;
+
+      const contactInfo: NonNullable<typeof body.contactInfo> = {};
+      if (settingsPhone)   contactInfo.phone       = settingsPhone;
+      if (settingsWebsite) contactInfo.website     = settingsWebsite;
+      if (settingsSocial)  contactInfo.socialMedia = settingsSocial;
+      if (Object.keys(contactInfo).length > 0) body.contactInfo = contactInfo;
+
+      if (settingsAddress) {
+        body.location = {
+          address:   settingsAddress,
+          latitude:  profile?.location?.latitude  ?? 0,
+          longitude: profile?.location?.longitude ?? 0,
+        };
+      }
+
+      await updateSellerProfile(body);
+      setProfile((prev) =>
+        prev ? {
+          ...prev,
+          description:    settingsDesc || prev.description,
+          businessType:   settingsBizType,
+          operatingHours: settingsHours || prev.operatingHours,
+          contactInfo: {
+            ...prev.contactInfo,
+            phone:       settingsPhone   || prev.contactInfo?.phone,
+            website:     settingsWebsite || prev.contactInfo?.website,
+            socialMedia: settingsSocial  || prev.contactInfo?.socialMedia,
+          },
+          location: settingsAddress ? {
+            ...prev.location,
+            address: settingsAddress,
+          } : prev.location,
+        } : prev
+      );
+      setSettingsMsg(rtl ? "✓ تم حفظ الإعدادات!" : "✓ Settings saved!");
+      setTimeout(() => setSettingsMsg(""), 3000);
+    } catch {
+      setSettingsMsg(rtl ? "تعذّر حفظ الإعدادات. يرجى المحاولة مجدداً." : "Could not save settings. Please try again.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleKaramToggle = async (value: boolean) => {
+    setSettingsKaram(value);
+    setKaramToggling(true);
+    try {
+      await updateKaramParticipation(value);
+      setProfile((prev) => prev ? { ...prev, participatesInKaram: value } : prev);
+      if (value && profile?.id) fetchKaramBalance(profile.id);
+    } catch {
+      setSettingsKaram(!value); // revert on error
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحديث برنامج كرم" : "Could not update Karam setting");
+    } finally {
+      setKaramToggling(false);
+    }
+  };
+
+  const handleSponsorKaram = async () => {
+    setKaramActing("sponsor");
+    try {
+      const updated = await sponsorKaramMealAsSeller();
+      setKaramBalance(updated);
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تمويل وجبة" : "Could not sponsor a meal");
+    } finally {
+      setKaramActing(null);
+    }
+  };
+
+  const handleClaimKaram = async () => {
+    setKaramActing("claim");
+    try {
+      const updated = await claimKaramMeal();
+      setKaramBalance(updated);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      Alert.alert(
+        rtl ? "تنبيه" : "Note",
+        msg ?? (rtl ? "لا توجد وجبات متاحة اليوم" : "No sponsored meals available today")
+      );
+    } finally {
+      setKaramActing(null);
+    }
+  };
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
   useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
@@ -177,10 +376,7 @@ export default function SellerDashboardScreen({
       await api.patch(`/api/listings/${listingId}/sold-out`);
       await fetchListings();
     } catch {
-      Alert.alert(
-        rtl ? "خطأ" : "Error",
-        rtl ? "تعذّر تحديث حالة القائمة" : "Could not update listing status"
-      );
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحديث حالة القائمة" : "Could not update listing status");
     } finally {
       setSoldOutLoading(null);
     }
@@ -193,8 +389,7 @@ export default function SellerDashboardScreen({
       [
         { text: rtl ? "إلغاء" : "Cancel", style: "cancel" },
         {
-          text: rtl ? "حذف" : "Delete",
-          style: "destructive",
+          text: rtl ? "حذف" : "Delete", style: "destructive",
           onPress: async () => {
             setDeleteLoading(listingId);
             try {
@@ -264,7 +459,7 @@ export default function SellerDashboardScreen({
   return (
     <View style={[styles.container, { paddingTop: topPadding }]}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <Animated.View entering={FadeInDown.delay(80).duration(500).springify()} style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.storeIconWrap}>
@@ -295,7 +490,7 @@ export default function SellerDashboardScreen({
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Tab bar */}
+      {/* ── Tab bar ── */}
       <Animated.View entering={FadeInDown.delay(180).duration(500).springify()} style={styles.tabBar}>
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -312,7 +507,7 @@ export default function SellerDashboardScreen({
         ))}
       </Animated.View>
 
-      {/* Tab content */}
+      {/* ── Loading / error ── */}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color={Colors.primaryOrange} size="large" />
@@ -320,7 +515,7 @@ export default function SellerDashboardScreen({
       ) : fetchError ? (
         <View style={styles.centered}>
           <Feather name="wifi-off" size={40} color={Colors.grayMedium} />
-          <Text style={[styles.errorText, rtl && styles.rtl]}>{fetchError}</Text>
+          <Text style={[styles.stateText, rtl && styles.rtl]}>{fetchError}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={() => fetchProfile()} activeOpacity={0.8}>
             <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
           </TouchableOpacity>
@@ -368,7 +563,7 @@ export default function SellerDashboardScreen({
             </ScrollView>
           )}
 
-          {/* ── LISTINGS TAB ── */}
+          {/* ══════════ LISTINGS TAB ══════════ */}
           {activeTab === "listings" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
               <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
@@ -501,7 +696,141 @@ export default function SellerDashboardScreen({
             </ScrollView>
           )}
 
-          {/* ── SETTINGS TAB ── */}
+          {/* ══════════ ORDERS TAB ══════════ */}
+          {activeTab === "orders" && (
+            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+              {/* Status filter */}
+              <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
+                {(["RESERVED", "COMPLETED", "CANCELLED"] as OrderFilter[]).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
+                    onPress={() => setOrdersFilter(f)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
+                      {rtl
+                        ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
+                        : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"
+                      }
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {ordersLoading ? (
+                <View style={styles.centeredState}>
+                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                </View>
+              ) : ordersError ? (
+                <View style={styles.centeredState}>
+                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                  <Text style={[styles.stateText, rtl && styles.rtl]}>{ordersError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={fetchOrders} activeOpacity={0.8}>
+                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredOrders.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>📋</Text>
+                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
+                    {rtl ? "لا توجد طلبات" : "No orders"}
+                  </Text>
+                </View>
+              ) : (
+                filteredOrders.map((order) => {
+                  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.RESERVED;
+                  const date = order.createdAt
+                    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
+                    : null;
+                  return (
+                    <View key={order.id} style={styles.orderCard}>
+                      <View style={[styles.orderInner, rtl && styles.orderInnerRTL]}>
+                        <View style={styles.orderIconWrap}>
+                          <Feather name="shopping-bag" size={16} color={Colors.primaryOrange} />
+                        </View>
+                        <View style={styles.orderBody}>
+                          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
+                            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+                          </Text>
+                          <Text style={[styles.orderSub, rtl && styles.rtl]}>
+                            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
+                            {order.quantity ? ` · ${rtl ? "الكمية" : "Qty"}: ${order.quantity}` : ""}
+                            {date ? ` · ${date}` : ""}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
+                        </View>
+                      </View>
+                      {order.totalPrice != null && (
+                        <Text style={[styles.orderPrice, rtl && styles.rtl]}>₪{order.totalPrice}</Text>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </Animated.View>
+          )}
+
+          {/* ══════════ DONATIONS TAB ══════════ */}
+          {activeTab === "donations" && (
+            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+              {donationsLoading ? (
+                <View style={styles.centeredState}>
+                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                </View>
+              ) : donationsError ? (
+                <View style={styles.centeredState}>
+                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                  <Text style={[styles.stateText, rtl && styles.rtl]}>{donationsError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={fetchDonations} activeOpacity={0.8}>
+                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : donations.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>🎁</Text>
+                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد تبرعات بعد" : "No donations yet"}</Text>
+                  <Text style={[styles.emptySub, rtl && styles.rtl]}>
+                    {rtl ? "اضغط \"تبرع بالفائض\" من نظرة عامة" : "Use \"Donate Surplus\" from the Overview tab"}
+                  </Text>
+                </View>
+              ) : (
+                donations.map((don) => {
+                  const cfg = DONATION_STATUS_CONFIG[don.status] ?? DONATION_STATUS_CONFIG.PENDING;
+                  const charityName = don.charity?.orgName ?? don.charity?.name ?? (rtl ? "جمعية" : "Charity");
+                  const date = don.createdAt
+                    ? new Date(don.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
+                    : null;
+                  return (
+                    <View key={don.id} style={styles.donationCard}>
+                      <View style={[styles.donationInner, rtl && styles.donationInnerRTL]}>
+                        <View style={styles.donationIconWrap}>
+                          <Feather name="gift" size={16} color={Colors.greenMain} />
+                        </View>
+                        <View style={styles.donationBody}>
+                          <Text style={[styles.donationTitle, rtl && styles.rtl]} numberOfLines={1}>
+                            {don.listing?.title ?? (rtl ? "تبرع" : "Donation")}
+                          </Text>
+                          <Text style={[styles.donationSub, rtl && styles.rtl]}>
+                            {rtl ? `إلى: ${charityName}` : `To: ${charityName}`}
+                            {` · ${rtl ? "كمية" : "Qty"}: ${don.quantity}`}
+                            {date ? ` · ${date}` : ""}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </Animated.View>
+          )}
+
+          {/* ══════════ SETTINGS TAB ══════════ */}
           {activeTab === "settings" && (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent} keyboardShouldPersistTaps="handled">
@@ -676,8 +1005,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   storeIconWrap: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: Colors.orangeLight,
+    width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.orangeLight,
     alignItems: "center", justifyContent: "center",
   },
   storeIconText: { fontSize: 26 },
@@ -729,6 +1057,31 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: "800", color: Colors.grayDark },
   statLabel: { fontSize: 11, color: Colors.grayMedium, lineHeight: 14 },
 
+  // Karam card
+  karamCard: {
+    backgroundColor: "#f0fdf4", borderRadius: 18, padding: Spacing.md, gap: Spacing.sm,
+    borderWidth: 1.5, borderColor: Colors.greenLight,
+  },
+  karamHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  karamHeaderRTL: { flexDirection: "row-reverse" },
+  karamIconWrap: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.greenLight,
+    alignItems: "center", justifyContent: "center",
+  },
+  karamTitle: { fontSize: 15, fontWeight: "800", color: Colors.greenMain },
+  karamStats: { flexDirection: "row", alignItems: "center" },
+  karamStatsRTL: { flexDirection: "row-reverse" },
+  karamStat: { flex: 1, alignItems: "center", gap: 2 },
+  karamStatValue: { fontSize: 22, fontWeight: "800", color: Colors.grayDark },
+  karamStatLabel: { fontSize: 11, color: Colors.grayMedium },
+  karamStatDivider: { width: 1, height: 32, backgroundColor: Colors.greenLight },
+  karamActions: { flexDirection: "row", gap: 10 },
+  karamActionsRTL: { flexDirection: "row-reverse" },
+  karamBtn: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
+  karamBtnSponsor: { backgroundColor: Colors.greenMain },
+  karamBtnClaim: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.greenMain },
+  karamBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+
   infoCard: {
     backgroundColor: Colors.white, borderRadius: 18, padding: Spacing.lg, gap: 6,
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
@@ -754,8 +1107,8 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
     overflow: "hidden",
   },
-  listingCardInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
-  listingCardInnerRTL: { flexDirection: "row-reverse" },
+  listingInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
+  listingInnerRTL: { flexDirection: "row-reverse" },
   listingIconWrap: {
     width: 42, height: 42, borderRadius: 12,
     backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center",
@@ -830,6 +1183,62 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
 
+  // Status pill (shared)
+  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  statusPillText: { fontSize: 11, fontWeight: "700" },
+
+  // Settings
+  settingsField: { gap: 6 },
+  settingsLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
+  settingsInput: {
+    backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1.5,
+    borderColor: Colors.grayLight, paddingHorizontal: Spacing.md,
+    height: 48, fontSize: 14, color: Colors.grayDark,
+  },
+  settingsTextArea: { height: 88, paddingTop: 12 },
+  rtlInput: { textAlign: "right" },
+
+  bizTypeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  bizTypeRowRTL: { flexDirection: "row-reverse" },
+  bizTypeChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.grayLight,
+    backgroundColor: Colors.white,
+  },
+  bizTypeChipActive: { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
+  bizTypeChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
+  bizTypeChipTextActive: { color: Colors.primaryOrange },
+
+  settingsMsg: { borderRadius: 10, padding: 12 },
+  settingsMsgSuccess: { backgroundColor: Colors.greenLight },
+  settingsMsgError: { backgroundColor: "#fef2f2" },
+  settingsMsgText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
+
+  saveBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingVertical: 14, alignItems: "center", justifyContent: "center",
+    flexDirection: "row", gap: 8,
+  },
+  saveBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+
+  karamToggleCard: {
+    backgroundColor: "#f0fdf4", borderRadius: 16, padding: Spacing.md,
+    borderWidth: 1.5, borderColor: Colors.greenLight,
+  },
+  karamToggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  karamToggleRowRTL: { flexDirection: "row-reverse" },
+  karamToggleInfo: { flex: 1, gap: 2 },
+  karamToggleTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  karamToggleSub: { fontSize: 12, color: Colors.grayMedium, lineHeight: 17 },
+
+  switchBuyerBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.white, borderRadius: 14, paddingVertical: 13,
+    borderWidth: 1.5, borderColor: Colors.primaryOrange,
+  },
+  switchBuyerBtnText: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
+
+  // FAB
   fab: {
     position: "absolute", bottom: 28,
     width: 56, height: 56, borderRadius: 28,
@@ -840,4 +1249,30 @@ const styles = StyleSheet.create({
   },
   fabLTR: { right: 24 },
   fabRTL: { left: 24 },
+
+  // Donate modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  modalSheet: {
+    backgroundColor: Colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: Spacing.xl, gap: Spacing.md,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
+  },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  modalHeaderRTL: { flexDirection: "row-reverse" },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  modalSub: { fontSize: 13, color: Colors.grayMedium },
+  modalLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
+  chipScroll: { flexGrow: 0 },
+  chip: {
+    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.grayLight,
+    paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, backgroundColor: Colors.white,
+  },
+  chipSelected: { borderColor: Colors.primaryOrange, backgroundColor: Colors.orangeLight },
+  chipText: { fontSize: 13, color: Colors.grayMedium, fontWeight: "600" },
+  chipTextSelected: { color: Colors.primaryOrange },
+  donateConfirmBtn: {
+    backgroundColor: Colors.greenMain, borderRadius: 14, paddingVertical: 14,
+    alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginTop: 4,
+  },
+  donateConfirmBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 });

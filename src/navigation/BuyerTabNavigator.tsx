@@ -1,6 +1,6 @@
 // BuyerTabNavigator — custom 5-tab bottom navigation for the buyer flow
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,9 +17,11 @@ import { FavoritesScreen } from "../features/favorites";
 import OrdersScreen from "../screens/buyer/OrdersScreen";
 import ProfileScreen from "../screens/buyer/ProfileScreen";
 import { FavoritesProvider, useFavoritesContext } from "../context/shared/FavoritesContext";
+import { useAuthContext } from "../context/AuthContext";
 
 import { Colors } from "../theme";
 import { isRTL } from "../i18n";
+import { fetchNotifications } from "../services/shared/notifications.service";
 
 import type { StoreDetailsParams } from "../types";
 import type { NearMeCoords } from "../types/nearMe";
@@ -40,6 +42,8 @@ export interface BuyerTabNavigatorProps {
   onListingPress?: (params: StoreDetailsParams) => void;
   onOpenChatbot?: () => void;
   onOpenNearMe?: (coords: NearMeCoords) => void;
+  onOpenNotifications?: () => void;
+  onOpenQRScan?: (params: { orderId: string; orderTitle?: string }) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,14 +70,23 @@ export default function BuyerTabNavigator(props: BuyerTabNavigatorProps) {
 
 // ─── Inner content — has access to FavoritesContext ───────────────────────────
 
-function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe }: BuyerTabNavigatorProps) {
+function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe, onOpenNotifications, onOpenQRScan }: BuyerTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const botPad = Platform.OS === "web" ? 16 : insets.bottom;
   const rtl = isRTL();
 
   const [activeTab, setActiveTab] = useState<BuyerTab>("home");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const { toastMessage } = useFavoritesContext();
+  const { user, viewMode, switchToSellerMode } = useAuthContext();
+  const isSellerInBuyerMode = user?.role === "SELLER" && viewMode === "buyer";
+
+  useEffect(() => {
+    fetchNotifications()
+      .then(({ unreadCount }) => setUnreadCount(unreadCount))
+      .catch(() => {});
+  }, []);
 
   const goToBrowse     = useCallback(() => setActiveTab("browse"), []);
   const handleTabPress = useCallback((key: BuyerTab) => setActiveTab(key), []);
@@ -87,6 +100,8 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe
             onListingPress={onListingPress}
             onSearchPress={goToBrowse}
             onOpenNearMe={onOpenNearMe}
+            onOpenNotifications={onOpenNotifications}
+            unreadNotifications={unreadCount}
           />
         );
       case "browse":
@@ -99,7 +114,7 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe
           />
         );
       case "orders":
-        return <OrdersScreen />;
+        return <OrdersScreen onOpenQRScan={onOpenQRScan} />;
       case "profile":
         return <ProfileScreen onLogout={onLogout} onOpenChatbot={onOpenChatbot} />;
     }
@@ -107,6 +122,21 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe
 
   return (
     <View style={styles.root}>
+
+      {/* ── Seller-in-buyer-mode banner ── */}
+      {isSellerInBuyerMode && (
+        <View style={styles.sellerBanner}>
+          <Feather name="shopping-bag" size={14} color={Colors.primaryOrange} />
+          <Text style={styles.sellerBannerText}>
+            {rtl ? "أنت في وضع المشتري" : "You're browsing as a buyer"}
+          </Text>
+          <TouchableOpacity style={styles.sellerBannerBtn} onPress={switchToSellerMode} activeOpacity={0.8}>
+            <Text style={styles.sellerBannerBtnText}>
+              {rtl ? "رجوع لمحلي" : "Back to my store"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Screen content ── */}
       <View style={styles.screenArea}>
@@ -173,6 +203,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+
+  sellerBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.orangeLight,
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: Colors.primaryOrange + "40",
+  },
+  sellerBannerText: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.primaryOrange },
+  sellerBannerBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  sellerBannerBtnText: { fontSize: 11, fontWeight: "700", color: Colors.white },
 
   screenArea: {
     flex: 1,

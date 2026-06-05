@@ -31,6 +31,10 @@ import ImpactCelebrationScreen   from "./src/screens/buyer/reserve/ImpactCelebra
 import NearMeScreen              from "./src/screens/buyer/nearMe/NearMeScreen";
 import BuyerTabNavigator          from "./src/navigation/BuyerTabNavigator";
 import ListingFormScreen          from "./src/screens/seller/listings/ListingFormScreen";
+import ForgotPasswordScreen       from "./src/screens/auth/ForgotPasswordScreen";
+import ResetPasswordScreen        from "./src/screens/auth/ResetPasswordScreen";
+import NotificationsScreen        from "./src/screens/shared/NotificationsScreen";
+import QRScanScreen               from "./src/screens/buyer/QRScanScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -71,7 +75,11 @@ type AppStep =
   | "donation-confirmed"
   | "near-me"
   | "seller-create-listing"
-  | "seller-edit-listing";
+  | "seller-edit-listing"
+  | "forgot-password"
+  | "reset-password"
+  | "notifications"
+  | "qr-scan";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -110,6 +118,8 @@ function AppContent() {
   const [nearMeCoords,      setNearMeCoords]      = useState<NearMeCoords | null>(null);
   const [listingToEdit,     setListingToEdit]     = useState<SellerListing | undefined>(undefined);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [resetPhone,        setResetPhone]        = useState("");
+  const [qrScanParams,      setQrScanParams]      = useState<{ orderId: string; orderTitle?: string } | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -132,6 +142,17 @@ function AppContent() {
       goTo(route);
     }
   }, [ctx.isInitializing, ctx.isAuthenticated, langRestored]);
+
+  // Seller view-mode switch: SELLER → buyer-home / back to seller-dashboard
+  useEffect(() => {
+    if (ctx.user?.role !== "SELLER") return;
+    if (ctx.viewMode === "buyer" && step === "seller-dashboard") {
+      goTo("buyer-home");
+    } else if (ctx.viewMode === "seller" && step === "buyer-home") {
+      goTo("seller-dashboard");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.viewMode]);
 
   // ── Resolve home route from user role + status ─────────────────────────────
   const resolveHomeRoute = (
@@ -372,6 +393,41 @@ function AppContent() {
             onBack={goBack}
             onSuccess={handlePostLogin}
             onRegister={() => goBack()}
+            onForgotPassword={() => goTo("forgot-password")}
+          />
+        )
+      }
+
+      {step === "forgot-password" &&
+        screen(
+          <ForgotPasswordScreen
+            onBack={goBack}
+            onOtpSent={(ph) => { setResetPhone(ph); goTo("reset-password"); }}
+          />
+        )
+      }
+
+      {step === "reset-password" &&
+        screen(
+          <ResetPasswordScreen
+            phone={resetPhone}
+            onBack={goBack}
+            onSuccess={() => setStepHistory(["sign-in"])}
+          />
+        )
+      }
+
+      {step === "notifications" &&
+        screen(<NotificationsScreen onBack={goBack} />)
+      }
+
+      {step === "qr-scan" && qrScanParams &&
+        screen(
+          <QRScanScreen
+            orderId={qrScanParams.orderId}
+            orderTitle={qrScanParams.orderTitle}
+            onBack={goBack}
+            onSuccess={() => setStepHistory(["buyer-home"])}
           />
         )
       }
@@ -383,6 +439,8 @@ function AppContent() {
             onListingPress={handleListingPress}
             onOpenChatbot={() => goTo("chatbot")}
             onOpenNearMe={handleOpenNearMe}
+            onOpenNotifications={() => goTo("notifications")}
+            onOpenQRScan={(params) => { setQrScanParams(params); goTo("qr-scan"); }}
           />
         )
       }
@@ -462,10 +520,6 @@ function AppContent() {
             onReserved={(order) => {
               setConfirmedOrder(order);
               goTo("impact-celebration");
-            }}
-            onDonate={(qty) => {
-              setDonationQuantity(qty);
-              goTo("charity-selector");
             }}
           />
         )
