@@ -69,28 +69,33 @@ LeftO-mobile/
     │   ├── auth/
     │   │   ├── PhoneEntryScreen.tsx
     │   │   ├── OTPVerificationScreen.tsx
-    │   │   └── SignInScreen.tsx
+    │   │   ├── SignInScreen.tsx
+    │   │   ├── ForgotPasswordScreen.tsx
+    │   │   └── ResetPasswordScreen.tsx
+    │   ├── shared/
+    │   │   └── NotificationsScreen.tsx
     │   ├── registration/
     │   │   ├── RoleSelectionScreen.tsx
     │   │   ├── BasicInfoScreen.tsx
     │   │   ├── AllergyPreferencesScreen.tsx
     │   │   └── RoleSpecificInfoScreen.tsx
     │   ├── buyer/
-    │   │   ├── HomeScreen.tsx          # Discovery: Surprise Bags, Parcels, Popular
+    │   │   ├── HomeScreen.tsx          # Discovery + Community sections + post meal modal
     │   │   ├── SearchScreen.tsx        # Live search + filter panel
     │   │   ├── StoreDetailsScreen.tsx  # Listing detail + seller reviews section
     │   │   ├── CheckoutScreen.tsx      # Reserve / Donate checkout
     │   │   ├── OrderConfirmedScreen.tsx
     │   │   ├── DonationConfirmedScreen.tsx
     │   │   ├── CharitySelectorScreen.tsx
-    │   │   ├── OrdersScreen.tsx
-    │   │   └── ProfileScreen.tsx       # Full profile: stats, badges, activity, settings
+    │   │   ├── OrdersScreen.tsx        # Active/Completed/Cancelled + Leave Review + QR buttons
+    │   │   ├── QRScanScreen.tsx        # QR token entry → POST /api/orders/:id/scan
+    │   │   └── ProfileScreen.tsx       # Full profile: stats, badges, activity, avatar color picker
     │   ├── seller/
-    │   │   ├── SellerDashboardScreen.tsx
+    │   │   ├── SellerDashboardScreen.tsx  # 4 tabs: Overview / Listings / Orders / Settings + Donate modal
     │   │   ├── PendingScreen.tsx
     │   │   └── RejectedScreen.tsx
     │   └── charity/
-    │       ├── CharityDashboardScreen.tsx
+    │       ├── CharityDashboardScreen.tsx  # Full: donations list, pickup confirm, proof upload
     │       └── registration/
     │           ├── CharityInfoScreen.tsx
     │           └── CharityDocumentScreen.tsx
@@ -137,21 +142,24 @@ LeftO-mobile/
     ├── services/
     │   ├── shared/
     │   │   ├── api.ts
-    │   │   └── storage.ts
+    │   │   ├── storage.ts
+    │   │   ├── notifications.service.ts   # fetchNotifications, markAllRead, markOneRead
+    │   │   └── community.service.ts       # fetchAppConfig, suspended meals, Ramadan bags, postSuspendedMeal
     │   ├── auth/
-    │   │   └── auth.service.ts
+    │   │   └── auth.service.ts            # + forgotPassword, resetPassword
     │   ├── buyer/
     │   │   ├── listing.service.ts
-    │   │   ├── search.service.ts       # Client-side ACTIVE filter for search results
+    │   │   ├── search.service.ts
     │   │   ├── order.service.ts
     │   │   ├── favorites.service.ts
     │   │   └── profile/
-    │   │       └── profileService.ts   # fetchProfile, fetchMyOrders, submitReview, fetchSellerReviews
+    │   │       └── profileService.ts      # + updateUserProfile
     │   ├── charity/
+    │   │   ├── charity.service.ts         # fetchCharityDonations, confirmPickup, confirmWithProof
     │   │   └── registration/
     │   │       └── charityRegistration.service.ts
     │   └── seller/
-    │       ├── seller.service.ts
+    │       ├── seller.service.ts          # + getSellerOrders, updateSellerProfile, createDonation
     │       └── document.service.ts
     ├── context/
     │   └── AuthContext.tsx
@@ -389,6 +397,20 @@ AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants lo
 | POST | `/api/orders` | order.service → CheckoutScreen (reserve + donate) |
 | GET | `/api/listings` | nearMeService → NearMeScreen (with `latitude`, `longitude`, `radius`, `status=ACTIVE`) |
 | POST | `/api/chatbot/message` | nearMeService → NearMeScreen (with `lat`, `lng` for location-aware AI reply) |
+| POST | `/api/auth/forgot-password` | ForgotPasswordScreen |
+| POST | `/api/auth/reset-password` | ResetPasswordScreen |
+| GET | `/api/notifications/me` | NotificationsScreen |
+| PATCH | `/api/notifications/me/read-all` | NotificationsScreen |
+| GET | `/api/donations/me` | CharityDashboardScreen |
+| PATCH | `/api/donations/:id/pickup` | CharityDashboardScreen |
+| PATCH | `/api/donations/:id/confirm` | CharityDashboardScreen (multipart proof upload) |
+| GET | `/api/sellers/me/orders` | SellerDashboardScreen → Orders tab |
+| PATCH | `/api/sellers/me` | SellerDashboardScreen → Settings tab |
+| POST | `/api/donations` | SellerDashboardScreen (donate surplus), CharitySelectorScreen |
+| GET | `/api/app/config` | community.service → HomeScreen (isRamadanSeason) |
+| POST | `/api/orders/:id/scan` | QRScanScreen |
+| PATCH | `/api/users/me` | profileService → ProfileScreen (avatarColor) |
+| POST | `/api/listings` (type=SUSPENDED_MEAL) | community.service → HomeScreen post meal modal |
 
 ---
 
@@ -488,26 +510,109 @@ npx tsc --noEmit
 | Full RTL layout, Arabic text throughout | ✅ Done |
 | TypeScript types from live API response shapes | ✅ Done |
 
-**Note:** Voice-to-text (mic button transcription) requires `@react-native-voice/voice` which is not yet installed. The mic button is fully UI-complete; tapping it currently focuses the text input as a fallback. Install the package and wire `SpeechResultsEvent` to `sendNearMeQuery` to activate.
+**Note:** Voice-to-text (mic button transcription) requires `@react-native-voice/voice` which is not yet installed. The mic button is fully UI-complete; tapping it currently focuses the text input as a fallback.
+
+### ✅ Sprint 5 — Foundation & Community Features
+
+#### Auth
+| Feature | Files | Details |
+|---------|-------|---------|
+| Forgot Password | `src/screens/auth/ForgotPasswordScreen.tsx` | Phone entry → `POST /api/auth/forgot-password` → go to ResetPassword |
+| Reset Password | `src/screens/auth/ResetPasswordScreen.tsx` | OTP + new password + confirm → `POST /api/auth/reset-password` |
+| "Forgot password?" link | `SignInScreen.tsx` | Added below password field, wired to `forgot-password` step |
+
+New `AppStep` values: `"forgot-password"`, `"reset-password"`.
+New service calls in `auth.service.ts`: `forgotPassword(phone)`, `resetPassword(phone, otp, newPassword)`.
+
+#### Charity Dashboard (Full Rebuild)
+Previous: placeholder card. Now: fully functional dashboard.
+
+| File | Role |
+|------|------|
+| `src/screens/charity/CharityDashboardScreen.tsx` | Replaced placeholder — 2 tabs (Pending / History), 4 stat cards, donation list with actions |
+| `src/services/charity/charity.service.ts` | `fetchCharityDonations()`, `confirmDonationPickup()`, `confirmDonationWithProof()` |
+
+**Features:**
+- `GET /api/donations/me` — loads all donations for the charity
+- Pending tab: donations with status `PENDING` or `CONFIRMED`
+- History tab: `PICKED_UP` or `CANCELLED`
+- **Confirm Pickup** button → `PATCH /api/donations/:id/pickup`
+- **Upload Proof** (image picker via `expo-image-picker`) + **Confirm with Proof** → `PATCH /api/donations/:id/confirm` (multipart)
+- Pull-to-refresh, loading/error states, full RTL
+
+#### Notifications
+| File | Role |
+|------|------|
+| `src/screens/shared/NotificationsScreen.tsx` | Full list with type icons, unread dot, "Mark all read" |
+| `src/services/shared/notifications.service.ts` | `fetchNotifications()`, `markAllRead()`, `markOneRead()` |
+
+- Bell icon with unread badge added to `HomeScreen` header
+- `onOpenNotifications` prop threaded from `App.tsx` → `BuyerTabNavigator` → `HomeScreen`
+- `GET /api/notifications/me` on load + pull-to-refresh
+- `PATCH /api/notifications/me/read-all` when tapping "Mark all read"
+- Type-based icon colours (order, donation, system, etc.)
+- Unread count polled on tab navigator mount
+
+New `AppStep`: `"notifications"`.
+
+#### Seller Dashboard — Orders, Settings, Donations
+The seller dashboard gained a 4th **Orders** tab and real Settings form, plus a "Donate Surplus" flow from the Overview tab.
+
+| Feature | API | Notes |
+|---------|-----|-------|
+| Orders tab | `GET /api/sellers/me/orders` | Shows status badge, buyer name, listing title, total price |
+| Settings tab (real form) | `PATCH /api/sellers/me` | Business name, description, contact phone, website — pre-populated from profile |
+| Donate Surplus modal | `POST /api/donations` | Select listing + charity + quantity; charities loaded from `GET /api/charities` |
+
+New service functions in `seller.service.ts`: `getSellerOrders()`, `updateSellerProfile()`, `createDonation()`.
+
+#### Community Sections — وجبات معلقة + Ramadan Bags
+
+| File | Role |
+|------|------|
+| `src/services/shared/community.service.ts` | `fetchAppConfig()`, `fetchSuspendedMeals()`, `fetchRamadanBags()`, `postSuspendedMeal()`, `claimCommunityListing()` |
+
+**HomeScreen additions:**
+- **وجبات معلقة 💚 (Free Meals)** — horizontal scroll of community-posted free meals. Any user can claim (→ `POST /api/orders` type=PURCHASE, price=0) or share (bottom sheet modal → `POST /api/listings` type=SUSPENDED_MEAL).
+- **Ramadan Bags 🌙** — shown only when `GET /api/app/config → isRamadanSeason: true`. Purple banner + horizontal scroll of Ramadan listings.
+- Share Meal modal: title, quantity, pickup from/to fields.
+
+#### QR Scanner
+| File | Notes |
+|------|-------|
+| `src/screens/buyer/QRScanScreen.tsx` | Manual token entry (camera SDK not installed). Calls `POST /api/orders/:id/scan { token }`. |
+
+- **Scan QR** button added alongside existing **Show QR** in `OrdersScreen` active orders.
+- Frame UI with orange corner brackets ready for camera integration.
+- New `AppStep`: `"qr-scan"`. Prop: `onOpenQRScan` threaded through `BuyerTabNavigator` → `OrdersScreen`.
+- To activate camera scanning: install `expo-camera`, replace the token input with a `CameraView` barcode scanner.
+
+#### Avatar Customization
+- `updateUserProfile({ avatarColor })` added to `profileService.ts` → `PATCH /api/users/me`
+- Tapping the camera icon on the avatar opens a 10-color swatch picker (bottom sheet modal)
+- Selected color applied immediately (optimistic) + persisted to backend
+- Color persists across sessions via `GET /api/users/me → profile.avatarColor`
+
+#### Leave Review from Orders Screen
+- **Leave Review** button added to Completed orders in `OrdersScreen` (was only in ProfileScreen)
+- Full 4-star review bottom sheet (Overall / Pickup / Quality / Variety + optional comment)
+- `POST /api/reviews` via `submitReview()` from `profileService.ts`
+- Reviewed order IDs tracked in local state; button disappears after submit
 
 ### 🔲 Remaining / Next
 
 | Feature | Notes |
 |---------|-------|
 | Voice recognition for mic button | Install `@react-native-voice/voice`, wire to `sendNearMeQuery` |
-| Personal Information editing | Needs `PATCH /api/users/me` from backend (endpoint unconfirmed) |
-| Avatar photo upload | Same — needs `PATCH /api/users/me` with avatar fields |
+| QR camera scanning | Install `expo-camera`, replace manual token entry in `QRScanScreen` |
+| FCM push notifications | Install Firebase SDK, call `PUT /api/auth/fcm-token` on login |
 | Allergy preferences editing | `GET /api/users/me` returns `[]` always — backend fix needed |
-| Notification settings | No push notification API yet — backend to implement |
 | Preferred Pickup Times | No API endpoint yet |
 | Rate LeftO | Needs app store link wired in |
 | Terms & Privacy | Content/screen not yet built |
 | Seller reviews pagination | Currently loads max 10 — add "load more" |
-| Money Saved stat | `AuthUser.moneySaved` field may not be populated by backend |
-| Seller profile page | View seller's full profile + all listings |
-| Order cancellation from ProfileScreen | Currently only in OrdersScreen |
-| Push notifications | Backend needed |
-| Charity receiving flow | Charities accepting / managing incoming donations |
+| Seller profile page | View seller's full public profile |
+| Ramadan bags — post form | Sellers can post RAMADAN_BAG listings (currently only admins toggle season) |
 
 ---
 

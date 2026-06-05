@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,13 @@ import {
   RefreshControl,
   StyleSheet,
   Platform,
+  Modal,
+  TextInput,
+  Switch,
+  Linking,
+  ScrollView,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
@@ -19,6 +25,12 @@ import BadgeGrid from "../../components/buyer/profile/BadgeGrid";
 import OrderCard from "../../components/buyer/profile/OrderCard";
 import DonationCard from "../../components/buyer/profile/DonationCard";
 import type { ProfileOrder } from "../../types/profile";
+import { updateUserProfile } from "../../services/buyer/profile/profileService";
+
+const AVATAR_COLORS = [
+  "#DE985A", "#16A34A", "#7C3AED", "#EC4899", "#0EA5E9",
+  "#F59E0B", "#EF4444", "#14B8A6", "#6366F1", "#84CC16",
+];
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +41,13 @@ interface ProfileScreenProps {
 
 // ─── Settings items (collapsed under the Settings button) ─────────────────────
 
-const SETTINGS_ITEMS = [
+const SETTINGS_ITEMS: {
+  id: "personal" | "notifications" | "pickup" | "rate" | "terms";
+  icon: string;
+  labelEn: string;
+  labelAr: string;
+  color: string;
+}[] = [
   { id: "personal",      icon: "user",       labelEn: "Personal Information",   labelAr: "المعلومات الشخصية",      color: "#8b5cf6" },
   { id: "notifications", icon: "bell",       labelEn: "Notification Settings",  labelAr: "إعدادات الإشعارات",      color: "#f59e0b" },
   { id: "pickup",        icon: "clock",      labelEn: "Preferred Pickup Times", labelAr: "أوقات الاستلام المفضلة",  color: "#10b981" },
@@ -115,7 +133,53 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
   const rtl        = isRTL();
   const tr         = t();
 
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [settingsExpanded,  setSettingsExpanded]  = useState(false);
+  const [colorPickerOpen,   setColorPickerOpen]   = useState(false);
+  const [avatarColor,       setAvatarColor]       = useState<string | null>(null);
+  const [savingColor,       setSavingColor]        = useState(false);
+
+  // ── Active settings sheet ──────────────────────────────────────────────────
+  const [activeSheet, setActiveSheet] = useState<"personal" | "notifications" | "pickup" | "terms" | null>(null);
+
+  // ── Personal Information ───────────────────────────────────────────────────
+  const [editName,       setEditName]       = useState("");
+  const [editEmail,      setEditEmail]      = useState("");
+  const [savingPersonal, setSavingPersonal] = useState(false);
+  const [personalMsg,    setPersonalMsg]    = useState("");
+
+  // ── Notification prefs (local) ─────────────────────────────────────────────
+  const [notifOrders,   setNotifOrders]   = useState(true);
+  const [notifFavs,     setNotifFavs]     = useState(true);
+  const [notifPromos,   setNotifPromos]   = useState(false);
+
+  // ── Preferred pickup times (local) ─────────────────────────────────────────
+  const PICKUP_SLOTS = ["08:00 – 10:00", "12:00 – 14:00", "17:00 – 19:00", "20:00 – 22:00"];
+  const [preferredSlots, setPreferredSlots] = useState<Set<string>>(new Set());
+
+  // Load notification + pickup prefs from AsyncStorage
+  useEffect(() => {
+    AsyncStorage.multiGet(["@notif_orders", "@notif_favs", "@notif_promos", "@pickup_slots"])
+      .then(([[, o], [, f], [, p], [, s]]) => {
+        if (o !== null) setNotifOrders(o === "true");
+        if (f !== null) setNotifFavs(f === "true");
+        if (p !== null) setNotifPromos(p === "true");
+        if (s !== null) setPreferredSlots(new Set(JSON.parse(s) as string[]));
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveNotifPrefs = async (key: string, value: boolean) => {
+    await AsyncStorage.setItem(key, String(value));
+  };
+
+  const togglePickupSlot = async (slot: string) => {
+    setPreferredSlots((prev) => {
+      const next = new Set(prev);
+      next.has(slot) ? next.delete(slot) : next.add(slot);
+      AsyncStorage.setItem("@pickup_slots", JSON.stringify([...next])).catch(() => {});
+      return next;
+    });
+  };
 
   const { user, logout } = useAuth();
   const {
@@ -140,6 +204,47 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
     : toast === "alreadyReviewed" ? tr.profile.review.alreadyReviewed
     : tr.profile.review.error
     : null;
+
+  const handleSelectColor = async (color: string) => {
+    setAvatarColor(color);
+    setSavingColor(true);
+    try {
+      await updateUserProfile({ avatarColor: color });
+      await onRefresh();
+    } catch {
+      // silent fail — color is still set locally
+    } finally {
+      setSavingColor(false);
+      setColorPickerOpen(false);
+    }
+  };
+
+  const currentAvatarColor = avatarColor ?? profile?.avatarColor;
+
+  const openPersonalSheet = () => {
+    setEditName(profile?.name ?? user?.name ?? "");
+    setEditEmail(profile?.email ?? user?.email ?? "");
+    setPersonalMsg("");
+    setActiveSheet("personal");
+  };
+
+  const handleSavePersonal = async () => {
+    setSavingPersonal(true);
+    setPersonalMsg("");
+    try {
+      await updateUserProfile({
+        name:  editName.trim()  || undefined,
+        email: editEmail.trim() || undefined,
+      });
+      setPersonalMsg(rtl ? "تم الحفظ!" : "Saved!");
+      await onRefresh();
+      setTimeout(() => { setPersonalMsg(""); setActiveSheet(null); }, 1500);
+    } catch {
+      setPersonalMsg(rtl ? "تعذّر الحفظ. يرجى المحاولة مجدداً." : "Could not save. Please try again.");
+    } finally {
+      setSavingPersonal(false);
+    }
+  };
 
   const displayName = profile?.name ?? user?.name;
   const initials = displayName
@@ -219,11 +324,15 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrap}>
-              <View style={[styles.avatar, profile?.avatarColor ? { backgroundColor: profile.avatarColor } : null]}>
+              <View style={[styles.avatar, currentAvatarColor ? { backgroundColor: currentAvatarColor } : null]}>
                 <Text style={styles.avatarInitials}>{initials}</Text>
               </View>
-              <TouchableOpacity style={styles.avatarEditBtn} disabled activeOpacity={0.6}>
-                <Feather name="camera" size={13} color={Colors.white} />
+              <TouchableOpacity
+                style={styles.avatarEditBtn}
+                onPress={() => setColorPickerOpen(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="edit-2" size={13} color={Colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -319,29 +428,46 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
       {/* Expanded settings panel */}
       {settingsExpanded && (
         <View style={styles.settingsPanel}>
-          {SETTINGS_ITEMS.map((item, idx) => (
-            <React.Fragment key={item.id}>
-              <TouchableOpacity
-                style={[styles.settingsRow, rtl && styles.rowReverse]}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.settingsIconWrap, { backgroundColor: item.color + "18" }]}>
-                  <Feather name={item.icon as "user"} size={16} color={item.color} />
-                </View>
-                <Text style={[styles.settingsRowLabel, rtl && styles.rtl]}>
-                  {rtl ? item.labelAr : item.labelEn}
-                </Text>
-                <Feather
-                  name={rtl ? "chevron-left" : "chevron-right"}
-                  size={15}
-                  color={Colors.grayLight}
-                />
-              </TouchableOpacity>
-              {idx < SETTINGS_ITEMS.length - 1 && (
-                <View style={[styles.settingsDivider, rtl && { marginRight: 52, marginLeft: 0 }]} />
-              )}
-            </React.Fragment>
-          ))}
+          {SETTINGS_ITEMS.map((item, idx) => {
+            const handlePress = () => {
+              if (item.id === "personal")      { openPersonalSheet(); return; }
+              if (item.id === "notifications") { setActiveSheet("notifications"); return; }
+              if (item.id === "pickup")        { setActiveSheet("pickup"); return; }
+              if (item.id === "terms")         { setActiveSheet("terms"); return; }
+              if (item.id === "rate") {
+                const url = Platform.OS === "android"
+                  ? "market://details?id=com.lefto.app"
+                  : "https://apps.apple.com/app/lefto/id000000000";
+                Linking.canOpenURL(url)
+                  .then((can) => Linking.openURL(can ? url : "https://lefto.app"))
+                  .catch(() => {});
+              }
+            };
+            return (
+              <React.Fragment key={item.id}>
+                <TouchableOpacity
+                  style={[styles.settingsRow, rtl && styles.rowReverse]}
+                  activeOpacity={0.7}
+                  onPress={handlePress}
+                >
+                  <View style={[styles.settingsIconWrap, { backgroundColor: item.color + "18" }]}>
+                    <Feather name={item.icon as "user"} size={16} color={item.color} />
+                  </View>
+                  <Text style={[styles.settingsRowLabel, rtl && styles.rtl]}>
+                    {rtl ? item.labelAr : item.labelEn}
+                  </Text>
+                  <Feather
+                    name={rtl ? "chevron-left" : "chevron-right"}
+                    size={15}
+                    color={Colors.grayLight}
+                  />
+                </TouchableOpacity>
+                {idx < SETTINGS_ITEMS.length - 1 && (
+                  <View style={[styles.settingsDivider, rtl && { marginRight: 52, marginLeft: 0 }]} />
+                )}
+              </React.Fragment>
+            );
+          })}
         </View>
       )}
 
@@ -405,6 +531,187 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
       />
 
       {toastMessage && <ToastBanner message={toastMessage} />}
+
+      {/* ── Personal Information sheet ── */}
+      <Modal visible={activeSheet === "personal"} transparent animationType="slide" onRequestClose={() => setActiveSheet(null)}>
+        <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={() => setActiveSheet(null)} />
+        <View style={sheetStyles.sheet}>
+          <View style={[sheetStyles.header, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Text style={[sheetStyles.title, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "المعلومات الشخصية" : "Personal Information"}
+            </Text>
+            <TouchableOpacity onPress={() => setActiveSheet(null)}><Feather name="x" size={22} color={Colors.grayDark} /></TouchableOpacity>
+          </View>
+
+          <Text style={[sheetStyles.label, rtl && { textAlign: "right" as const }]}>{rtl ? "الاسم" : "Name"}</Text>
+          <TextInput
+            style={[sheetStyles.input, rtl && { textAlign: "right" as const }]}
+            value={editName}
+            onChangeText={setEditName}
+            placeholder={rtl ? "اسمك الكامل" : "Your full name"}
+            placeholderTextColor={Colors.grayMedium}
+          />
+
+          <Text style={[sheetStyles.label, rtl && { textAlign: "right" as const }]}>{rtl ? "البريد الإلكتروني" : "Email"}</Text>
+          <TextInput
+            style={[sheetStyles.input, rtl && { textAlign: "right" as const }]}
+            value={editEmail}
+            onChangeText={setEditEmail}
+            placeholder={rtl ? "بريدك الإلكتروني" : "Your email address"}
+            placeholderTextColor={Colors.grayMedium}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          {personalMsg ? (
+            <Text style={[sheetStyles.msg, { color: personalMsg.includes("تعذّر") || personalMsg.includes("Could not") ? "#ef4444" : Colors.greenMain }]}>
+              {personalMsg}
+            </Text>
+          ) : null}
+
+          <TouchableOpacity
+            style={[sheetStyles.saveBtn, savingPersonal && { opacity: 0.6 }]}
+            onPress={handleSavePersonal}
+            disabled={savingPersonal}
+            activeOpacity={0.85}
+          >
+            {savingPersonal
+              ? <ActivityIndicator size="small" color={Colors.white} />
+              : <Text style={sheetStyles.saveBtnText}>{rtl ? "حفظ التغييرات" : "Save Changes"}</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── Notification Settings sheet ── */}
+      <Modal visible={activeSheet === "notifications"} transparent animationType="slide" onRequestClose={() => setActiveSheet(null)}>
+        <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={() => setActiveSheet(null)} />
+        <View style={sheetStyles.sheet}>
+          <View style={[sheetStyles.header, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Text style={[sheetStyles.title, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "إعدادات الإشعارات" : "Notification Settings"}
+            </Text>
+            <TouchableOpacity onPress={() => setActiveSheet(null)}><Feather name="x" size={22} color={Colors.grayDark} /></TouchableOpacity>
+          </View>
+          {[
+            { key: "orders",  label: rtl ? "تحديثات الطلبات" : "Order updates",            val: notifOrders, set: (v: boolean) => { setNotifOrders(v); saveNotifPrefs("@notif_orders", v); } },
+            { key: "favs",    label: rtl ? "عروض المفضّلة" : "Favorites new listings",      val: notifFavs,   set: (v: boolean) => { setNotifFavs(v);   saveNotifPrefs("@notif_favs", v);   } },
+            { key: "promos",  label: rtl ? "العروض والتخفيضات" : "Promotions & discounts",  val: notifPromos, set: (v: boolean) => { setNotifPromos(v); saveNotifPrefs("@notif_promos", v); } },
+          ].map((row, i) => (
+            <View key={row.key} style={[sheetStyles.toggleRow, rtl && { flexDirection: "row-reverse" as const }, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.grayLight }]}>
+              <Text style={[sheetStyles.toggleLabel, rtl && { textAlign: "right" as const }]}>{row.label}</Text>
+              <Switch
+                value={row.val}
+                onValueChange={row.set}
+                trackColor={{ false: Colors.grayLight, true: Colors.primaryOrange }}
+                thumbColor={Colors.white}
+              />
+            </View>
+          ))}
+          <Text style={[sheetStyles.note, rtl && { textAlign: "right" as const }]}>
+            {rtl ? "* الإشعارات الفورية تتطلب تفعيل الإشعارات في إعدادات الجهاز." : "* Push notifications require notifications to be enabled in device settings."}
+          </Text>
+        </View>
+      </Modal>
+
+      {/* ── Preferred Pickup Times sheet ── */}
+      <Modal visible={activeSheet === "pickup"} transparent animationType="slide" onRequestClose={() => setActiveSheet(null)}>
+        <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={() => setActiveSheet(null)} />
+        <View style={sheetStyles.sheet}>
+          <View style={[sheetStyles.header, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Text style={[sheetStyles.title, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "أوقات الاستلام المفضلة" : "Preferred Pickup Times"}
+            </Text>
+            <TouchableOpacity onPress={() => setActiveSheet(null)}><Feather name="x" size={22} color={Colors.grayDark} /></TouchableOpacity>
+          </View>
+          <Text style={[sheetStyles.note, rtl && { textAlign: "right" as const }, { marginBottom: Spacing.md }]}>
+            {rtl ? "اختر الأوقات التي تفضّل فيها الاستلام. سيتم تمييز العروض المناسبة لك." : "Select the times you prefer to pick up. Matching listings will be highlighted."}
+          </Text>
+          {PICKUP_SLOTS.map((slot) => {
+            const selected = preferredSlots.has(slot);
+            return (
+              <TouchableOpacity
+                key={slot}
+                style={[sheetStyles.slotRow, selected && sheetStyles.slotRowSelected, rtl && { flexDirection: "row-reverse" as const }]}
+                onPress={() => togglePickupSlot(slot)}
+                activeOpacity={0.8}
+              >
+                <Feather name={selected ? "check-circle" : "circle"} size={20} color={selected ? Colors.primaryOrange : Colors.grayMedium} />
+                <Text style={[sheetStyles.slotLabel, selected && { color: Colors.primaryOrange }]}>{slot}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Modal>
+
+      {/* ── Terms & Privacy sheet ── */}
+      <Modal visible={activeSheet === "terms"} transparent animationType="slide" onRequestClose={() => setActiveSheet(null)}>
+        <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={() => setActiveSheet(null)} />
+        <View style={[sheetStyles.sheet, { maxHeight: "80%" }]}>
+          <View style={[sheetStyles.header, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Text style={[sheetStyles.title, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "الشروط والخصوصية" : "Terms & Privacy"}
+            </Text>
+            <TouchableOpacity onPress={() => setActiveSheet(null)}><Feather name="x" size={22} color={Colors.grayDark} /></TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={[sheetStyles.termsText, rtl && { textAlign: "right" as const }]}>
+              {rtl
+                ? "LeftO منصة لإنقاذ الطعام الفائض وتوزيعه بأسعار مخفضة. باستخدام التطبيق، توافق على الشروط التالية:\n\n• تُستخدم بياناتك الشخصية فقط لتقديم الخدمة.\n• لا تُشارك بياناتك مع أطراف خارجية دون موافقتك.\n• أنت مسؤول عن دقة المعلومات التي تدخلها.\n• الاستخدام التجاري أو إعادة البيع غير مسموح بدون إذن.\n• يحق لـ LeftO تعليق الحسابات التي تنتهك الشروط.\n\nللتواصل: support@lefto.app"
+                : "LeftO is a platform for rescuing surplus food and distributing it at discounted prices. By using the app, you agree to the following:\n\n• Your personal data is used only to deliver the service.\n• Your data is not shared with third parties without your consent.\n• You are responsible for the accuracy of information you provide.\n• Commercial use or resale is not permitted without permission.\n• LeftO reserves the right to suspend accounts that violate these terms.\n\nContact: support@lefto.app"
+              }
+            </Text>
+            <TouchableOpacity
+              style={sheetStyles.linkBtn}
+              onPress={() => Linking.openURL("https://lefto.app/privacy").catch(() => {})}
+              activeOpacity={0.7}
+            >
+              <Text style={sheetStyles.linkBtnText}>{rtl ? "عرض السياسة الكاملة على الويب" : "View full policy on web"}</Text>
+              <Feather name="external-link" size={14} color={Colors.primaryOrange} />
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Avatar color picker modal */}
+      <Modal visible={colorPickerOpen} transparent animationType="slide" onRequestClose={() => setColorPickerOpen(false)}>
+        <TouchableOpacity style={avatarStyles.overlay} activeOpacity={1} onPress={() => setColorPickerOpen(false)} />
+        <View style={avatarStyles.sheet}>
+          <View style={[avatarStyles.sheetHeader, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Text style={[avatarStyles.sheetTitle, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "اختر لون الصورة الرمزية" : "Choose Avatar Color"}
+            </Text>
+            <TouchableOpacity onPress={() => setColorPickerOpen(false)}>
+              <Feather name="x" size={22} color={Colors.grayDark} />
+            </TouchableOpacity>
+          </View>
+          <View style={avatarStyles.colorGrid}>
+            {AVATAR_COLORS.map((color) => (
+              <TouchableOpacity
+                key={color}
+                style={[
+                  avatarStyles.colorSwatch,
+                  { backgroundColor: color },
+                  currentAvatarColor === color && avatarStyles.colorSwatchSelected,
+                ]}
+                onPress={() => handleSelectColor(color)}
+                disabled={savingColor}
+                activeOpacity={0.85}
+              >
+                {currentAvatarColor === color && (
+                  <Feather name="check" size={18} color={Colors.white} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+          {savingColor && (
+            <View style={avatarStyles.savingRow}>
+              <ActivityIndicator size="small" color={Colors.primaryOrange} />
+              <Text style={avatarStyles.savingText}>{rtl ? "جاري الحفظ…" : "Saving…"}</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -553,4 +860,74 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   signOutText: { fontSize: 15, fontWeight: "700", color: "#ef4444" },
+});
+
+const avatarStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: Spacing.xl, gap: Spacing.lg,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
+  },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14, justifyContent: "center" },
+  colorSwatch: {
+    width: 52, height: 52, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+  },
+  colorSwatchSelected: {
+    borderWidth: 3, borderColor: Colors.grayDark,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 6, elevation: 4,
+  },
+  savingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  savingText: { fontSize: 13, color: Colors.grayMedium },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: Spacing.xl, gap: Spacing.md,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
+  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  title: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  label: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
+  input: {
+    backgroundColor: Colors.white, borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    paddingHorizontal: Spacing.md, height: 48,
+    fontSize: 15, color: Colors.grayDark,
+  },
+  msg: { fontSize: 13, fontWeight: "600" },
+  saveBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingVertical: 14, alignItems: "center",
+  },
+  saveBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
+  toggleRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 14,
+  },
+  toggleLabel: { fontSize: 15, color: Colors.grayDark, flex: 1 },
+  note: { fontSize: 12, color: Colors.grayMedium, lineHeight: 18 },
+  slotRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 13, borderRadius: 12,
+    paddingHorizontal: Spacing.sm,
+  },
+  slotRowSelected: { backgroundColor: Colors.orangeLight },
+  slotLabel: { fontSize: 15, color: Colors.grayDark, fontWeight: "600" },
+  termsText: { fontSize: 14, color: Colors.grayDark, lineHeight: 22, marginBottom: Spacing.lg },
+  linkBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: Spacing.md,
+  },
+  linkBtnText: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
 });

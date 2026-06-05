@@ -6,6 +6,8 @@ import type { SellerListing, ListingFormData } from "../../services/seller/selle
 
 function isoToHHMM(iso: string): string {
   try {
+    // Already HH:MM
+    if (/^\d{2}:\d{2}$/.test(iso)) return iso;
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "";
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -14,10 +16,28 @@ function isoToHHMM(iso: string): string {
   }
 }
 
-function hhmmToIso(hhmm: string): string {
+// Normalize partial time input to HH:MM — e.g. "9" → "09:00", "17" → "17:00", "17:3" → "17:03"
+function normalizeTime(raw: string): string {
+  const clean = raw.replace(/[^\d:]/g, "");
+  if (!clean) return "";
+  if (/^\d{1,2}$/.test(clean)) {
+    return `${clean.padStart(2, "0")}:00`;
+  }
+  const [h, m = "0"] = clean.split(":");
+  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+}
+
+// Convert HH:MM to ISO datetime. If the resulting time is already in the past today,
+// advance to tomorrow so the backend never rejects it as expired.
+function hhmmToSmartIso(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
   const d = new Date();
   d.setHours(h, m, 0, 0);
+  // If this time has already passed today, advance to tomorrow
+  if (d.getTime() <= Date.now()) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(h, m, 0, 0);
+  }
   return d.toISOString();
 }
 
@@ -68,14 +88,27 @@ export function useListingForm(existing?: SellerListing) {
   };
 
   const validate = (): boolean => {
+    // Auto-normalize time fields before validating so partial input ("17") doesn't block
+    const normalizedStart = normalizeTime(form.pickupStart);
+    const normalizedEnd   = normalizeTime(form.pickupEnd);
+    if (normalizedStart) setForm((p) => ({ ...p, pickupStart: normalizedStart }));
+    if (normalizedEnd)   setForm((p) => ({ ...p, pickupEnd:   normalizedEnd }));
+
     const e: FormErrors = {};
-    if (!form.title.trim())                                    e.title = "Required";
-    if (!form.originalPrice || isNaN(Number(form.originalPrice)))  e.originalPrice = "Enter a valid price";
-    if (!form.discountedPrice || isNaN(Number(form.discountedPrice))) e.discountedPrice = "Enter a valid price";
-    if (Number(form.discountedPrice) >= Number(form.originalPrice))   e.discountedPrice = "Must be less than original price";
-    if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) < 1) e.quantity = "Min 1";
-    if (!/^\d{2}:\d{2}$/.test(form.pickupStart)) e.pickupStart = "Use HH:MM (e.g. 17:00)";
-    if (!/^\d{2}:\d{2}$/.test(form.pickupEnd))   e.pickupEnd   = "Use HH:MM (e.g. 20:00)";
+    if (!form.title.trim())
+      e.title = "Required";
+    if (!form.originalPrice || isNaN(Number(form.originalPrice)))
+      e.originalPrice = "Enter a valid price";
+    if (!form.discountedPrice || isNaN(Number(form.discountedPrice)))
+      e.discountedPrice = "Enter a valid price";
+    if (Number(form.discountedPrice) >= Number(form.originalPrice))
+      e.discountedPrice = "Must be less than original price";
+    if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) < 1)
+      e.quantity = "Min 1";
+    if (!normalizedStart)
+      e.pickupStart = "Enter pickup start (e.g. 17:00)";
+    if (!normalizedEnd)
+      e.pickupEnd = "Enter pickup end (e.g. 20:00)";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -86,17 +119,18 @@ export function useListingForm(existing?: SellerListing) {
     setSubmitError("");
     try {
       const payload: ListingFormData = {
-        title:          form.title.trim(),
-        type:           form.type,
-        category:       form.category,
-        originalPrice:  Number(form.originalPrice),
+        title:           form.title.trim(),
+        type:            form.type,
+        category:        form.category,
+        originalPrice:   Number(form.originalPrice),
         discountedPrice: Number(form.discountedPrice),
-        quantity:       Number(form.quantity),
-        pickupStart:    hhmmToIso(form.pickupStart),
-        pickupEnd:      hhmmToIso(form.pickupEnd),
-        freshnessBadge: form.freshnessBadge,
-        allergenNote:   form.allergenNote.trim() || undefined,
-        photoUrl:       form.photoUrl.trim() || undefined,
+        quantity:        Number(form.quantity),
+        // API requires ISO datetime — smart converter advances to tomorrow if time has passed
+        pickupStart:     hhmmToSmartIso(normalizeTime(form.pickupStart)),
+        pickupEnd:       hhmmToSmartIso(normalizeTime(form.pickupEnd)),
+        freshnessBadge:  form.freshnessBadge,
+        allergenNote:    form.allergenNote.trim() || undefined,
+        photoUrl:        form.photoUrl.trim() || undefined,
       };
       if (isEdit && existing?.id) {
         await updateListing(existing.id, payload);

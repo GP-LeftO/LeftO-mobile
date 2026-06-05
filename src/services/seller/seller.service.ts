@@ -59,7 +59,7 @@ export interface ListingFormData {
 
 export interface RegisterSellerParams {
   businessName: string;
-  businessType: "RESTAURANT" | "MARKET" | "BAKERY";
+  businessType: "RESTAURANT" | "MARKET" | "BAKERY" | "GROCERY";
   location: { latitude: number; longitude: number; address?: string };
   description?: string;
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
@@ -98,3 +98,88 @@ export const deleteListing = (id: string): Promise<void> =>
 
 export const markListingSoldOut = (listingId: string) =>
   api.patch(`/api/listings/${listingId}/sold-out`);
+
+// ─── Seller orders ────────────────────────────────────────────────────────────
+
+export interface SellerOrder {
+  id: string;
+  status: "RESERVED" | "COMPLETED" | "CANCELLED" | "DONATED";
+  totalPrice?: number;
+  quantity?: number;
+  createdAt?: string;
+  expiresAt?: string;
+  listing?: { id?: string; title?: string; pickupStart?: string; pickupEnd?: string };
+  buyer?: { id?: string; name?: string; phone?: string };
+}
+
+export const getSellerOrders = (params?: { status?: string; page?: number; limit?: number }): Promise<SellerOrder[]> =>
+  api.get("/api/sellers/me/orders", { params }).then((r) => {
+    const payload = r.data?.data ?? r.data;
+    return (Array.isArray(payload) ? payload : payload?.orders ?? payload?.items ?? payload?.data ?? []) as SellerOrder[];
+  });
+
+// ─── Seller profile update ────────────────────────────────────────────────────
+
+export interface UpdateSellerParams {
+  description?: string;
+  businessType?: "RESTAURANT" | "BAKERY" | "MARKET" | "GROCERY";
+  contactInfo?: {
+    phone?: string;
+    website?: string;
+    socialMedia?: string;
+  };
+  location?: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  operatingHours?: string;
+  logoUrl?: string;
+}
+
+export const updateSellerProfile = (params: UpdateSellerParams) =>
+  api.patch("/api/sellers/me", params).then((r) => r.data?.data ?? r.data);
+
+// ─── Karam program (seller-side) ──────────────────────────────────────────────
+
+export const updateKaramParticipation = (participatesInKaram: boolean) =>
+  api.patch("/api/sellers/me/karam", { participatesInKaram }).then((r) => r.data?.data ?? r.data);
+
+export const sponsorKaramMealAsSeller = () =>
+  api.post("/api/sellers/me/karam/sponsor").then((r) => r.data?.data ?? r.data);
+
+export const claimKaramMeal = () =>
+  api.post("/api/sellers/me/karam/claim").then((r) => r.data?.data ?? r.data);
+
+// ─── Seller donation (create) ─────────────────────────────────────────────────
+
+export interface CreateDonationParams {
+  listingId: string;
+  charityId: string;
+  quantity: number;
+  pickupStart?: string;
+  pickupEnd?: string;
+  purposeNote?: string;
+}
+
+export const createDonation = (params: CreateDonationParams) =>
+  api.post("/api/donations", params).then((r) => r.data?.data ?? r.data);
+
+// ─── Seller donations (history) ───────────────────────────────────────────────
+
+export interface SellerDonation {
+  id: string;
+  status: "PENDING" | "PICKED_UP" | "CONFIRMED" | "CANCELLED";
+  quantity: number;
+  pickupStart?: string;
+  pickupEnd?: string;
+  createdAt?: string;
+  listing?: { id?: string; title?: string };
+  charity?: { id?: string; orgName?: string; name?: string };
+}
+
+export const getMySellerDonations = (page = 1, limit = 20): Promise<SellerDonation[]> =>
+  api.get("/api/donations/me", { params: { page, limit } }).then((r) => {
+    const payload = r.data?.data ?? r.data;
+    return (Array.isArray(payload) ? payload : payload?.donations ?? []) as SellerDonation[];
+  });

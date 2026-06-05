@@ -14,7 +14,6 @@ interface CheckoutScreenProps {
   params: CheckoutParams;
   onBack: () => void;
   onReserved: (order: Order) => void;
-  onDonate: (quantity: number) => void;
 }
 
 function formatTime(iso: string): string {
@@ -43,7 +42,6 @@ export default function CheckoutScreen({
   params,
   onBack,
   onReserved,
-  onDonate,
 }: CheckoutScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
@@ -199,15 +197,6 @@ export default function CheckoutScreen({
               <Text style={styles.reserveBtnText}>{tr.reserve}</Text>
             </>
           )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.donateBtn, loading && styles.btnDisabled]}
-          onPress={() => onDonate(quantity)}
-          activeOpacity={0.85}
-          disabled={loading}
-        >
-          <Feather name="gift" size={18} color={Colors.greenMain} />
-          <Text style={styles.donateBtnText}>{tr.donate}</Text>
         </TouchableOpacity>
       </View>
     </View>

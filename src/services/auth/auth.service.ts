@@ -38,3 +38,9 @@ export const logout = (refreshToken: string) =>
 
 export const refreshToken = (token: string) =>
   api.post<{ data: { accessToken: string } }>("/api/auth/refresh", { refreshToken: token });
+
+export const forgotPassword = (phone: string) =>
+  api.post("/api/auth/forgot-password", { phone });
+
+export const resetPassword = (phone: string, code: string, newPassword: string) =>
+  api.post("/api/auth/reset-password", { phone, code, newPassword });
