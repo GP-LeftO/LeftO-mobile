@@ -54,7 +54,9 @@ interface SellerDashboardScreenProps {
   onLogout?: () => void;
   onCreateListing?: () => void;
   onEditListing?: (listing: SellerListing) => void;
+  onDonateFromListing?: (listing: SellerListing) => void;
   refreshKey?: number;
+  openDonationsTab?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -95,7 +97,9 @@ export default function SellerDashboardScreen({
   onLogout,
   onCreateListing,
   onEditListing,
+  onDonateFromListing,
   refreshKey,
+  openDonationsTab,
 }: SellerDashboardScreenProps) {
   const insets     = useSafeAreaInsets();
   const rtl        = isRTL();

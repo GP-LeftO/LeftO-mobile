@@ -116,7 +116,8 @@ function AppContent() {
   const [donationQuantity,  setDonationQuantity]  = useState(1);
   const [donatedCharityName, setDonatedCharityName] = useState("");
   const [nearMeCoords,      setNearMeCoords]      = useState<NearMeCoords | null>(null);
-  const [listingToEdit,     setListingToEdit]     = useState<SellerListing | undefined>(undefined);
+  const [listingToEdit,       setListingToEdit]       = useState<SellerListing | undefined>(undefined);
+  const [listingToDonate,     setListingToDonate]     = useState<SellerListing | undefined>(undefined);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [resetPhone,        setResetPhone]        = useState("");
   const [qrScanParams,      setQrScanParams]      = useState<{ orderId: string; orderTitle?: string } | null>(null);
@@ -464,6 +465,7 @@ function AppContent() {
           <SellerDashboardScreen
             onLogout={handleLogout}
             refreshKey={dashboardRefreshKey}
+            openDonationsTab={openDonationsTab}
             onCreateListing={() => {
               setListingToEdit(undefined);
               goTo("seller-create-listing");
@@ -471,6 +473,10 @@ function AppContent() {
             onEditListing={(listing) => {
               setListingToEdit(listing);
               goTo("seller-edit-listing");
+            }}
+            onDonateFromListing={(listing) => {
+              setListingToDonate(listing);
+              goTo("seller-donate-surplus");
             }}
           />
         )
@@ -487,6 +493,24 @@ function AppContent() {
             }}
           />
         )
+      }
+
+      {step === "seller-donate-surplus" && listingToDonate &&
+        screen(
+          <SellerDonateSurplusScreen
+            listing={listingToDonate}
+            onBack={goBack}
+            onComplete={(charityName) => {
+              setOpenDonationsTab(true);
+              goBack();
+              setTimeout(() => setOpenDonationsTab(false), 500);
+            }}
+          />
+        )
+      }
+
+      {step === "seller-donations-history" &&
+        screen(<SellerDonationsHistoryScreen onBack={goBack} />)
       }
 
       {step === "charity-dashboard" &&
