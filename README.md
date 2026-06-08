@@ -91,9 +91,12 @@ LeftO-mobile/
     │   │   ├── QRScanScreen.tsx        # QR token entry → POST /api/orders/:id/scan
     │   │   └── ProfileScreen.tsx       # Full profile: stats, badges, activity, avatar color picker
     │   ├── seller/
-    │   │   ├── SellerDashboardScreen.tsx  # 4 tabs: Overview / Listings / Orders / Settings + Donate modal
+    │   │   ├── SellerDashboardScreen.tsx  # 4 tabs: Overview / Listings / Orders / Settings + "Donate" CTA
     │   │   ├── PendingScreen.tsx
-    │   │   └── RejectedScreen.tsx
+    │   │   ├── RejectedScreen.tsx
+    │   │   └── donations/
+    │   │       ├── SellerDonateSurplusScreen.tsx   # Listing + charity picker + pickup window → POST /api/donations
+    │   │       └── SellerDonationsHistoryScreen.tsx # Paginated history: PENDING / PICKED_UP / CONFIRMED badges
     │   └── charity/
     │       ├── CharityDashboardScreen.tsx  # Full: donations list, pickup confirm, proof upload
     │       └── registration/
@@ -134,6 +137,9 @@ LeftO-mobile/
     │   │   ├── useAllergyPreferences.ts
     │   │   └── profile/
     │   │       └── useProfile.ts       # Profile + orders + reviews state + AsyncStorage
+    │   ├── seller/
+    │   │   ├── useListingForm.ts       # Create/edit listing form state + validation
+    │   │   └── useSellerDonations.ts   # Fetches seller donation history (GET /api/donations/me as SELLER)
     │   ├── charity/
     │   │   └── registration/
     │   │       └── useCharityRegistration.ts
@@ -159,7 +165,8 @@ LeftO-mobile/
     │   │   └── registration/
     │   │       └── charityRegistration.service.ts
     │   └── seller/
-    │       ├── seller.service.ts          # + getSellerOrders, updateSellerProfile, createDonation
+    │       ├── seller.service.ts          # + getSellerOrders, updateSellerProfile
+    │       ├── donation.service.ts        # createSellerDonation, fetchSellerDonations
     │       └── document.service.ts
     ├── context/
     │   └── AuthContext.tsx
@@ -183,7 +190,7 @@ LeftO-mobile/
 Custom **state-machine router** — no React Navigation. `App.tsx` maintains a `stepHistory: AppStep[]` stack. Screens receive `onBack` / `onComplete` / `onXxx` callbacks and never import a navigation library.
 
 ```
-splash → language-selection → onboarding → phone-entry ←→ sign-in
+splash → language-selection → onboarding → phone-entry ←→ sign-in → forgot-password → reset-password
   └─► otp → role-selection → basic-info → allergy-prefs (buyer) → role-specific
         ├─► buyer-home
         │     ├─► browse (list + map)
@@ -191,9 +198,11 @@ splash → language-selection → onboarding → phone-entry ←→ sign-in
         │     │                      └─► charity-selector → donation-confirmed
         │     ├─► search → store-details
         │     ├─► favorites
-        │     ├─► orders
+        │     ├─► orders → qr-scan
+        │     ├─► notifications
         │     └─► profile → chatbot
-        ├─► seller-dashboard / pending / rejected
+        ├─► seller-dashboard → seller-donate-surplus
+        │   pending / rejected  └─► seller-donations-history
         └─► charity-info → charity-document → charity-dashboard
 ```
 
@@ -401,12 +410,13 @@ AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants lo
 | POST | `/api/auth/reset-password` | ResetPasswordScreen |
 | GET | `/api/notifications/me` | NotificationsScreen |
 | PATCH | `/api/notifications/me/read-all` | NotificationsScreen |
-| GET | `/api/donations/me` | CharityDashboardScreen |
+| GET | `/api/donations/me` | CharityDashboardScreen (as CHARITY) |
 | PATCH | `/api/donations/:id/pickup` | CharityDashboardScreen |
 | PATCH | `/api/donations/:id/confirm` | CharityDashboardScreen (multipart proof upload) |
 | GET | `/api/sellers/me/orders` | SellerDashboardScreen → Orders tab |
 | PATCH | `/api/sellers/me` | SellerDashboardScreen → Settings tab |
-| POST | `/api/donations` | SellerDashboardScreen (donate surplus), CharitySelectorScreen |
+| POST | `/api/donations` | SellerDonateSurplusScreen |
+| GET | `/api/donations/me` | SellerDonationsHistoryScreen (as SELLER) |
 | GET | `/api/app/config` | community.service → HomeScreen (isRamadanSeason) |
 | POST | `/api/orders/:id/scan` | QRScanScreen |
 | PATCH | `/api/users/me` | profileService → ProfileScreen (avatarColor) |
@@ -555,16 +565,19 @@ Previous: placeholder card. Now: fully functional dashboard.
 
 New `AppStep`: `"notifications"`.
 
-#### Seller Dashboard — Orders, Settings, Donations
-The seller dashboard gained a 4th **Orders** tab and real Settings form, plus a "Donate Surplus" flow from the Overview tab.
+#### Seller Dashboard — Orders, Settings, Donate Surplus
+The seller dashboard gained a 4th **Orders** tab and real Settings form. Donate Surplus is a dedicated screen flow.
 
 | Feature | API | Notes |
 |---------|-----|-------|
 | Orders tab | `GET /api/sellers/me/orders` | Shows status badge, buyer name, listing title, total price |
 | Settings tab (real form) | `PATCH /api/sellers/me` | Business name, description, contact phone, website — pre-populated from profile |
-| Donate Surplus modal | `POST /api/donations` | Select listing + charity + quantity; charities loaded from `GET /api/charities` |
+| Donate Surplus flow | `POST /api/donations` | Dedicated `SellerDonateSurplusScreen` — listing picker, charity picker, quantity, pickup window |
+| Donations history | `GET /api/donations/me` | Dedicated `SellerDonationsHistoryScreen` — status badges: PENDING / PICKED_UP / CONFIRMED |
 
-New service functions in `seller.service.ts`: `getSellerOrders()`, `updateSellerProfile()`, `createDonation()`.
+New service: `seller/donation.service.ts` (`createSellerDonation()`, `fetchSellerDonations()`).
+New hook: `useSellerDonations.ts`.
+New `AppStep` values: `"seller-donate-surplus"`, `"seller-donations-history"`.
 
 #### Community Sections — وجبات معلقة + Ramadan Bags
 
@@ -598,6 +611,20 @@ New service functions in `seller.service.ts`: `getSellerOrders()`, `updateSeller
 - Full 4-star review bottom sheet (Overall / Pickup / Quality / Variety + optional comment)
 - `POST /api/reviews` via `submitReview()` from `profileService.ts`
 - Reviewed order IDs tracked in local state; button disappears after submit
+
+### ✅ Sprint 6 — Seller Donate Surplus
+
+| Feature | Files | Details |
+|---------|-------|---------|
+| Donate Surplus screen | `src/screens/seller/donations/SellerDonateSurplusScreen.tsx` | Listing picker, charity picker, quantity input, pickup window (HH:MM) → `POST /api/donations` |
+| Donations history screen | `src/screens/seller/donations/SellerDonationsHistoryScreen.tsx` | Paginated list with animated status badges — PENDING / PICKED_UP / CONFIRMED. Pull-to-refresh. |
+| Seller donations hook | `src/hooks/seller/useSellerDonations.ts` | Fetches `GET /api/donations/me` as SELLER, auto-load on mount |
+| Seller donation service | `src/services/seller/donation.service.ts` | `createSellerDonation()`, `fetchSellerDonations()` |
+
+New `AppStep` values: `"seller-donate-surplus"`, `"seller-donations-history"`.
+"Donate Surplus" CTA on listing cards in the Listings tab navigates to `SellerDonateSurplusScreen` with the selected listing passed as prop.
+
+---
 
 ### 🔲 Remaining / Next
 

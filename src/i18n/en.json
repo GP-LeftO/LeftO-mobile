@@ -313,27 +313,6 @@
     "error": "Could not load profile. Please try again.",
     "retry": "Retry"
   },
-  "sellerSettings": {
-    "title": "Store Settings",
-    "businessName": "Business Name",
-    "description": "Description",
-    "phone": "Phone",
-    "website": "Website",
-    "socialMedia": "Social Media",
-    "address": "Address",
-    "save": "Save Changes",
-    "saving": "Saving…",
-    "saved": "Changes saved successfully",
-    "error": "Could not save changes. Please try again."
-  },
-  "sellerOrders": {
-    "title": "Orders",
-    "empty": "No orders yet",
-    "emptySub": "Buyer reservations will appear here",
-    "loadMore": "Load more",
-    "buyer": "Buyer",
-    "qty": "Qty"
-  },
   "listingForm": {
     "createTitle": "New Listing",
     "editTitle": "Edit Listing",
@@ -507,6 +486,48 @@
     "invalidPassword": "Password must be at least 6 characters",
     "passwordMismatch": "Passwords do not match",
     "error": "Could not reset password. Please try again."
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "subtitle": "LeftO Management",
+    "tabs": {
+      "sellers": "Sellers",
+      "charities": "Charities",
+      "users": "Users"
+    },
+    "sellers": {
+      "sectionTitle": "Pending Seller Applications",
+      "empty": "No pending seller applications",
+      "approveTitle": "Approve Seller",
+      "rejectTitle": "Reject Seller",
+      "loading": "Could not load pending sellers."
+    },
+    "charities": {
+      "sectionTitle": "Pending Charity Applications",
+      "empty": "No pending charity applications",
+      "approveTitle": "Approve Charity",
+      "rejectTitle": "Reject Charity",
+      "loading": "Could not load pending charities."
+    },
+    "users": {
+      "sectionTitle": "All Users",
+      "empty": "No users found",
+      "loading": "Could not load users.",
+      "detailTitle": "User Detail"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "viewDoc": "View",
+      "retry": "Retry",
+      "signOut": "Sign Out",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
+    },
+    "applied": "Applied",
+    "joined": "Joined",
+    "verifiedSeller": "Verified Seller",
+    "verifiedCharity": "Verified Charity"
   },
   "favorites": {
     "title": "Favorites",

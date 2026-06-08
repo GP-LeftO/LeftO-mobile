@@ -35,6 +35,10 @@ import ForgotPasswordScreen       from "./src/screens/auth/ForgotPasswordScreen"
 import ResetPasswordScreen        from "./src/screens/auth/ResetPasswordScreen";
 import NotificationsScreen        from "./src/screens/shared/NotificationsScreen";
 import QRScanScreen               from "./src/screens/buyer/QRScanScreen";
+import SellerDonateSurplusScreen  from "./src/screens/seller/donations/SellerDonateSurplusScreen";
+import SellerDonationsHistoryScreen from "./src/screens/seller/donations/SellerDonationsHistoryScreen";
+import AdminDashboardScreen       from "./src/screens/admin/AdminDashboardScreen";
+import AdminUserDetailScreen      from "./src/screens/admin/AdminUserDetailScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -79,7 +83,11 @@ type AppStep =
   | "forgot-password"
   | "reset-password"
   | "notifications"
-  | "qr-scan";
+  | "qr-scan"
+  | "seller-donate-surplus"
+  | "seller-donations-history"
+  | "admin-dashboard"
+  | "admin-user-detail";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -121,6 +129,8 @@ function AppContent() {
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [resetPhone,        setResetPhone]        = useState("");
   const [qrScanParams,      setQrScanParams]      = useState<{ orderId: string; orderTitle?: string } | null>(null);
+  const [openDonationsTab,  setOpenDonationsTab]  = useState(false);
+  const [adminUserId,       setAdminUserId]       = useState<string | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -162,6 +172,7 @@ function AppContent() {
     charityStatus: string | null
   ): AppStep => {
     if (role === "BUYER") return "buyer-home";
+    if (role === "ADMIN") return "admin-dashboard";
     const status = role === "SELLER" ? sellerStatus : charityStatus;
     if (status === "APPROVED") return role === "SELLER" ? "seller-dashboard" : "charity-dashboard";
     if (status === "REJECTED") return "rejected";
@@ -515,6 +526,19 @@ function AppContent() {
 
       {step === "charity-dashboard" &&
         screen(<CharityDashboardScreen onLogout={handleLogout} />)
+      }
+
+      {step === "admin-dashboard" &&
+        screen(
+          <AdminDashboardScreen
+            onLogout={handleLogout}
+            onViewUser={(id) => { setAdminUserId(id); goTo("admin-user-detail"); }}
+          />
+        )
+      }
+
+      {step === "admin-user-detail" && adminUserId &&
+        screen(<AdminUserDetailScreen userId={adminUserId} onBack={goBack} />)
       }
 
       {step === "under-review" &&
