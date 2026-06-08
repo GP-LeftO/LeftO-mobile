@@ -1,13 +1,17 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView,
+  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../../theme";
 import { isRTL } from "../../../i18n";
 import { useListingForm } from "../../../hooks/seller/useListingForm";
+import {
+  scoreListingTitle, getPriceSuggestion, suggestAllergens,
+} from "../../../services/seller/listingAI.service";
+import type { TitleScoreResult, PriceSuggestionResult } from "../../../services/seller/listingAI.service";
 import type { SellerListing } from "../../../services/seller/seller.service";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -47,6 +51,73 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   const rtl        = isRTL();
 
   const { form, errors, loading, submitError, isEdit, setField, submit } = useListingForm(existing);
+
+  // ── AI state ─────────────────────────────────────────────────────────────────
+  const [titleScore,       setTitleScore]       = useState<TitleScoreResult | null>(null);
+  const [titleScoring,     setTitleScoring]     = useState(false);
+  const [priceSugg,        setPriceSugg]        = useState<PriceSuggestionResult | null>(null);
+  const [allergenDetecting, setAllergenDetecting] = useState(false);
+
+  // ── AI handlers ───────────────────────────────────────────────────────────────
+
+  const handleTitleBlur = useCallback(async () => {
+    if (form.title.trim().length < 3) return;
+    setTitleScoring(true);
+    try {
+      const res = await scoreListingTitle(form.title.trim(), form.category);
+      setTitleScore(res);
+    } catch {
+      // Non-critical — silently fail
+    } finally {
+      setTitleScoring(false);
+    }
+  }, [form.title, form.category]);
+
+  const handlePriceSuggestion = useCallback(async () => {
+    const orig = Number(form.originalPrice);
+    if (!form.category || !orig || orig <= 0) return;
+    try {
+      const res = await getPriceSuggestion(form.category, orig);
+      setPriceSugg(res);
+    } catch {
+      // Non-critical
+    }
+  }, [form.category, form.originalPrice]);
+
+  const handleAllergenDetect = useCallback(async () => {
+    if (!form.title.trim()) return;
+    setAllergenDetecting(true);
+    try {
+      const res = await suggestAllergens(form.title.trim());
+      if (res.allergens?.length) {
+        setField("allergenNote", res.allergens.join("، "));
+      }
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر اكتشاف مسببات الحساسية" : "Could not detect allergens");
+    } finally {
+      setAllergenDetecting(false);
+    }
+  }, [form.title, rtl, setField]);
+
+  // Trigger price suggestion whenever category or original price changes
+  React.useEffect(() => {
+    const orig = Number(form.originalPrice);
+    if (form.category && orig > 0) {
+      const t = setTimeout(() => handlePriceSuggestion(), 600);
+      return () => clearTimeout(t);
+    }
+  }, [form.category, form.originalPrice]);
+
+  // ── Score bar color ──────────────────────────────────────────────────────────
+  const scoreColor = !titleScore ? Colors.grayMedium
+    : titleScore.score >= 70 ? Colors.greenMain
+    : titleScore.score >= 41 ? Colors.primaryOrange
+    : "#EF4444";
+
+  const scoreLabel = !titleScore ? ""
+    : titleScore.score >= 70 ? (rtl ? "ممتاز" : "Excellent")
+    : titleScore.score >= 41 ? (rtl ? "مقبول" : "Acceptable")
+    : (rtl ? "ضعيف" : "Weak");
 
   const handleSubmit = async () => {
     try {
@@ -90,10 +161,42 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             placeholder={rtl ? "مثال: كيس مفاجأة المساء" : "e.g. Evening Surprise Bag"}
             placeholderTextColor={Colors.grayMedium}
             value={form.title}
-            onChangeText={v => setField("title", v)}
+            onChangeText={v => { setField("title", v); setTitleScore(null); }}
+            onBlur={handleTitleBlur}
             textAlign={rtl ? "right" : "left"}
           />
           {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
+
+          {/* Title scorer */}
+          {titleScoring && (
+            <View style={styles.scoreRow}>
+              <ActivityIndicator size="small" color={Colors.primaryOrange} />
+              <Text style={styles.scoringText}>{rtl ? "جارٍ تقييم العنوان..." : "Scoring title..."}</Text>
+            </View>
+          )}
+          {titleScore && !titleScoring && (
+            <View style={styles.scoreCard}>
+              <View style={[styles.scoreBarRow, rtl && { flexDirection: "row-reverse" }]}>
+                <View style={styles.scoreBarBg}>
+                  <View style={[styles.scoreBarFill, { width: `${titleScore.score}%` as any, backgroundColor: scoreColor }]} />
+                </View>
+                <Text style={[styles.scoreNumber, { color: scoreColor }]}>
+                  {titleScore.score}/100 · {scoreLabel}
+                </Text>
+              </View>
+              <Text style={[styles.scoreFeedback, rtl && { textAlign: "right" }]}>{titleScore.feedback}</Text>
+              {titleScore.suggestedTitle && (
+                <TouchableOpacity
+                  onPress={() => { setField("title", titleScore.suggestedTitle!); setTitleScore(null); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.scoreSuggestion}>
+                    💡 {rtl ? "تطبيق العنوان المقترح" : "Apply suggested title"}: "{titleScore.suggestedTitle}"
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* ── Type ── */}
@@ -181,6 +284,22 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
               {errors.discountedPrice && <Text style={styles.errorText}>{errors.discountedPrice}</Text>}
             </View>
           </View>
+
+          {/* AI price suggestion chip */}
+          {priceSugg && (
+            <TouchableOpacity
+              style={styles.priceSuggChip}
+              onPress={() => setField("discountedPrice", String(priceSugg.suggestedPrice))}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.priceSuggText}>
+                💡 {rtl ? `الأنسب: ${priceSugg.suggestedPrice} ₪ (خصم ${priceSugg.discountPct}%) — اضغط للتطبيق` : `Suggested: ₪${priceSugg.suggestedPrice} (${priceSugg.discountPct}% off) — tap to apply`}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {priceSugg?.reasoning && (
+            <Text style={[styles.priceSuggReason, rtl && { textAlign: "right" }]}>{priceSugg.reasoning}</Text>
+          )}
         </View>
 
         {/* ── Quantity ── */}
@@ -288,6 +407,19 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             textAlign={rtl ? "right" : "left"}
             textAlignVertical="top"
           />
+          <TouchableOpacity
+            style={[styles.allergenBtn, (!form.title.trim() || allergenDetecting) && { opacity: 0.5 }]}
+            onPress={handleAllergenDetect}
+            disabled={!form.title.trim() || allergenDetecting}
+            activeOpacity={0.8}
+          >
+            {allergenDetecting
+              ? <ActivityIndicator size="small" color={Colors.primaryOrange} />
+              : <Text style={styles.allergenBtnText}>
+                  🧪 {rtl ? "اكتشاف مسببات الحساسية تلقائياً" : "Auto-detect allergens"}
+                </Text>
+            }
+          </TouchableOpacity>
         </View>
 
         {/* ── Photo URL ── */}
@@ -525,4 +657,36 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText:     { fontSize: 16, fontWeight: "800", color: Colors.white },
+
+  // ── AI styles ──────────────────────────────────────────────────────────────
+  scoreRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  scoringText: { fontSize: 12, color: Colors.grayMedium },
+
+  scoreCard: {
+    marginTop: 8, backgroundColor: "#F9FAFB", borderRadius: 10,
+    padding: 10, gap: 4,
+  },
+  scoreBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  scoreBarBg: {
+    flex: 1, height: 6, backgroundColor: Colors.grayLight, borderRadius: 3, overflow: "hidden",
+  },
+  scoreBarFill: { height: "100%", borderRadius: 3 },
+  scoreNumber: { fontSize: 12, fontWeight: "700", minWidth: 90 },
+  scoreFeedback: { fontSize: 11, color: Colors.grayMedium },
+  scoreSuggestion: { fontSize: 11, color: Colors.primaryOrange, marginTop: 2 },
+
+  priceSuggChip: {
+    marginTop: 8, backgroundColor: Colors.orangeLight,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+    borderWidth: 1, borderColor: Colors.primaryOrange,
+  },
+  priceSuggText: { fontSize: 12, color: Colors.primaryOrange, fontWeight: "600" },
+  priceSuggReason: { fontSize: 11, color: Colors.grayMedium, marginTop: 4 },
+
+  allergenBtn: {
+    marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, borderWidth: 1, borderColor: Colors.primaryOrange,
+    borderRadius: 10, paddingVertical: 10,
+  },
+  allergenBtnText: { fontSize: 13, color: Colors.primaryOrange, fontWeight: "600" },
 });
