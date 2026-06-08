@@ -321,6 +321,35 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
 
       {!loading && !error && (
         <>
+          {/* Blocked account banner */}
+          {profile?.isBlocked && (
+            <View style={[styles.blockBanner, rtl && styles.rowReverse]}>
+              <Feather name="slash" size={18} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.blockBannerTitle, rtl && styles.rtl]}>
+                  {rtl ? "🚫 حسابك موقوف مؤقتاً" : "🚫 Account Suspended"}
+                </Text>
+                <Text style={[styles.blockBannerBody, rtl && styles.rtl]}>
+                  {rtl
+                    ? `تم إلغاء ${profile.cancellationCount ?? 5} حجوزات. تواصل مع الإدارة.`
+                    : `${profile.cancellationCount ?? 5} cancellations recorded. Contact support.`}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Cancellation warning (3–4 cancellations, not yet blocked) */}
+          {!profile?.isBlocked && (profile?.cancellationCount ?? 0) >= 3 && (
+            <View style={[styles.warnBanner, rtl && styles.rowReverse]}>
+              <Feather name="alert-triangle" size={16} color="#92400e" />
+              <Text style={[styles.warnBannerText, rtl && styles.rtl]}>
+                {rtl
+                  ? `⚠️ تنبيه: ${profile!.cancellationCount} إلغاءات — الحد الأقصى 5 قبل التعليق`
+                  : `⚠️ Warning: ${profile!.cancellationCount} cancellations — max 5 before suspension`}
+              </Text>
+            </View>
+          )}
+
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrap}>
@@ -852,6 +881,24 @@ const styles = StyleSheet.create({
   },
   settingsRowLabel: { flex: 1, fontSize: 14, fontWeight: "500", color: Colors.grayDark },
   settingsDivider:  { height: 1, backgroundColor: Colors.grayLight, marginLeft: 52 },
+
+  // Block / warning banners
+  blockBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "#ef4444",
+    marginHorizontal: Spacing.xl, marginBottom: Spacing.sm,
+    borderRadius: 14, padding: Spacing.md,
+  },
+  blockBannerTitle: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  blockBannerBody:  { fontSize: 12, color: "#fee2e2", marginTop: 2, lineHeight: 17 },
+  warnBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#fef3c7",
+    marginHorizontal: Spacing.xl, marginBottom: Spacing.sm,
+    borderRadius: 12, padding: Spacing.sm,
+    borderWidth: 1, borderColor: "#fcd34d",
+  },
+  warnBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
 
   // Sign out
   signOutBtn: {
