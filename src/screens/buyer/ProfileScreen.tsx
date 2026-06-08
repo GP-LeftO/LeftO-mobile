@@ -37,6 +37,8 @@ const AVATAR_COLORS = [
 interface ProfileScreenProps {
   onLogout?: () => void;
   onOpenChatbot?: () => void;
+  onNavigateToSellerDashboard?: () => void;
+  onNavigateToSellerRegister?: () => void;
 }
 
 // ─── Settings items (collapsed under the Settings button) ─────────────────────
@@ -127,7 +129,7 @@ const toastStyles = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreenProps) {
+export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSellerDashboard, onNavigateToSellerRegister }: ProfileScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl        = isRTL();
@@ -181,7 +183,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
     });
   };
 
-  const { user, logout } = useAuth();
+  const { user, logout, sellerStatus } = useAuth();
   const {
     profile,
     completedOrders,
@@ -498,6 +500,53 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
             );
           })}
         </View>
+      )}
+
+      {/* Dual role — seller access */}
+      {sellerStatus === null && (
+        <TouchableOpacity
+          style={[styles.sellerBtn, rtl && styles.rowReverse]}
+          activeOpacity={0.85}
+          onPress={onNavigateToSellerRegister}
+        >
+          <View style={styles.sellerBtnIcon}>
+            <Feather name="briefcase" size={18} color={Colors.primaryOrange} />
+          </View>
+          <Text style={styles.sellerBtnText}>{rtl ? "أصبح بائعاً" : "Become a Seller"}</Text>
+          <Feather name={rtl ? "chevron-left" : "chevron-right"} size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+      )}
+
+      {sellerStatus === "PENDING" && (
+        <View style={[styles.sellerInfoRow, rtl && styles.rowReverse]}>
+          <Feather name="clock" size={16} color="#f59e0b" />
+          <Text style={[styles.sellerInfoText, { color: "#92400e" }, rtl && styles.rtl]}>
+            {rtl ? "طلب التسجيل كبائع قيد المراجعة" : "Seller application under review"}
+          </Text>
+        </View>
+      )}
+
+      {sellerStatus === "REJECTED" && (
+        <View style={[styles.sellerInfoRow, rtl && styles.rowReverse]}>
+          <Feather name="x-circle" size={16} color="#ef4444" />
+          <Text style={[styles.sellerInfoText, { color: "#ef4444" }, rtl && styles.rtl]}>
+            {rtl ? "تم رفض طلبك — تواصل مع الإدارة" : "Application rejected — contact support"}
+          </Text>
+        </View>
+      )}
+
+      {sellerStatus === "APPROVED" && (
+        <TouchableOpacity
+          style={[styles.sellerBtn, styles.sellerBtnApproved, rtl && styles.rowReverse]}
+          activeOpacity={0.85}
+          onPress={onNavigateToSellerDashboard}
+        >
+          <View style={[styles.sellerBtnIcon, { backgroundColor: Colors.orangeLight }]}>
+            <Feather name="shopping-bag" size={18} color={Colors.primaryOrange} />
+          </View>
+          <Text style={styles.sellerBtnText}>{rtl ? "لوحة التاجر 🏪" : "Seller Dashboard 🏪"}</Text>
+          <Feather name={rtl ? "chevron-left" : "chevron-right"} size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
       )}
 
       {/* Sign out */}
@@ -899,6 +948,30 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#fcd34d",
   },
   warnBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
+
+  // Dual role seller buttons
+  sellerBtn: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: 14,
+  },
+  sellerBtnApproved: {
+    backgroundColor: Colors.orangeLight,
+  },
+  sellerBtnIcon: {
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: Colors.orangeLight,
+    alignItems: "center", justifyContent: "center",
+  },
+  sellerBtnText: { flex: 1, fontSize: 15, fontWeight: "700", color: Colors.primaryOrange },
+  sellerInfoRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 14, paddingHorizontal: Spacing.md, paddingVertical: 12,
+    borderWidth: 1, borderColor: Colors.grayLight,
+  },
+  sellerInfoText: { flex: 1, fontSize: 13, fontWeight: "600" },
 
   // Sign out
   signOutBtn: {
