@@ -9,7 +9,7 @@
  * Handles: loading skeleton, error + retry, null-safe field rendering, RTL layout.
  */
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, ActivityIndicator,
@@ -22,6 +22,8 @@ import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
 import { useSellerReviews } from "../../hooks/buyer/useSellerReviews";
 import ReviewCard from "../../components/buyer/profile/ReviewCard";
+import { getPublicPerformance } from "../../services/seller/listingAI.service";
+import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { FreshnessBadge, ListingType } from "../../types";
 import type { CheckoutParams } from "../../types/order.types";
 
@@ -110,6 +112,13 @@ export default function StoreDetailsScreen({
 
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
   const { reviews, loading: reviewsLoading } = useSellerReviews(sellerId);
+
+  const [performance, setPerformance] = useState<Omit<PerformanceResult, 'stats'> | null>(null);
+  useEffect(() => {
+    if (sellerId) {
+      getPublicPerformance(sellerId).then(setPerformance).catch(() => {});
+    }
+  }, [sellerId]);
 
   // ── Error ────────────────────────────────────────────────────────────────────
   if (error) {
@@ -286,6 +295,11 @@ export default function StoreDetailsScreen({
             </View>
           )}
 
+          {/* AI Seller Performance Score */}
+          {performance && (
+            <PublicPerformanceCard perf={performance} rtl={rtl} />
+          )}
+
           {/* Rating */}
           {displayRating != null && (
             <View style={[styles.card, styles.row, rtl && styles.rowReverse, { gap: 12 }]}>
@@ -413,6 +427,55 @@ function InfoRow({
     </View>
   );
 }
+
+// ─── Public Performance Card ──────────────────────────────────────────────────
+
+function PublicPerformanceCard({ perf, rtl }: { perf: Omit<PerformanceResult, 'stats'>; rtl: boolean }) {
+  const score = perf.performanceScore;
+  const barColor = score >= 70 ? Colors.greenMain : score >= 40 ? Colors.primaryOrange : "#EF4444";
+  const label = score >= 70
+    ? (rtl ? "ممتاز" : "Excellent")
+    : score >= 40 ? (rtl ? "جيد" : "Good") : (rtl ? "ضعيف" : "Weak");
+
+  const insightParts = perf.weeklyInsight
+    ? perf.weeklyInsight.split("|").map(s => s.trim())
+    : [];
+
+  return (
+    <View style={pubPerfStyles.card}>
+      <View style={[pubPerfStyles.row, rtl && { flexDirection: "row-reverse" }]}>
+        <Text style={[pubPerfStyles.title, rtl && { textAlign: "right" }]}>
+          {rtl ? "أداء البائع" : "Seller Performance"}
+        </Text>
+        <Text style={[pubPerfStyles.score, { color: barColor }]}>{score}/100 · {label}</Text>
+      </View>
+      <View style={pubPerfStyles.barBg}>
+        <View style={[pubPerfStyles.barFill, { width: `${score}%` as any, backgroundColor: barColor }]} />
+      </View>
+      {insightParts.map((part, i) => (
+        <View key={i} style={[pubPerfStyles.insightRow, { backgroundColor: part.startsWith("💪") ? "#D1FAE5" : "#FFE8D6" }]}>
+          <Text style={[pubPerfStyles.insightText, rtl && { textAlign: "right" }]}>{part}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const pubPerfStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 16,
+    padding: Spacing.md, marginBottom: Spacing.sm, gap: 8,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  score: { fontSize: 13, fontWeight: "800" },
+  barBg: { height: 7, backgroundColor: Colors.grayLight, borderRadius: 4, overflow: "hidden" },
+  barFill: { height: "100%", borderRadius: 4 },
+  insightRow: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  insightText: { fontSize: 12, color: Colors.grayDark },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
