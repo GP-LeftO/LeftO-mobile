@@ -13,6 +13,7 @@ import {
   Switch,
   Linking,
   ScrollView,
+  Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -199,7 +200,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
     });
   };
 
-  const { user, logout, sellerStatus, accessToken } = useAuth();
+  const { user, logout, sellerStatus } = useAuth();
   const {
     profile,
     completedOrders,
@@ -451,10 +452,11 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
               disabled={certDownloading}
               activeOpacity={0.85}
               onPress={async () => {
-                if (!accessToken) return;
                 setCertDownloading(true);
                 try {
-                  await downloadImpactCertificate(certMonth, accessToken);
+                  const token = await AsyncStorage.getItem("accessToken");
+                  if (!token) return;
+                  await downloadImpactCertificate(certMonth, token);
                 } catch {
                   Alert.alert(rtl ? "خطأ" : "Error", rtl ? "لم نتمكن من تحميل الشهادة" : "Could not download certificate");
                 } finally {
@@ -1118,4 +1120,28 @@ const sheetStyles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   linkBtnText: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
+});
+
+const certStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 20,
+    padding: Spacing.md, gap: Spacing.sm,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { fontSize: 15, fontWeight: "700", color: Colors.grayDark, flex: 1 },
+  monthRow: { gap: 8, paddingVertical: 4 },
+  monthChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.grayLight,
+  },
+  monthChipActive: { backgroundColor: Colors.greenMain },
+  monthChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
+  monthChipTextActive: { color: Colors.white },
+  downloadBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.greenMain, borderRadius: 14, paddingVertical: 13,
+  },
+  downloadBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
 });

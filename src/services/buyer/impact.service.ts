@@ -1,13 +1,15 @@
-import * as FileSystem from "expo-file-system";
+import { downloadAsync } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
 const BASE_URL = "https://lefto-backend-production.up.railway.app";
 
+const DOCS_DIR = "file:///data/user/0/com.lefto.app/files/";
+
 export async function downloadImpactCertificate(month: string, accessToken: string): Promise<void> {
   const url  = `${BASE_URL}/api/users/me/impact-certificate?month=${month}`;
-  const path = (FileSystem.documentDirectory ?? "") + `lefto-impact-${month}.pdf`;
+  const path = `${DOCS_DIR}lefto-impact-${month}.pdf`;
 
-  const result = await FileSystem.downloadAsync(url, path, {
+  const result = await downloadAsync(url, path, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
