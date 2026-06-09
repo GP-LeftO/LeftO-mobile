@@ -1,6 +1,6 @@
 // FavoritesScreen — view only; calls useFavorites, renders listing cards
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 
@@ -62,6 +63,20 @@ export default function FavoritesScreen({
     refetch,
   } = useFavorites();
 
+  const [notifyEnabled, setNotifyEnabled] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@favorites_notify")
+      .then((v) => { if (v !== null) setNotifyEnabled(v === "true"); })
+      .catch(() => {});
+  }, []);
+
+  const toggleNotify = () => {
+    const next = !notifyEnabled;
+    setNotifyEnabled(next);
+    AsyncStorage.setItem("@favorites_notify", String(next)).catch(() => {});
+  };
+
   const isEmpty = !isLoading && !error && favoriteListings.length === 0;
 
   const renderItem = useCallback(
@@ -79,10 +94,17 @@ export default function FavoritesScreen({
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: topPad }]}>
 
       {/* ── Header ── */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }, rtl && styles.rowReverse]}>
         <Text style={[styles.title, { color: colors.text }, rtl && styles.textEnd]}>
           {tr.title}
         </Text>
+        <TouchableOpacity onPress={toggleNotify} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+          <Feather
+            name={notifyEnabled ? "bell" : "bell-off"}
+            size={20}
+            color={notifyEnabled ? Colors.primaryOrange : Colors.grayMedium}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* ── Loading ── */}
@@ -140,10 +162,14 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
   },
+  rowReverse: { flexDirection: "row-reverse" },
   title: { fontSize: 22, fontWeight: "700", lineHeight: 30 },
   textEnd: { textAlign: "right" },
 

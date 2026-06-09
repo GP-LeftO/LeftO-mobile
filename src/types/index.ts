@@ -134,6 +134,8 @@ export interface UserProfile {
   createdAt: string;
   activeOrdersCount: number;
   confirmedDonationsCount: number;
+  isBlocked?: boolean;
+  cancellationCount?: number;
   seller?: {
     id: string;
     businessName: string;

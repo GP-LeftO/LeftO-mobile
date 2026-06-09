@@ -3,6 +3,7 @@ import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { AuthProvider } from "./src/context/AuthContext";
+import { AppConfigProvider } from "./src/context/AppConfigContext";
 import { useAuthContext } from "./src/context/AuthContext";
 
 import SplashScreen           from "./src/screens/onboarding/SplashScreen";
@@ -95,9 +96,11 @@ interface BasicInfo { name: string; email: string; password: string }
 export default function Index() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <AppConfigProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </AppConfigProvider>
     </SafeAreaProvider>
   );
 }

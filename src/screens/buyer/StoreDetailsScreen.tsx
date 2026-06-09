@@ -12,17 +12,21 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform, ActivityIndicator,
+  StyleSheet, Platform, ActivityIndicator, Share, Linking,
+  Modal, TextInput, Alert,
 } from "react-native";
 import LeafletMap from "../../components/shared/LeafletMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useStripe } from "@stripe/stripe-react-native";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
 import { useSellerReviews } from "../../hooks/buyer/useSellerReviews";
+import { useKaram } from "../../hooks/buyer/useKaram";
 import ReviewCard from "../../components/buyer/profile/ReviewCard";
 import { getPublicPerformance } from "../../services/seller/listingAI.service";
+import { reportListing, type ReportReason } from "../../services/buyer/report.service";
 import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { FreshnessBadge, ListingType } from "../../types";
 import type { CheckoutParams } from "../../types/order.types";
@@ -111,9 +115,14 @@ export default function StoreDetailsScreen({
   const tr         = t().storeDetails;
 
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
-  const { reviews, loading: reviewsLoading } = useSellerReviews(sellerId);
+  const { reviews, loading: reviewsLoading, loadingMore, hasMore, loadMore } = useSellerReviews(sellerId);
 
-  const [performance, setPerformance] = useState<Omit<PerformanceResult, 'stats'> | null>(null);
+  const [performance,    setPerformance]    = useState<Omit<PerformanceResult, 'stats'> | null>(null);
+  const [reportOpen,     setReportOpen]     = useState(false);
+  const [reportReason,   setReportReason]   = useState<ReportReason | null>(null);
+  const [reportDetails,  setReportDetails]  = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportDone,     setReportDone]     = useState(false);
   useEffect(() => {
     if (sellerId) {
       getPublicPerformance(sellerId).then(setPerformance).catch(() => {});
@@ -167,6 +176,54 @@ export default function StoreDetailsScreen({
     ? { latitude: sellerLat!, longitude: sellerLng! }
     : PALESTINE_CENTER;
 
+  const REPORT_REASONS: { value: ReportReason; labelAr: string; labelEn: string }[] = [
+    { value: "SPOILED_FOOD",          labelAr: "طعام فاسد",         labelEn: "Spoiled food" },
+    { value: "WRONG_DESCRIPTION",     labelAr: "وصف خاطئ",          labelEn: "Wrong description" },
+    { value: "WRONG_PRICE",           labelAr: "سعر خاطئ",          labelEn: "Wrong price" },
+    { value: "INAPPROPRIATE_CONTENT", labelAr: "محتوى غير لائق",    labelEn: "Inappropriate content" },
+    { value: "OTHER",                 labelAr: "سبب آخر",           labelEn: "Other" },
+  ];
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) return;
+    setReportSubmitting(true);
+    try {
+      await reportListing(listingId, reportReason, reportDetails.trim() || undefined);
+      setReportDone(true);
+      setReportOpen(false);
+      Alert.alert(
+        rtl ? "شكراً" : "Thank you",
+        rtl ? "سيراجع فريقنا البلاغ" : "Our team will review the report"
+      );
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      Alert.alert(
+        rtl ? "خطأ" : "Error",
+        status === 409
+          ? (rtl ? "لقد أبلغت عن هذا العرض مسبقاً" : "You already reported this listing")
+          : (rtl ? "تعذّر إرسال البلاغ" : "Could not submit report")
+      );
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
+  const handleShare = () => {
+    const name = seller?.businessName ?? listing.seller?.businessName ?? "";
+    const msg = rtl
+      ? `🥡 ${name} — ${listing.title}\n💰 ₪${listing.discountedPrice} بدلاً من ₪${listing.originalPrice}\n\nحجز عبر LeftO 🇵🇸`
+      : `🥡 ${name} — ${listing.title}\n💰 ₪${listing.discountedPrice} instead of ₪${listing.originalPrice}\n\nBook via LeftO 🇵🇸`;
+    Share.share({ message: msg }).catch(() => {});
+  };
+
+  const handleDirections = () => {
+    if (!hasCoords) return;
+    const url = Platform.OS === "ios"
+      ? `maps:0,0?q=${sellerLat},${sellerLng}`
+      : `geo:${sellerLat},${sellerLng}?q=${sellerLat},${sellerLng}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
   const buildCheckoutParams = (): CheckoutParams => ({
     listingId,
     listingTitle:        listing.title,
@@ -184,15 +241,21 @@ export default function StoreDetailsScreen({
 
   return (
     <View style={styles.container}>
-      {/* ── Floating back button (over hero) ── */}
-      <View style={[styles.floatingBack, { top: topPadding + 8 }]}>
+      {/* ── Floating back + share + flag buttons (over hero) ── */}
+      <View style={[styles.floatingBar, { top: topPadding + 8 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
-          <Feather
-            name={rtl ? "arrow-right" : "arrow-left"}
-            size={20}
-            color={Colors.grayDark}
-          />
+          <Feather name={rtl ? "arrow-right" : "arrow-left"} size={20} color={Colors.grayDark} />
         </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleShare} activeOpacity={0.7}>
+            <Feather name="share-2" size={18} color={Colors.grayDark} />
+          </TouchableOpacity>
+          {!reportDone && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => setReportOpen(true)} activeOpacity={0.7}>
+              <Feather name="flag" size={18} color={Colors.grayMedium} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -342,6 +405,19 @@ export default function StoreDetailsScreen({
                     rtl={rtl}
                   />
                 ))}
+                {hasMore && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    onPress={loadMore}
+                    disabled={loadingMore}
+                    activeOpacity={0.8}
+                  >
+                    {loadingMore
+                      ? <ActivityIndicator size="small" color={Colors.primaryOrange} />
+                      : <Text style={styles.loadMoreText}>{rtl ? "تحميل المزيد" : "Load more"}</Text>
+                    }
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -363,10 +439,84 @@ export default function StoreDetailsScreen({
             <Text style={[styles.address, rtl && styles.textRight]}>
               {address ?? tr.noAddress}
             </Text>
+
+            {hasCoords && (
+              <TouchableOpacity
+                style={[styles.directionsBtn, rtl && styles.rowReverse]}
+                onPress={handleDirections}
+                activeOpacity={0.8}
+              >
+                <Feather name="map-pin" size={15} color={Colors.primaryOrange} />
+                <Text style={styles.directionsBtnText}>
+                  {rtl ? "احصل على الاتجاهات" : "Get Directions"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
         </View>
       </ScrollView>
+
+      {/* ── Report modal ── */}
+      <Modal visible={reportOpen} transparent animationType="slide" onRequestClose={() => setReportOpen(false)}>
+        <TouchableOpacity style={reportStyles.overlay} activeOpacity={1} onPress={() => setReportOpen(false)} />
+        <View style={reportStyles.sheet}>
+          <View style={[reportStyles.header, rtl && styles.rowReverse]}>
+            <Text style={[reportStyles.title, rtl && styles.textRight]}>
+              {rtl ? "⚠️ الإبلاغ عن هذا العرض" : "⚠️ Report this listing"}
+            </Text>
+            <TouchableOpacity onPress={() => setReportOpen(false)}>
+              <Feather name="x" size={22} color={Colors.grayDark} />
+            </TouchableOpacity>
+          </View>
+
+          {REPORT_REASONS.map((r) => (
+            <TouchableOpacity
+              key={r.value}
+              style={[reportStyles.reasonRow, rtl && styles.rowReverse, reportReason === r.value && reportStyles.reasonSelected]}
+              onPress={() => setReportReason(r.value)}
+              activeOpacity={0.7}
+            >
+              <Feather
+                name={reportReason === r.value ? "check-circle" : "circle"}
+                size={18}
+                color={reportReason === r.value ? Colors.primaryOrange : Colors.grayMedium}
+              />
+              <Text style={[reportStyles.reasonLabel, rtl && styles.textRight, reportReason === r.value && { color: Colors.primaryOrange }]}>
+                {rtl ? r.labelAr : r.labelEn}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          <TextInput
+            style={[reportStyles.input, rtl && styles.textRight]}
+            placeholder={rtl ? "تفاصيل إضافية (اختياري)..." : "Additional details (optional)..."}
+            placeholderTextColor={Colors.grayMedium}
+            value={reportDetails}
+            onChangeText={setReportDetails}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+
+          <View style={[reportStyles.footerRow, rtl && styles.rowReverse]}>
+            <TouchableOpacity style={reportStyles.cancelBtn} onPress={() => setReportOpen(false)} activeOpacity={0.8}>
+              <Text style={reportStyles.cancelBtnText}>{rtl ? "إلغاء" : "Cancel"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[reportStyles.submitBtn, (!reportReason || reportSubmitting) && { opacity: 0.5 }]}
+              onPress={handleSubmitReport}
+              disabled={!reportReason || reportSubmitting}
+              activeOpacity={0.85}
+            >
+              {reportSubmitting
+                ? <ActivityIndicator size="small" color={Colors.white} />
+                : <Text style={reportStyles.submitBtnText}>{rtl ? "إرسال البلاغ" : "Submit report"}</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Sticky CTA buttons ── */}
       <View style={[styles.ctaBar, { paddingBottom: botPadding + 12 }]}>
@@ -461,6 +611,43 @@ function PublicPerformanceCard({ perf, rtl }: { perf: Omit<PerformanceResult, 's
   );
 }
 
+const reportStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: Spacing.xl, gap: Spacing.md,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
+  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  title: { fontSize: 17, fontWeight: "800", color: Colors.grayDark, flex: 1 },
+  reasonRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 11, borderRadius: 12, paddingHorizontal: 4,
+  },
+  reasonSelected: { backgroundColor: Colors.orangeLight, paddingHorizontal: 10 },
+  reasonLabel: { fontSize: 14, color: Colors.grayDark },
+  input: {
+    backgroundColor: Colors.white, borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: 14, color: Colors.grayDark, minHeight: 72,
+  },
+  footerRow: { flexDirection: "row", gap: 10 },
+  cancelBtn: {
+    flex: 1, borderRadius: 14, paddingVertical: 13,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    alignItems: "center",
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: "700", color: Colors.grayMedium },
+  submitBtn: {
+    flex: 2, borderRadius: 14, paddingVertical: 13,
+    backgroundColor: Colors.primaryOrange, alignItems: "center",
+  },
+  submitBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+});
+
 const pubPerfStyles = StyleSheet.create({
   card: {
     backgroundColor: Colors.white, borderRadius: 16,
@@ -497,11 +684,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: "700", color: Colors.grayDark },
 
-  // Floating back button over hero
-  floatingBack: {
+  // Floating back+share bar over hero
+  floatingBar: {
     position: "absolute",
     left: Spacing.xl,
+    right: Spacing.xl,
     zIndex: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
@@ -636,6 +826,14 @@ const styles = StyleSheet.create({
   },
   address: { fontSize: 13, color: Colors.grayMedium, lineHeight: 18 },
 
+  directionsBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    borderRadius: 12, paddingHorizontal: Spacing.md, paddingVertical: 10,
+    marginTop: 8, alignSelf: "flex-start",
+  },
+  directionsBtnText: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
+
   // Error
   errorWrap: {
     flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: Spacing.xl,
@@ -691,4 +889,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   soldOutCtaText: { fontSize: 16, fontWeight: "700", color: Colors.grayMedium },
+
+  loadMoreBtn: {
+    alignItems: "center", paddingVertical: 10,
+    borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    borderRadius: 12, marginTop: 4,
+  },
+  loadMoreText: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
 });
