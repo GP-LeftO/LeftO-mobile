@@ -22,12 +22,18 @@ import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useProfile, ProfileTab } from "../../hooks/buyer/profile/useProfile";
+import { useNotificationSettings } from "../../hooks/buyer/useNotificationSettings";
 import BadgeGrid from "../../components/buyer/profile/BadgeGrid";
 import OrderCard from "../../components/buyer/profile/OrderCard";
 import DonationCard from "../../components/buyer/profile/DonationCard";
 import type { ProfileOrder } from "../../types/profile";
 import { updateUserProfile } from "../../services/buyer/profile/profileService";
 import { downloadImpactCertificate } from "../../services/buyer/impact.service";
+import Co2ImpactScreen from "./impact/Co2ImpactScreen";
+import MoneySavedScreen from "./impact/MoneySavedScreen";
+import DonationsImpactScreen from "./impact/DonationsImpactScreen";
+import CharityDirectoryScreen from "./charity/CharityDirectoryScreen";
+import LeaderboardScreen from "./stats/LeaderboardScreen";
 
 const AVATAR_COLORS = [
   "#DE985A", "#16A34A", "#7C3AED", "#EC4899", "#0EA5E9",
@@ -137,7 +143,10 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
   const rtl        = isRTL();
   const tr         = t();
 
-  const [settingsExpanded,  setSettingsExpanded]  = useState(false);
+  const [settingsExpanded,   setSettingsExpanded]  = useState(false);
+  const [activeImpactModal,  setActiveImpactModal] = useState<"co2" | "money" | "donations" | null>(null);
+  const [charityDirOpen,     setCharityDirOpen]    = useState(false);
+  const [leaderboardOpen,    setLeaderboardOpen]   = useState(false);
 
   // ── Impact certificate ─────────────────────────────────────────────────────
   const PAST_MONTHS = Array.from({ length: 6 }, (_, i) => {
@@ -166,30 +175,19 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalMsg,    setPersonalMsg]    = useState("");
 
-  // ── Notification prefs (local) ─────────────────────────────────────────────
-  const [notifOrders,   setNotifOrders]   = useState(true);
-  const [notifFavs,     setNotifFavs]     = useState(true);
-  const [notifPromos,   setNotifPromos]   = useState(false);
+  // ── Notification prefs ────────────────────────────────────────────────────
+  const { settings: notifSettings, update: updateNotif, toggleDay: toggleReminderDay } = useNotificationSettings();
 
   // ── Preferred pickup times (local) ─────────────────────────────────────────
   const PICKUP_SLOTS = ["08:00 – 10:00", "12:00 – 14:00", "17:00 – 19:00", "20:00 – 22:00"];
   const [preferredSlots, setPreferredSlots] = useState<Set<string>>(new Set());
 
-  // Load notification + pickup prefs from AsyncStorage
+  // Load pickup prefs from AsyncStorage
   useEffect(() => {
-    AsyncStorage.multiGet(["@notif_orders", "@notif_favs", "@notif_promos", "@pickup_slots"])
-      .then(([[, o], [, f], [, p], [, s]]) => {
-        if (o !== null) setNotifOrders(o === "true");
-        if (f !== null) setNotifFavs(f === "true");
-        if (p !== null) setNotifPromos(p === "true");
-        if (s !== null) setPreferredSlots(new Set(JSON.parse(s) as string[]));
-      })
+    AsyncStorage.getItem("@pickup_slots")
+      .then(s => { if (s) setPreferredSlots(new Set(JSON.parse(s) as string[])); })
       .catch(() => {});
   }, []);
-
-  const saveNotifPrefs = async (key: string, value: boolean) => {
-    await AsyncStorage.setItem(key, String(value));
-  };
 
   const togglePickupSlot = async (slot: string) => {
     setPreferredSlots((prev) => {
@@ -278,39 +276,48 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
     : null;
 
   // Impact stats — use actual order counts from fetched data, not profile counters
-  const impactStats = [
+  const impactStats: {
+    icon: React.ComponentProps<typeof Feather>["name"];
+    color: string; bg: string; value: string;
+    labelEn: string; labelAr: string;
+    modalKey: "co2" | "money" | "donations" | null;
+  }[] = [
     {
-      icon: "award"        as const,
+      icon: "award",
       color: Colors.primaryOrange,
       bg: Colors.orangeLight,
       value: profile != null ? String(profile.points) : "—",
       labelEn: "Points",
       labelAr: "النقاط",
+      modalKey: null,
     },
     {
-      icon: "wind"         as const,
+      icon: "wind",
       color: "#10b981",
       bg: "#ecfdf5",
       value: profile != null ? `${profile.totalCo2SavedKg} kg` : "—",
       labelEn: "CO₂ Saved",
       labelAr: "CO₂ موفّر",
+      modalKey: "co2",
     },
     {
-      icon: "heart"        as const,
+      icon: "heart",
       color: "#ec4899",
       bg: "#fdf2f8",
       value: !loading ? String(donations.filter((d) => d.status === "COMPLETED").length) : "—",
       labelEn: "Donations",
       labelAr: "التبرعات",
+      modalKey: "donations",
     },
     {
-      icon: "shopping-bag" as const,
+      icon: "shopping-bag",
       color: "#8b5cf6",
       bg: "#f5f3ff",
       // completedOrders is already filtered to status === "COMPLETED" in useProfile
       value: !loading ? String(completedOrders.length) : "—",
       labelEn: "Orders",
       labelAr: "الطلبات",
+      modalKey: "money",
     },
   ];
 
@@ -407,7 +414,12 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
           {/* Impact grid — 2 per row, horizontal card layout */}
           <View style={styles.impactGrid}>
             {impactStats.map((s) => (
-              <View key={s.labelEn} style={styles.impactCard}>
+              <TouchableOpacity
+                key={s.labelEn}
+                style={styles.impactCard}
+                activeOpacity={s.modalKey ? 0.75 : 1}
+                onPress={() => s.modalKey && setActiveImpactModal(s.modalKey)}
+              >
                 <View style={[styles.impactIconBg, { backgroundColor: s.bg }]}>
                   <Feather name={s.icon} size={20} color={s.color} />
                 </View>
@@ -417,7 +429,10 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
                     {rtl ? s.labelAr : s.labelEn}
                   </Text>
                 </View>
-              </View>
+                {s.modalKey && (
+                  <Feather name="chevron-left" size={14} color={Colors.grayMedium} style={{ position: "absolute", left: 10, bottom: 10 }} />
+                )}
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -569,6 +584,38 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
               </React.Fragment>
             );
           })}
+
+          {/* Charity directory */}
+          <View style={[styles.settingsDivider, rtl && { marginRight: 52, marginLeft: 0 }]} />
+          <TouchableOpacity
+            style={[styles.settingsRow, rtl && styles.rowReverse]}
+            activeOpacity={0.7}
+            onPress={() => setCharityDirOpen(true)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: Colors.greenMain + "18" }]}>
+              <Feather name="heart" size={16} color={Colors.greenMain} />
+            </View>
+            <Text style={[styles.settingsRowLabel, rtl && styles.rtl]}>
+              {rtl ? "دليل الجمعيات المعتمدة" : "Certified Charities"}
+            </Text>
+            <Feather name={rtl ? "chevron-left" : "chevron-right"} size={15} color={Colors.grayLight} />
+          </TouchableOpacity>
+
+          {/* Leaderboard */}
+          <View style={[styles.settingsDivider, rtl && { marginRight: 52, marginLeft: 0 }]} />
+          <TouchableOpacity
+            style={[styles.settingsRow, rtl && styles.rowReverse]}
+            activeOpacity={0.7}
+            onPress={() => setLeaderboardOpen(true)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: Colors.primaryOrange + "18" }]}>
+              <Feather name="award" size={16} color={Colors.primaryOrange} />
+            </View>
+            <Text style={[styles.settingsRowLabel, rtl && styles.rtl]}>
+              {rtl ? "لوحة المتصدرين 🏆" : "Leaderboard 🏆"}
+            </Text>
+            <Feather name={rtl ? "chevron-left" : "chevron-right"} size={15} color={Colors.grayLight} />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -741,21 +788,47 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
             </Text>
             <TouchableOpacity onPress={() => setActiveSheet(null)}><Feather name="x" size={22} color={Colors.grayDark} /></TouchableOpacity>
           </View>
-          {[
-            { key: "orders",  label: rtl ? "تحديثات الطلبات" : "Order updates",            val: notifOrders, set: (v: boolean) => { setNotifOrders(v); saveNotifPrefs("@notif_orders", v); } },
-            { key: "favs",    label: rtl ? "عروض المفضّلة" : "Favorites new listings",      val: notifFavs,   set: (v: boolean) => { setNotifFavs(v);   saveNotifPrefs("@notif_favs", v);   } },
-            { key: "promos",  label: rtl ? "العروض والتخفيضات" : "Promotions & discounts",  val: notifPromos, set: (v: boolean) => { setNotifPromos(v); saveNotifPrefs("@notif_promos", v); } },
-          ].map((row, i) => (
-            <View key={row.key} style={[sheetStyles.toggleRow, rtl && { flexDirection: "row-reverse" as const }, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.grayLight }]}>
-              <Text style={[sheetStyles.toggleLabel, rtl && { textAlign: "right" as const }]}>{row.label}</Text>
-              <Switch
-                value={row.val}
-                onValueChange={row.set}
-                trackColor={{ false: Colors.grayLight, true: Colors.primaryOrange }}
-                thumbColor={Colors.white}
-              />
-            </View>
+
+          {([
+            { key: "orders",      icon: "📦", label: rtl ? "تحديثات الطلبات"          : "Order updates",            val: notifSettings.orders },
+            { key: "favs",        icon: "⭐", label: rtl ? "عروض المفضّلة"             : "Favorites new listings",    val: notifSettings.favs },
+            { key: "newListings", icon: "🔔", label: rtl ? "إشعارات الباقات الجديدة" : "New listing alerts",        val: notifSettings.newListings },
+            { key: "karam",       icon: "🤝", label: rtl ? "تحديثات الكرم"            : "Karam updates",             val: notifSettings.karam },
+            { key: "promos",      icon: "🎁", label: rtl ? "العروض والتخفيضات"        : "Promotions & discounts",    val: notifSettings.promos },
+            { key: "dailyReminder", icon: "📱", label: rtl ? "التذكير اليومي"         : "Daily reminder",            val: notifSettings.dailyReminder },
+          ] as { key: keyof typeof notifSettings; icon: string; label: string; val: boolean }[]).map((row, i) => (
+            <React.Fragment key={row.key}>
+              <View style={[sheetStyles.toggleRow, rtl && { flexDirection: "row-reverse" as const }, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.grayLight }]}>
+                <Text style={[sheetStyles.toggleLabel, rtl && { textAlign: "right" as const }]}>
+                  {row.icon} {row.label}
+                </Text>
+                <Switch
+                  value={row.val as boolean}
+                  onValueChange={(v) => updateNotif({ [row.key]: v })}
+                  trackColor={{ false: Colors.grayLight, true: Colors.primaryOrange }}
+                  thumbColor={Colors.white}
+                />
+              </View>
+              {row.key === "dailyReminder" && notifSettings.dailyReminder && (
+                <View style={[notifStyles.dayRow, rtl && { flexDirection: "row-reverse" as const }]}>
+                  {["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"].map(day => {
+                    const active = notifSettings.reminderDays.includes(day);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[notifStyles.dayChip, active && notifStyles.dayChipActive]}
+                        onPress={() => toggleReminderDay(day)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[notifStyles.dayText, active && notifStyles.dayTextActive]}>{day}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </React.Fragment>
           ))}
+
           <Text style={[sheetStyles.note, rtl && { textAlign: "right" as const }]}>
             {rtl ? "* الإشعارات الفورية تتطلب تفعيل الإشعارات في إعدادات الجهاز." : "* Push notifications require notifications to be enabled in device settings."}
           </Text>
@@ -819,6 +892,36 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
             </TouchableOpacity>
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* ── Impact detail modals ── */}
+      <Modal visible={activeImpactModal === "co2"} animationType="slide" onRequestClose={() => setActiveImpactModal(null)}>
+        <Co2ImpactScreen
+          totalCo2KgSaved={profile?.totalCo2SavedKg ?? 0}
+          onClose={() => setActiveImpactModal(null)}
+        />
+      </Modal>
+      <Modal visible={activeImpactModal === "money"} animationType="slide" onRequestClose={() => setActiveImpactModal(null)}>
+        <MoneySavedScreen
+          orders={completedOrders}
+          onClose={() => setActiveImpactModal(null)}
+        />
+      </Modal>
+      <Modal visible={activeImpactModal === "donations"} animationType="slide" onRequestClose={() => setActiveImpactModal(null)}>
+        <DonationsImpactScreen
+          donationCount={donations.filter(d => d.status === "COMPLETED").length}
+          onClose={() => setActiveImpactModal(null)}
+        />
+      </Modal>
+
+      {/* Charity directory */}
+      <Modal visible={charityDirOpen} animationType="slide" onRequestClose={() => setCharityDirOpen(false)}>
+        <CharityDirectoryScreen onClose={() => setCharityDirOpen(false)} />
+      </Modal>
+
+      {/* Leaderboard */}
+      <Modal visible={leaderboardOpen} animationType="slide" onRequestClose={() => setLeaderboardOpen(false)}>
+        <LeaderboardScreen onClose={() => setLeaderboardOpen(false)} />
       </Modal>
 
       {/* Avatar color picker modal */}
@@ -1144,4 +1247,18 @@ const certStyles = StyleSheet.create({
     backgroundColor: Colors.greenMain, borderRadius: 14, paddingVertical: 13,
   },
   downloadBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
+});
+
+const notifStyles = StyleSheet.create({
+  dayRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6,
+    paddingHorizontal: Spacing.md, paddingBottom: 12,
+  },
+  dayChip: {
+    borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1.5, borderColor: Colors.grayLight, backgroundColor: Colors.white,
+  },
+  dayChipActive: { borderColor: Colors.primaryOrange, backgroundColor: Colors.primaryOrange + "18" },
+  dayText: { fontSize: 12, fontWeight: "600", color: Colors.grayMedium },
+  dayTextActive: { color: Colors.primaryOrange },
 });
