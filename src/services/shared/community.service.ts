@@ -1,4 +1,5 @@
 import api from "./api";
+import type { Listing } from "../../types";
 
 export interface AppConfig {
   isRamadanSeason: boolean;
@@ -47,6 +48,31 @@ export function sponsorKaramMeal(sellerId: string): Promise<KaramBalance["today"
 // GET /api/sellers/:id/karam — public, single seller Karam balance
 export function fetchSellerKaramBalance(sellerId: string): Promise<KaramBalance> {
   return api.get(`/api/sellers/${sellerId}/karam`).then((r) => r.data?.data ?? r.data);
+}
+
+// ─── Monthly winner banner ───────────────────────────────────────────────────
+
+export interface MonthlyWinner {
+  sellerId: string;
+  name: string;
+  rating: number;
+  month: string;
+}
+
+export function fetchMonthlyWinner(): Promise<MonthlyWinner | null> {
+  return api.get("/api/stats/monthly-winner").then((r) => {
+    const payload = r.data?.data ?? r.data;
+    return payload?.winner ?? null;
+  }).catch(() => null);
+}
+
+// ─── Recommended listings (rescue score + badges) ────────────────────────────
+
+export function fetchRecommendedListings(lat?: number, lng?: number): Promise<Listing[]> {
+  return api.get("/api/listings/recommended", { params: { lat, lng } }).then((r) => {
+    const payload = r.data?.data ?? r.data;
+    return (Array.isArray(payload?.listings) ? payload.listings : []) as Listing[];
+  }).catch(() => []);
 }
 
 // ─── Regular listing claim (buyer orders) ────────────────────────────────────

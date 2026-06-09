@@ -12,9 +12,15 @@ import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useAuthContext } from "../../context/AuthContext";
 import api from "../../services/shared/api";
-import { deleteListing } from "../../services/seller/seller.service";
+import {
+  deleteListing, updateKaramParticipation, sponsorKaramMealAsSeller,
+  claimKaramMeal, getMySellerDonations,
+} from "../../services/seller/seller.service";
+import { fetchSellerKaramBalance } from "../../services/shared/community.service";
 import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
-import type { SellerListing } from "../../services/seller/seller.service";
+import type { SellerListing, SellerDonation } from "../../services/seller/seller.service";
+import { getMyPerformance } from "../../services/seller/listingAI.service";
+import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { SellerOrder } from "../../hooks/seller/useSellerOrders";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,6 +80,13 @@ const ORDER_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; co
   CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",   color: Colors.grayMedium    },
 };
 
+const DONATION_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string }> = {
+  PENDING:   { labelEn: "Pending",   labelAr: "قادم",        color: Colors.primaryOrange },
+  PICKED_UP: { labelEn: "Picked Up", labelAr: "تم الاستلام",  color: "#7c3aed"            },
+  CONFIRMED: { labelEn: "Confirmed", labelAr: "مكتمل",        color: Colors.greenMain     },
+  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",         color: Colors.grayMedium    },
+};
+
 function formatPickup(start?: string, end?: string): string {
   if (!start || !end) return "—";
   try {
@@ -129,11 +142,36 @@ export default function SellerDashboardScreen({
   const [settingsSaved,   setSettingsSaved]   = useState(false);
   const [settingsError,   setSettingsError]   = useState("");
 
+  // ── Donations state ───────────────────────────────────────────────────────
+  const [donations,        setDonations]        = useState<SellerDonation[]>([]);
+  const [donationsLoading, setDonationsLoading] = useState(false);
+  const [donationsError,   setDonationsError]   = useState("");
+
+  // ── Charities state (for donation flow) ──────────────────────────────────
+  const [charities,        setCharities]        = useState<{ id: string; name: string }[]>([]);
+  const [charitiesLoading, setCharitiesLoading] = useState(false);
+
+  // ── Karam state ───────────────────────────────────────────────────────────
+  const [karamBalance,  setKaramBalance]  = useState<{ sponsored: number; claimed: number; available: number } | null>(null);
+  const [settingsKaram, setSettingsKaram] = useState(false);
+  const [karamToggling, setKaramToggling] = useState(false);
+  const [karamActing,   setKaramActing]   = useState<"sponsor" | "claim" | null>(null);
+
+  // ── Orders filter state ───────────────────────────────────────────────────
+  const [ordersFilter, setOrdersFilter] = useState<string>("");
+
+  // ── AI Performance state ──────────────────────────────────────────────────
+  const [performance, setPerformance] = useState<PerformanceResult | null>(null);
+
   // ── Orders hook ───────────────────────────────────────────────────────────
   const {
     orders, loading: ordersLoading, refreshing: ordersRefreshing,
     error: ordersError, hasMore: ordersHasMore, fetchOrders,
   } = useSellerOrders();
+
+  const filteredOrders = ordersFilter
+    ? orders.filter((o) => o.status === ordersFilter)
+    : orders;
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
@@ -193,19 +231,6 @@ export default function SellerDashboardScreen({
     }
   }, [profile?.id, user?.id, rtl]);
 
-  const fetchOrders = useCallback(async () => {
-    setOrdersLoading(true);
-    setOrdersError("");
-    try {
-      const data = await getSellerOrders();
-      setOrders(data);
-    } catch {
-      setOrdersError(rtl ? "تعذّر تحميل الطلبات" : "Could not load orders");
-    } finally {
-      setOrdersLoading(false);
-    }
-  }, [rtl]);
-
   const fetchDonations = useCallback(async () => {
     setDonationsLoading(true);
     setDonationsError("");
@@ -238,7 +263,10 @@ export default function SellerDashboardScreen({
 
   // ─── Effects ────────────────────────────────────────────────────────────────
 
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => {
+    fetchProfile();
+    getMyPerformance().then(setPerformance).catch(() => {});
+  }, [fetchProfile]);
 
   useEffect(() => {
     if (profile?.participatesInKaram && profile?.id) {
@@ -271,57 +299,6 @@ export default function SellerDashboardScreen({
   const handleLogout = async () => {
     await logout();
     onLogout?.();
-  };
-
-  const handleSaveSettings = async () => {
-    setSettingsSaving(true);
-    setSettingsMsg("");
-    try {
-      const body: Parameters<typeof updateSellerProfile>[0] = {};
-      if (settingsDesc)    body.description    = settingsDesc;
-      if (settingsBizType) body.businessType   = settingsBizType;
-      if (settingsHours)   body.operatingHours = settingsHours;
-
-      const contactInfo: NonNullable<typeof body.contactInfo> = {};
-      if (settingsPhone)   contactInfo.phone       = settingsPhone;
-      if (settingsWebsite) contactInfo.website     = settingsWebsite;
-      if (settingsSocial)  contactInfo.socialMedia = settingsSocial;
-      if (Object.keys(contactInfo).length > 0) body.contactInfo = contactInfo;
-
-      if (settingsAddress) {
-        body.location = {
-          address:   settingsAddress,
-          latitude:  profile?.location?.latitude  ?? 0,
-          longitude: profile?.location?.longitude ?? 0,
-        };
-      }
-
-      await updateSellerProfile(body);
-      setProfile((prev) =>
-        prev ? {
-          ...prev,
-          description:    settingsDesc || prev.description,
-          businessType:   settingsBizType,
-          operatingHours: settingsHours || prev.operatingHours,
-          contactInfo: {
-            ...prev.contactInfo,
-            phone:       settingsPhone   || prev.contactInfo?.phone,
-            website:     settingsWebsite || prev.contactInfo?.website,
-            socialMedia: settingsSocial  || prev.contactInfo?.socialMedia,
-          },
-          location: settingsAddress ? {
-            ...prev.location,
-            address: settingsAddress,
-          } : prev.location,
-        } : prev
-      );
-      setSettingsMsg(rtl ? "✓ تم حفظ الإعدادات!" : "✓ Settings saved!");
-      setTimeout(() => setSettingsMsg(""), 3000);
-    } catch {
-      setSettingsMsg(rtl ? "تعذّر حفظ الإعدادات. يرجى المحاولة مجدداً." : "Could not save settings. Please try again.");
-    } finally {
-      setSettingsSaving(false);
-    }
   };
 
   const handleKaramToggle = async (value: boolean) => {
@@ -439,11 +416,6 @@ export default function SellerDashboardScreen({
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    onLogout?.();
-  };
-
   // ─── Tabs config ───────────────────────────────────────────────────────────
 
   const TABS: { key: Tab; labelEn: string; labelAr: string; icon: keyof typeof Feather.glyphMap }[] = [
@@ -545,6 +517,11 @@ export default function SellerDashboardScreen({
                     </View>
                   ))}
                 </View>
+                {/* AI Performance Score card */}
+                {performance && (
+                  <PerformanceCard perf={performance} rtl={rtl} />
+                )}
+
                 {profile?.description && (
                   <View style={styles.infoCard}>
                     <Text style={[styles.infoCardTitle, rtl && styles.rtl]}>{rtl ? "عن المتجر" : "About"}</Text>
@@ -996,6 +973,95 @@ function SettingsField({
     </View>
   );
 }
+
+// ─── Performance Card sub-component ──────────────────────────────────────────
+
+function PerformanceCard({ perf, rtl }: { perf: PerformanceResult; rtl: boolean }) {
+  const score = perf.performanceScore;
+  const barColor = score >= 70 ? Colors.greenMain : score >= 40 ? Colors.primaryOrange : "#EF4444";
+  const label = score >= 70
+    ? (rtl ? "ممتاز" : "Excellent")
+    : score >= 40 ? (rtl ? "مقبول" : "Good") : (rtl ? "ضعيف" : "Weak");
+
+  const insightParts = perf.weeklyInsight
+    ? perf.weeklyInsight.split("|").map(s => s.trim())
+    : [];
+
+  return (
+    <View style={perfStyles.card}>
+      {/* Score row */}
+      <View style={[perfStyles.titleRow, rtl && { flexDirection: "row-reverse" }]}>
+        <Text style={[perfStyles.title, rtl && { textAlign: "right" }]}>
+          {rtl ? "أداء متجرك" : "Store Performance"}
+        </Text>
+        <Text style={[perfStyles.scoreNum, { color: barColor }]}>{score}/100 · {label}</Text>
+      </View>
+
+      {/* Progress bar */}
+      <View style={perfStyles.barBg}>
+        <View style={[perfStyles.barFill, { width: `${score}%` as any, backgroundColor: barColor }]} />
+      </View>
+
+      {/* Breakdown pills */}
+      {perf.stats && (
+        <View style={[perfStyles.pillRow, rtl && { flexDirection: "row-reverse" }]}>
+          <StatPill label={rtl ? "معدل البيع" : "Sell-through"} value={`${perf.stats.sellThroughRate}%`} />
+          <StatPill label={rtl ? "التقييم" : "Rating"} value={perf.stats.avgRating > 0 ? `⭐ ${perf.stats.avgRating.toFixed(1)}` : "—"} />
+          <StatPill label={rtl ? "أسبوعياً" : "Weekly"} value={`${perf.stats.listingsPerWeek.toFixed(1)}`} />
+        </View>
+      )}
+
+      {/* Weekly sentiment insight */}
+      {insightParts.length > 0 && (
+        <View style={perfStyles.insightBox}>
+          <Text style={[perfStyles.insightTitle, rtl && { textAlign: "right" }]}>
+            {rtl ? "ملخص آراء العملاء" : "Customer Insight"}
+          </Text>
+          {insightParts.map((part, i) => (
+            <View key={i} style={[perfStyles.insightRow, { backgroundColor: part.startsWith("💪") ? "#D1FAE5" : "#FFE8D6" }, rtl && { flexDirection: "row-reverse" }]}>
+              <Text style={[perfStyles.insightText, rtl && { textAlign: "right" }]}>{part}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={perfStyles.pill}>
+      <Text style={perfStyles.pillVal}>{value}</Text>
+      <Text style={perfStyles.pillLabel}>{label}</Text>
+    </View>
+  );
+}
+
+const perfStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 16,
+    padding: Spacing.md, marginBottom: Spacing.sm,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    gap: 10,
+  },
+  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  scoreNum: { fontSize: 13, fontWeight: "800" },
+  barBg: { height: 7, backgroundColor: Colors.grayLight, borderRadius: 4, overflow: "hidden" },
+  barFill: { height: "100%", borderRadius: 4 },
+  pillRow: { flexDirection: "row", gap: 8 },
+  pill: {
+    flex: 1, backgroundColor: "#F9FAFB", borderRadius: 10,
+    alignItems: "center", paddingVertical: 8,
+  },
+  pillVal: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  pillLabel: { fontSize: 10, color: Colors.grayMedium, marginTop: 2 },
+  insightBox: { gap: 6 },
+  insightTitle: { fontSize: 12, fontWeight: "600", color: Colors.grayMedium },
+  insightRow: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  insightText: { fontSize: 12, fontWeight: "500", color: Colors.grayDark },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

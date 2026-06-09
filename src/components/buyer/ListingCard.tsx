@@ -7,17 +7,17 @@
  * Also exports SkeletonCard for loading placeholder states.
  */
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
 } from "react-native";
 
-const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2; // 16 left + 16 right + 16 gap
+const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2;
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t } from "../../i18n";
 import { useFavoritesContext } from "../../context/shared/FavoritesContext";
-import type { Listing, FreshnessBadge, ListingType } from "../../types";
+import type { Listing, FreshnessBadge, ListingType, RescueBadge } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +77,37 @@ function hasAllergenOverlap(allergenNote: string | undefined, prefs: string[]): 
   return prefs.some((p) => note.includes(p.toLowerCase()));
 }
 
+function computeCurrentPrice(listing: Listing): number {
+  if (!listing.isPriceDecaying || !listing.floorPrice || !listing.expiryDate) {
+    return listing.currentPrice ?? listing.discountedPrice;
+  }
+  const now   = Date.now();
+  const start = listing.createdAt ? new Date(listing.createdAt).getTime() : now;
+  const end   = new Date(listing.expiryDate).getTime();
+  if (now >= end) return listing.floorPrice;
+  if (now <= start) return listing.discountedPrice;
+  const progress = (now - start) / (end - start);
+  const price = listing.discountedPrice - progress * (listing.discountedPrice - listing.floorPrice);
+  return Math.max(Math.round(price * 100) / 100, listing.floorPrice);
+}
+
+function timeUntilExpiry(expiryDate: string): string {
+  const diff = new Date(expiryDate).getTime() - Date.now();
+  if (diff <= 0) return "";
+  const hours = Math.floor(diff / 3_600_000);
+  const mins  = Math.floor((diff % 3_600_000) / 60_000);
+  if (hours > 0) return `${hours}س ${mins}د`;
+  return `${mins}د`;
+}
+
+function rescueBadgeStyle(badge: RescueBadge): { bg: string; label: string } {
+  switch (badge) {
+    case "critical_rescue": return { bg: "#EF4444", label: "🔴 آخر فرصة" };
+    case "expiring_soon":   return { bg: "#DE985A", label: "🟠 ينتهي قريباً" };
+    default:                return { bg: "#16A34A", label: "✅ صفقة جيدة" };
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ListingCard({
@@ -91,6 +122,16 @@ export default function ListingCard({
   const tr = t().home;
   const isSoldOut = listing.status === "SOLD_OUT";
 
+  // Tick every 60s so decaying prices re-render without a network call
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!listing.isPriceDecaying) return;
+    const id = setInterval(() => setTick(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [listing.isPriceDecaying]);
+
+  const livePrice = computeCurrentPrice(listing);
+
   const pickupWindow =
     listing.pickupStart && listing.pickupEnd
       ? `${formatTime(listing.pickupStart)} – ${formatTime(listing.pickupEnd)}`
@@ -104,6 +145,9 @@ export default function ListingCard({
       : Colors.grayMedium;
 
   const showAllergenWarning = hasAllergenOverlap(listing.allergenNote, userAllergyPreferences);
+  const expiryCountdown = listing.isPriceDecaying && listing.expiryDate
+    ? timeUntilExpiry(listing.expiryDate) : null;
+  const rescueBadgeInfo = listing.rescueBadge ? rescueBadgeStyle(listing.rescueBadge) : null;
 
   return (
     <TouchableOpacity
@@ -124,6 +168,13 @@ export default function ListingCard({
         {listing.freshnessBadge && (
           <View style={[styles.freshnessBadge, { backgroundColor: freshnessBadgeColor(listing.freshnessBadge) }]}>
             <Text style={styles.freshnessBadgeText}>{freshnessLabel(listing.freshnessBadge, rtl)}</Text>
+          </View>
+        )}
+
+        {/* Rescue badge (top-right on image) */}
+        {!isSoldOut && rescueBadgeInfo && (
+          <View style={[styles.rescueBadge, { backgroundColor: rescueBadgeInfo.bg }]}>
+            <Text style={styles.rescueBadgeText}>{rescueBadgeInfo.label}</Text>
           </View>
         )}
 
@@ -191,11 +242,24 @@ export default function ListingCard({
           </View>
         )}
 
+        {/* Decay label + countdown */}
+        {listing.isPriceDecaying && (
+          <View style={[styles.row, rtl && styles.rowReverse, { gap: 4, marginTop: 2 }]}>
+            <Text style={styles.decayLabel}>🔥 ينخفض تلقائياً</Text>
+            {expiryCountdown ? (
+              <Text style={styles.countdownText}>⏰ {expiryCountdown}</Text>
+            ) : null}
+          </View>
+        )}
+
         {/* Price row + quantity */}
         <View style={[styles.row, rtl && styles.rowReverse, styles.priceRow]}>
           <View style={[styles.row, { gap: 6, alignItems: "baseline" }]}>
-            <Text style={styles.discountedPrice}>₪{listing.discountedPrice}</Text>
+            <Text style={styles.discountedPrice}>₪{livePrice}</Text>
             <Text style={styles.originalPrice}>₪{listing.originalPrice}</Text>
+            {listing.isPriceDecaying && listing.floorPrice != null && (
+              <Text style={styles.floorPriceText}>أدنى ₪{listing.floorPrice}</Text>
+            )}
           </View>
 
           <View style={[styles.row, { gap: 4 }]}>
@@ -273,6 +337,16 @@ const styles = StyleSheet.create({
   },
   freshnessBadgeText: { fontSize: 10, fontWeight: "700", color: Colors.white },
 
+  rescueBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  rescueBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.white },
+
   soldOutOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -338,6 +412,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: "#ef4444",
+  },
+
+  decayLabel: {
+    fontSize: 10,
+    color: Colors.primaryOrange,
+    fontWeight: "600",
+  },
+  countdownText: {
+    fontSize: 10,
+    color: "#EF4444",
+    fontWeight: "600",
+  },
+  floorPriceText: {
+    fontSize: 10,
+    color: Colors.grayMedium,
   },
 
   skeletonLine: {

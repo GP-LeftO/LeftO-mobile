@@ -32,8 +32,9 @@ import type { Listing, StoreDetailsParams } from "../../types";
 import type { NearMeCoords } from "../../types/nearMe";
 import {
   fetchAppConfig, fetchKaramSellers, sponsorKaramMeal,
+  fetchMonthlyWinner, fetchRecommendedListings,
 } from "../../services/shared/community.service";
-import type { KaramSeller } from "../../services/shared/community.service";
+import type { KaramSeller, MonthlyWinner } from "../../services/shared/community.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,13 +64,24 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
   const [karamSellers,    setKaramSellers]    = useState<KaramSeller[]>([]);
   const [communityLoading, setCommunityLoading] = useState(true);
   const [sponsoringId,    setSponsoringId]    = useState<string | null>(null);
+  const [monthlyWinner,   setMonthlyWinner]   = useState<MonthlyWinner | null>(null);
+  const [rescueListings,  setRescueListings]  = useState<Listing[]>([]);
 
   const loadCommunity = useCallback(async () => {
     setCommunityLoading(true);
     try {
-      const [config, karam] = await Promise.allSettled([fetchAppConfig(), fetchKaramSellers()]);
+      const [config, karam, winner, rescue] = await Promise.allSettled([
+        fetchAppConfig(),
+        fetchKaramSellers(),
+        fetchMonthlyWinner(),
+        fetchRecommendedListings(),
+      ]);
       if (config.status === "fulfilled") setIsRamadanSeason(config.value.isRamadanSeason);
-      if (karam.status === "fulfilled")  setKaramSellers(karam.value);
+      if (karam.status  === "fulfilled") setKaramSellers(karam.value);
+      if (winner.status === "fulfilled") setMonthlyWinner(winner.value);
+      if (rescue.status === "fulfilled") {
+        setRescueListings(rescue.value.filter((l) => l.rescueBadge != null).slice(0, 6));
+      }
     } finally {
       setCommunityLoading(false);
     }
@@ -184,6 +196,14 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
           <NearMeEntryButton onPress={onOpenNearMe} />
         )}
 
+        {/* Monthly winner banner */}
+        {monthlyWinner && (
+          <WinnerBanner winner={monthlyWinner} rtl={rtl} onPress={() => {
+            // Navigate to seller store — pass through onListingPress with sellerId
+            // For now show an alert; full deep-link requires sellerId → listing lookup
+          }} />
+        )}
+
         {/* Impact strip */}
         <View style={styles.impactStrip}>
           <ImpactStat
@@ -216,6 +236,23 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
           </View>
         ) : (
           <>
+            {/* ── Section 0: Rescue Now ── (listings with urgency badges) */}
+            {rescueListings.length > 0 && (
+              <>
+                <SectionHeader title={rtl ? "⚡ أنقذها الآن" : "⚡ Rescue Now"} rtl={rtl} seeAllLabel={tr.seeAll} />
+                <FlatList
+                  data={rescueListings}
+                  renderItem={renderCard}
+                  keyExtractor={(item) => `rescue-${item.id}`}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalList}
+                  ItemSeparatorComponent={() => <View style={styles.cardGap} />}
+                  scrollEventThrottle={16}
+                />
+              </>
+            )}
+
             {/* ── Section 1: Surprise Bags ── */}
             <SectionHeader
               title={tr.surpriseBags}
@@ -328,6 +365,28 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+function formatMonth(ym: string): string {
+  const [year, m] = ym.split("-");
+  return `${ARABIC_MONTHS[parseInt(m, 10) - 1]} ${year}`;
+}
+
+function WinnerBanner({ winner, rtl, onPress }: { winner: MonthlyWinner; rtl: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.winnerBanner} activeOpacity={0.85} onPress={onPress}>
+      <View style={[{ flex: 1 }]}>
+        <Text style={[styles.winnerBannerTitle, rtl && { textAlign: "right" }]}>
+          🏆 {rtl ? `بائع ${formatMonth(winner.month)}` : `Seller of ${formatMonth(winner.month)}`}
+        </Text>
+        <Text style={[styles.winnerBannerName, rtl && { textAlign: "right" }]} numberOfLines={1}>
+          {winner.name}  ⭐ {winner.rating.toFixed(1)}
+        </Text>
+      </View>
+      <Feather name="chevron-left" size={18} color="#fff" style={rtl ? { transform: [{ rotate: "180deg" }] } : undefined} />
+    </TouchableOpacity>
+  );
+}
 
 function ImpactStat({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
@@ -531,6 +590,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 7,
   },
   postMealBtnText: { fontSize: 12, fontWeight: "700", color: Colors.white },
+
+  // Monthly winner banner
+  winnerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#D97706",
+    borderRadius: 14,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
+  winnerBannerTitle: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
+  winnerBannerName:  { fontSize: 15, fontWeight: "800", color: "#fff" },
 
   // Ramadan banner
   ramadanBanner: {

@@ -45,12 +45,15 @@ export interface ListingSeller {
   rating?: number;
   verifiedBadge?: boolean;
   totalDonations?: number;
+  participatesInKaram?: boolean;
   location?: {
     address?: string;
     latitude?: number;
     longitude?: number;
   };
 }
+
+export type RescueBadge = "critical_rescue" | "expiring_soon" | "good_deal";
 
 export interface Listing {
   id: string;
@@ -62,6 +65,11 @@ export interface Listing {
   freshnessBadge?: FreshnessBadge;
   originalPrice: number;
   discountedPrice: number;
+  currentPrice: number;
+  isPriceDecaying: boolean;
+  floorPrice?: number | null;
+  expiryDate?: string | null;
+  createdAt?: string;
   quantity: number;
   pickupStart?: string;
   pickupEnd?: string;
@@ -70,6 +78,8 @@ export interface Listing {
   estimatedCo2SavedG?: number;
   qrCodeUrl?: string;
   distanceKm?: number;
+  rescueScore?: number;
+  rescueBadge?: RescueBadge | null;
   seller: ListingSeller;
 }
 
