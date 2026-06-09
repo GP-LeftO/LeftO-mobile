@@ -13,6 +13,7 @@ import {
   Switch,
   Linking,
   ScrollView,
+  Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +27,7 @@ import OrderCard from "../../components/buyer/profile/OrderCard";
 import DonationCard from "../../components/buyer/profile/DonationCard";
 import type { ProfileOrder } from "../../types/profile";
 import { updateUserProfile } from "../../services/buyer/profile/profileService";
+import { downloadImpactCertificate } from "../../services/buyer/impact.service";
 
 const AVATAR_COLORS = [
   "#DE985A", "#16A34A", "#7C3AED", "#EC4899", "#0EA5E9",
@@ -37,6 +39,8 @@ const AVATAR_COLORS = [
 interface ProfileScreenProps {
   onLogout?: () => void;
   onOpenChatbot?: () => void;
+  onNavigateToSellerDashboard?: () => void;
+  onNavigateToSellerRegister?: () => void;
 }
 
 // ─── Settings items (collapsed under the Settings button) ─────────────────────
@@ -127,13 +131,28 @@ const toastStyles = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreenProps) {
+export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSellerDashboard, onNavigateToSellerRegister }: ProfileScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
   const rtl        = isRTL();
   const tr         = t();
 
   const [settingsExpanded,  setSettingsExpanded]  = useState(false);
+
+  // ── Impact certificate ─────────────────────────────────────────────────────
+  const PAST_MONTHS = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const formatMonth = (ym: string) => {
+    const [year, m] = ym.split("-");
+    return rtl ? `${ARABIC_MONTHS[parseInt(m, 10) - 1]} ${year}` : `${new Date(ym + "-01").toLocaleString("en-US", { month: "long" })} ${year}`;
+  };
+  const [certMonth,       setCertMonth]       = useState(PAST_MONTHS[0]);
+  const [certDownloading, setCertDownloading] = useState(false);
   const [colorPickerOpen,   setColorPickerOpen]   = useState(false);
   const [avatarColor,       setAvatarColor]       = useState<string | null>(null);
   const [savingColor,       setSavingColor]        = useState(false);
@@ -181,7 +200,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
     });
   };
 
-  const { user, logout } = useAuth();
+  const { user, logout, sellerStatus } = useAuth();
   const {
     profile,
     completedOrders,
@@ -321,6 +340,35 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
 
       {!loading && !error && (
         <>
+          {/* Blocked account banner */}
+          {profile?.isBlocked && (
+            <View style={[styles.blockBanner, rtl && styles.rowReverse]}>
+              <Feather name="slash" size={18} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.blockBannerTitle, rtl && styles.rtl]}>
+                  {rtl ? "🚫 حسابك موقوف مؤقتاً" : "🚫 Account Suspended"}
+                </Text>
+                <Text style={[styles.blockBannerBody, rtl && styles.rtl]}>
+                  {rtl
+                    ? `تم إلغاء ${profile.cancellationCount ?? 5} حجوزات. تواصل مع الإدارة.`
+                    : `${profile.cancellationCount ?? 5} cancellations recorded. Contact support.`}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Cancellation warning (3–4 cancellations, not yet blocked) */}
+          {!profile?.isBlocked && (profile?.cancellationCount ?? 0) >= 3 && (
+            <View style={[styles.warnBanner, rtl && styles.rowReverse]}>
+              <Feather name="alert-triangle" size={16} color="#92400e" />
+              <Text style={[styles.warnBannerText, rtl && styles.rtl]}>
+                {rtl
+                  ? `⚠️ تنبيه: ${profile!.cancellationCount} إلغاءات — الحد الأقصى 5 قبل التعليق`
+                  : `⚠️ Warning: ${profile!.cancellationCount} cancellations — max 5 before suspension`}
+              </Text>
+            </View>
+          )}
+
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrap}>
@@ -371,6 +419,59 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
                 </View>
               </View>
             ))}
+          </View>
+
+          {/* Impact certificate download */}
+          <View style={certStyles.card}>
+            <View style={[certStyles.headerRow, rtl && styles.rowReverse]}>
+              <Feather name="file-text" size={18} color={Colors.greenMain} />
+              <Text style={[certStyles.title, rtl && styles.rtl]}>
+                {rtl ? "📄 شهادة الأثر البيئي" : "📄 Environmental Impact Certificate"}
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={certStyles.monthRow}
+            >
+              {PAST_MONTHS.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[certStyles.monthChip, certMonth === m && certStyles.monthChipActive]}
+                  onPress={() => setCertMonth(m)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[certStyles.monthChipText, certMonth === m && certStyles.monthChipTextActive]}>
+                    {formatMonth(m)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={[certStyles.downloadBtn, certDownloading && { opacity: 0.6 }]}
+              disabled={certDownloading}
+              activeOpacity={0.85}
+              onPress={async () => {
+                setCertDownloading(true);
+                try {
+                  const token = await AsyncStorage.getItem("accessToken");
+                  if (!token) return;
+                  await downloadImpactCertificate(certMonth, token);
+                } catch {
+                  Alert.alert(rtl ? "خطأ" : "Error", rtl ? "لم نتمكن من تحميل الشهادة" : "Could not download certificate");
+                } finally {
+                  setCertDownloading(false);
+                }
+              }}
+            >
+              {certDownloading
+                ? <ActivityIndicator size="small" color={Colors.white} />
+                : <>
+                    <Feather name="download" size={16} color={Colors.white} />
+                    <Text style={certStyles.downloadBtnText}>{rtl ? "تحميل ومشاركة" : "Download & Share"}</Text>
+                  </>
+              }
+            </TouchableOpacity>
           </View>
 
           {/* Badges */}
@@ -469,6 +570,53 @@ export default function ProfileScreen({ onLogout, onOpenChatbot }: ProfileScreen
             );
           })}
         </View>
+      )}
+
+      {/* Dual role — seller access */}
+      {sellerStatus === null && (
+        <TouchableOpacity
+          style={[styles.sellerBtn, rtl && styles.rowReverse]}
+          activeOpacity={0.85}
+          onPress={onNavigateToSellerRegister}
+        >
+          <View style={styles.sellerBtnIcon}>
+            <Feather name="briefcase" size={18} color={Colors.primaryOrange} />
+          </View>
+          <Text style={styles.sellerBtnText}>{rtl ? "أصبح بائعاً" : "Become a Seller"}</Text>
+          <Feather name={rtl ? "chevron-left" : "chevron-right"} size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
+      )}
+
+      {sellerStatus === "PENDING" && (
+        <View style={[styles.sellerInfoRow, rtl && styles.rowReverse]}>
+          <Feather name="clock" size={16} color="#f59e0b" />
+          <Text style={[styles.sellerInfoText, { color: "#92400e" }, rtl && styles.rtl]}>
+            {rtl ? "طلب التسجيل كبائع قيد المراجعة" : "Seller application under review"}
+          </Text>
+        </View>
+      )}
+
+      {sellerStatus === "REJECTED" && (
+        <View style={[styles.sellerInfoRow, rtl && styles.rowReverse]}>
+          <Feather name="x-circle" size={16} color="#ef4444" />
+          <Text style={[styles.sellerInfoText, { color: "#ef4444" }, rtl && styles.rtl]}>
+            {rtl ? "تم رفض طلبك — تواصل مع الإدارة" : "Application rejected — contact support"}
+          </Text>
+        </View>
+      )}
+
+      {sellerStatus === "APPROVED" && (
+        <TouchableOpacity
+          style={[styles.sellerBtn, styles.sellerBtnApproved, rtl && styles.rowReverse]}
+          activeOpacity={0.85}
+          onPress={onNavigateToSellerDashboard}
+        >
+          <View style={[styles.sellerBtnIcon, { backgroundColor: Colors.orangeLight }]}>
+            <Feather name="shopping-bag" size={18} color={Colors.primaryOrange} />
+          </View>
+          <Text style={styles.sellerBtnText}>{rtl ? "لوحة التاجر 🏪" : "Seller Dashboard 🏪"}</Text>
+          <Feather name={rtl ? "chevron-left" : "chevron-right"} size={16} color={Colors.primaryOrange} />
+        </TouchableOpacity>
       )}
 
       {/* Sign out */}
@@ -853,6 +1001,48 @@ const styles = StyleSheet.create({
   settingsRowLabel: { flex: 1, fontSize: 14, fontWeight: "500", color: Colors.grayDark },
   settingsDivider:  { height: 1, backgroundColor: Colors.grayLight, marginLeft: 52 },
 
+  // Block / warning banners
+  blockBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "#ef4444",
+    marginHorizontal: Spacing.xl, marginBottom: Spacing.sm,
+    borderRadius: 14, padding: Spacing.md,
+  },
+  blockBannerTitle: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  blockBannerBody:  { fontSize: 12, color: "#fee2e2", marginTop: 2, lineHeight: 17 },
+  warnBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#fef3c7",
+    marginHorizontal: Spacing.xl, marginBottom: Spacing.sm,
+    borderRadius: 12, padding: Spacing.sm,
+    borderWidth: 1, borderColor: "#fcd34d",
+  },
+  warnBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
+
+  // Dual role seller buttons
+  sellerBtn: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: 14,
+  },
+  sellerBtnApproved: {
+    backgroundColor: Colors.orangeLight,
+  },
+  sellerBtnIcon: {
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: Colors.orangeLight,
+    alignItems: "center", justifyContent: "center",
+  },
+  sellerBtnText: { flex: 1, fontSize: 15, fontWeight: "700", color: Colors.primaryOrange },
+  sellerInfoRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 14, paddingHorizontal: Spacing.md, paddingVertical: 12,
+    borderWidth: 1, borderColor: Colors.grayLight,
+  },
+  sellerInfoText: { flex: 1, fontSize: 13, fontWeight: "600" },
+
   // Sign out
   signOutBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
@@ -930,4 +1120,28 @@ const sheetStyles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   linkBtnText: { fontSize: 14, fontWeight: "600", color: Colors.primaryOrange },
+});
+
+const certStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 20,
+    padding: Spacing.md, gap: Spacing.sm,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { fontSize: 15, fontWeight: "700", color: Colors.grayDark, flex: 1 },
+  monthRow: { gap: 8, paddingVertical: 4 },
+  monthChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.grayLight,
+  },
+  monthChipActive: { backgroundColor: Colors.greenMain },
+  monthChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
+  monthChipTextActive: { color: Colors.white },
+  downloadBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.greenMain, borderRadius: 14, paddingVertical: 13,
+  },
+  downloadBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
 });

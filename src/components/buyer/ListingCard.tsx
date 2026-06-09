@@ -242,6 +242,24 @@ export default function ListingCard({
           </View>
         )}
 
+        {/* Expiry date — SPECIFIC_PARCEL only */}
+        {listing.type === "SPECIFIC_PARCEL" && listing.expiryDate && (() => {
+          const daysLeft = Math.ceil((new Date(listing.expiryDate).getTime() - Date.now()) / 86_400_000);
+          const isUrgent = daysLeft <= 2;
+          const label = new Date(listing.expiryDate).toLocaleDateString(
+            rtl ? "ar-PS" : "en-GB",
+            { day: "numeric", month: "short" }
+          );
+          return (
+            <View style={[styles.row, rtl && styles.rowReverse, { gap: 4 }]}>
+              <Feather name="calendar" size={11} color={isUrgent ? "#ef4444" : Colors.grayMedium} />
+              <Text style={[styles.metaText, isUrgent && { color: "#ef4444" }]}>
+                {rtl ? `ينتهي: ${label}` : `Exp: ${label}`}
+              </Text>
+            </View>
+          );
+        })()}
+
         {/* Decay label + countdown */}
         {listing.isPriceDecaying && (
           <View style={[styles.row, rtl && styles.rowReverse, { gap: 4, marginTop: 2 }]}>

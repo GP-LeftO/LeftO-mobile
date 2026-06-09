@@ -201,7 +201,7 @@ export default function SellerDashboardScreen({
   const fetchKaramBalance = useCallback(async (sellerId: string) => {
     try {
       const bal = await fetchSellerKaramBalance(sellerId);
-      setKaramBalance(bal.today ?? bal as unknown as KaramBalance);
+      setKaramBalance(bal as { sponsored: number; claimed: number; available: number });
     } catch {
       // Karam balance is non-critical, silently fail
     }
@@ -276,19 +276,20 @@ export default function SellerDashboardScreen({
 
   useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
   useEffect(() => { if (activeTab === "orders") fetchOrders(); }, [activeTab, fetchOrders]);
-  useEffect(() => { if (activeTab === "donations") fetchDonations(); }, [activeTab, fetchDonations]);
+  useEffect(() => { fetchDonations(); }, [fetchDonations]);
   useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey, activeTab, fetchListings]);
 
   // Pre-populate settings on first profile load
   useEffect(() => {
     if (profile) {
-      setSettingsDesc(profile.description ?? "");
-      setSettingsBizType(profile.businessType ?? "RESTAURANT");
-      setSettingsPhone(profile.contactInfo?.phone ?? "");
-      setSettingsWebsite(profile.contactInfo?.website ?? "");
-      setSettingsSocial(profile.contactInfo?.socialMedia ?? "");
-      setSettingsAddress(profile.location?.address ?? "");
-      setSettingsHours(profile.operatingHours ?? "");
+      setSettingsForm({
+        businessName: profile.businessName ?? "",
+        description:  profile.description ?? "",
+        phone:        profile.contactInfo?.phone ?? "",
+        website:      profile.contactInfo?.website ?? "",
+        socialMedia:  profile.contactInfo?.socialMedia ?? "",
+        address:      profile.location?.address ?? "",
+      });
       setSettingsKaram(profile.participatesInKaram ?? false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
