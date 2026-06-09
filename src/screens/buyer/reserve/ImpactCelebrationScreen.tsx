@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Platform,
+  Animated, Dimensions, Platform, Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -299,6 +299,22 @@ export default function ImpactCelebrationScreen({
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.shareBtn, rtl && styles.rowReverse]}
+          onPress={() => {
+            const grams = Math.round(co2SavedKg * 1000);
+            const km = (co2SavedKg * 4.6).toFixed(1);
+            const msg = rtl
+              ? `🌱 أنقذت وجبة مع LeftO اليوم!\nوفّرت ${grams > 1000 ? co2SavedKg + " كغ" : grams + " غ"} CO₂ — يعادل عدم قيادة ${km} كم 🇵🇸\n#LeftO #فلسطين`
+              : `🌱 I rescued a meal with LeftO today!\nSaved ${grams > 1000 ? co2SavedKg + " kg" : grams + " g"} CO₂ — like skipping ${km} km of driving 🇵🇸\n#LeftO #Palestine`;
+            Share.share({ message: msg }).catch(() => {});
+          }}
+          activeOpacity={0.85}
+        >
+          <Feather name="share-2" size={17} color={Colors.greenMain} />
+          <Text style={styles.shareBtnText}>{rtl ? "شارك تأثيرك 🌱" : "Share your impact 🌱"}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.homeBtn, rtl && styles.rowReverse]}
           onPress={onGoHome}
           activeOpacity={0.85}
@@ -460,4 +476,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   homeBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
+
+  shareBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.greenLight,
+    borderRadius: 16, paddingVertical: 14,
+    borderWidth: 2, borderColor: Colors.greenMain,
+  },
+  shareBtnText: { fontSize: 15, fontWeight: "700", color: Colors.greenMain },
 });

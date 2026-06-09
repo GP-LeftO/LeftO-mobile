@@ -31,9 +31,10 @@ import NearMeEntryButton from "../../components/shared/NearMeEntryButton";
 import type { Listing, StoreDetailsParams } from "../../types";
 import type { NearMeCoords } from "../../types/nearMe";
 import {
-  fetchAppConfig, fetchKaramSellers, sponsorKaramMeal,
+  fetchKaramSellers, sponsorKaramMeal,
   fetchMonthlyWinner, fetchRecommendedListings,
 } from "../../services/shared/community.service";
+import { useAppConfig } from "../../context/AppConfigContext";
 import type { KaramSeller, MonthlyWinner } from "../../services/shared/community.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,23 +61,37 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
   const stats = useHomeStats();
 
   // Community / Karam state
-  const [isRamadanSeason, setIsRamadanSeason] = useState(false);
+  const { isRamadanSeason, isIftarWindow, maghribTime } = useAppConfig();
   const [karamSellers,    setKaramSellers]    = useState<KaramSeller[]>([]);
   const [communityLoading, setCommunityLoading] = useState(true);
   const [sponsoringId,    setSponsoringId]    = useState<string | null>(null);
   const [monthlyWinner,   setMonthlyWinner]   = useState<MonthlyWinner | null>(null);
   const [rescueListings,  setRescueListings]  = useState<Listing[]>([]);
+  const [maghribCountdown, setMaghribCountdown] = useState<string | null>(null);
+
+  // Update Maghrib countdown every minute
+  useEffect(() => {
+    const calc = () => {
+      if (!maghribTime) { setMaghribCountdown(null); return; }
+      const diff = new Date(maghribTime).getTime() - Date.now();
+      if (diff <= 0) { setMaghribCountdown(null); return; }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      setMaghribCountdown(h > 0 ? `${h}س ${m}د` : `${m}د`);
+    };
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, [maghribTime]);
 
   const loadCommunity = useCallback(async () => {
     setCommunityLoading(true);
     try {
-      const [config, karam, winner, rescue] = await Promise.allSettled([
-        fetchAppConfig(),
+      const [karam, winner, rescue] = await Promise.allSettled([
         fetchKaramSellers(),
         fetchMonthlyWinner(),
         fetchRecommendedListings(),
       ]);
-      if (config.status === "fulfilled") setIsRamadanSeason(config.value.isRamadanSeason);
       if (karam.status  === "fulfilled") setKaramSellers(karam.value);
       if (winner.status === "fulfilled") setMonthlyWinner(winner.value);
       if (rescue.status === "fulfilled") {
@@ -322,12 +337,19 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
                 )
             )}
 
-            {/* ── Ramadan Banner ── */}
+            {/* ── Ramadan / Iftar Banner ── */}
             {isRamadanSeason && (
               <View style={styles.ramadanBanner}>
                 <Text style={styles.ramadanBannerText}>
-                  {rtl ? "رمضان مبارك — شارك إفطارك" : "Ramadan Mubarak — Share your iftar"}
+                  {isIftarWindow
+                    ? (rtl ? "🌙 حان وقت الإفطار! — ابحث عن وجبات الإفطار القريبة منك" : "🌙 Iftar time! — Find nearby iftar meals")
+                    : (rtl ? "🌙 رمضان كريم — ابحث عن وجبات الإفطار" : "🌙 Ramadan Mubarak — Find iftar meals")}
                 </Text>
+                {maghribCountdown && (
+                  <Text style={styles.ramadanCountdown}>
+                    🕌 {rtl ? `المغرب بعد: ${maghribCountdown}` : `Maghrib in: ${maghribCountdown}`}
+                  </Text>
+                )}
               </View>
             )}
 
@@ -608,9 +630,10 @@ const styles = StyleSheet.create({
   ramadanBanner: {
     backgroundColor: "#7c3aed", borderRadius: 14,
     paddingHorizontal: Spacing.md, paddingVertical: 12,
-    alignItems: "center",
+    alignItems: "center", gap: 4,
   },
   ramadanBannerText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+  ramadanCountdown: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },

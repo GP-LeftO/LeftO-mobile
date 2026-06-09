@@ -26,6 +26,7 @@ import OrderCard from "../../components/buyer/profile/OrderCard";
 import DonationCard from "../../components/buyer/profile/DonationCard";
 import type { ProfileOrder } from "../../types/profile";
 import { updateUserProfile } from "../../services/buyer/profile/profileService";
+import { downloadImpactCertificate } from "../../services/buyer/impact.service";
 
 const AVATAR_COLORS = [
   "#DE985A", "#16A34A", "#7C3AED", "#EC4899", "#0EA5E9",
@@ -136,6 +137,21 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
   const tr         = t();
 
   const [settingsExpanded,  setSettingsExpanded]  = useState(false);
+
+  // ── Impact certificate ─────────────────────────────────────────────────────
+  const PAST_MONTHS = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const formatMonth = (ym: string) => {
+    const [year, m] = ym.split("-");
+    return rtl ? `${ARABIC_MONTHS[parseInt(m, 10) - 1]} ${year}` : `${new Date(ym + "-01").toLocaleString("en-US", { month: "long" })} ${year}`;
+  };
+  const [certMonth,       setCertMonth]       = useState(PAST_MONTHS[0]);
+  const [certDownloading, setCertDownloading] = useState(false);
   const [colorPickerOpen,   setColorPickerOpen]   = useState(false);
   const [avatarColor,       setAvatarColor]       = useState<string | null>(null);
   const [savingColor,       setSavingColor]        = useState(false);
@@ -183,7 +199,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
     });
   };
 
-  const { user, logout, sellerStatus } = useAuth();
+  const { user, logout, sellerStatus, accessToken } = useAuth();
   const {
     profile,
     completedOrders,
@@ -402,6 +418,58 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
                 </View>
               </View>
             ))}
+          </View>
+
+          {/* Impact certificate download */}
+          <View style={certStyles.card}>
+            <View style={[certStyles.headerRow, rtl && styles.rowReverse]}>
+              <Feather name="file-text" size={18} color={Colors.greenMain} />
+              <Text style={[certStyles.title, rtl && styles.rtl]}>
+                {rtl ? "📄 شهادة الأثر البيئي" : "📄 Environmental Impact Certificate"}
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={certStyles.monthRow}
+            >
+              {PAST_MONTHS.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[certStyles.monthChip, certMonth === m && certStyles.monthChipActive]}
+                  onPress={() => setCertMonth(m)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[certStyles.monthChipText, certMonth === m && certStyles.monthChipTextActive]}>
+                    {formatMonth(m)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={[certStyles.downloadBtn, certDownloading && { opacity: 0.6 }]}
+              disabled={certDownloading}
+              activeOpacity={0.85}
+              onPress={async () => {
+                if (!accessToken) return;
+                setCertDownloading(true);
+                try {
+                  await downloadImpactCertificate(certMonth, accessToken);
+                } catch {
+                  Alert.alert(rtl ? "خطأ" : "Error", rtl ? "لم نتمكن من تحميل الشهادة" : "Could not download certificate");
+                } finally {
+                  setCertDownloading(false);
+                }
+              }}
+            >
+              {certDownloading
+                ? <ActivityIndicator size="small" color={Colors.white} />
+                : <>
+                    <Feather name="download" size={16} color={Colors.white} />
+                    <Text style={certStyles.downloadBtnText}>{rtl ? "تحميل ومشاركة" : "Download & Share"}</Text>
+                  </>
+              }
+            </TouchableOpacity>
           </View>
 
           {/* Badges */}

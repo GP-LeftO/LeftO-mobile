@@ -65,6 +65,8 @@ export interface SellerReview {
   comment?: string;
   createdAt: string;
   buyer?: SellerReviewBuyer;
+  sellerReply?: string | null;
+  repliedAt?: string | null;
 }
 
 export interface SellerReviewsResponse {

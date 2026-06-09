@@ -69,6 +69,20 @@ export default function ReviewCard({ review, anonymousLabel, rtl }: ReviewCardPr
       {!!review.comment && (
         <Text style={[styles.comment, rtl && styles.textRight]}>{review.comment}</Text>
       )}
+
+      {!!review.sellerReply && (
+        <View style={styles.replyBox}>
+          <Text style={[styles.replyLabel, rtl && styles.textRight]}>
+            {rtl ? "💬 رد صاحب المحل:" : "💬 Seller reply:"}
+          </Text>
+          <Text style={[styles.replyText, rtl && styles.textRight]}>{review.sellerReply}</Text>
+          {review.repliedAt && (
+            <Text style={styles.replyDate}>
+              {new Date(review.repliedAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -108,4 +122,18 @@ const styles = StyleSheet.create({
   stars: { flexDirection: "row", gap: 2 },
 
   comment: { fontSize: 13, color: Colors.grayMedium, lineHeight: 19 },
+
+  replyBox: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 3,
+    marginTop: 2,
+    marginLeft: 12,
+    marginRight: 12,
+  },
+  replyLabel: { fontSize: 12, fontWeight: "700", color: Colors.primaryOrange },
+  replyText:  { fontSize: 12, color: Colors.grayDark, lineHeight: 18 },
+  replyDate:  { fontSize: 10, color: Colors.grayMedium },
 });
