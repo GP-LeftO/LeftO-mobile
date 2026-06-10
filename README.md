@@ -362,19 +362,126 @@ AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants lo
 - Heart icon removes optimistically → `DELETE /api/favorites/:sellerId` — reverts on failure
 - Skeleton, empty state with Browse CTA, full RTL
 
+### Bug Fix — Seller Registration Steps Skipped (June 2026)
+
+**Symptom:** After completing `BasicInfoScreen`, new sellers were redirected straight to `PendingScreen` and never saw the 5-step registration form.
+
+**Root cause:** The session-restore `useEffect` in `App.tsx` listens to `ctx.isAuthenticated`. When `register()` is called (inside `handleRegisterAndProceed`) it fires `ctx.saveSession()` which sets `ctx.isAuthenticated = true`. This triggered the effect, which evaluated `resolveHomeRoute("SELLER", null, null)` → `"under-review"` and pushed it onto the step stack before the user could interact with `RoleSpecificInfoScreen`.
+
+**Fix (`App.tsx`):** Added `isRegistrationInProgressRef` (a `useRef<boolean>`). Set to `true` synchronously before `register()` is called; cleared on success, error, or logout. The session-restore effect now returns early while this ref is `true`, so it only redirects on a real cold-start with an existing session — not during fresh registration.
+
+**Secondary fix (`RoleSpecificInfoScreen.tsx`):** After a successful Step 5 submit (`POST /api/sellers/register`), `onPending()` is now called instead of `onComplete()`, so the seller lands on `PendingScreen` (awaiting admin approval) rather than buyer home.
+
+---
+
 ### Seller
 | Screen | Details |
 |--------|---------|
-| Registration | Business name, type, map location, description, document upload → `POST /api/sellers/register` |
-| SellerDashboardScreen | `GET /api/listings?sellerId`; Mark Sold Out per listing |
+| Registration | **5-step multi-step form** (see below) → `POST /api/sellers/register` |
+| SellerDashboardScreen | 4 tabs: Overview / Listings / Orders / Settings. Full listing CRUD actions (see below). |
+| ListingFormScreen | Unified Create + Edit form (see Listing CRUD section below) |
 | PendingScreen / RejectedScreen | Status states |
+
+#### Seller Listing CRUD
+
+All listing management is handled by a single `ListingFormScreen` that operates in create mode (no `existing` prop) or edit mode (`existing` prop pre-populates all fields).
+
+**Files:**
+
+| File | Role |
+|------|------|
+| `src/services/seller/seller.service.ts` | `createListing`, `updateListing`, `deleteListing`, `markListingSoldOut` — all raw Axios calls, return typed `SellerListing` |
+| `src/hooks/seller/useListingForm.ts` | Full form state, per-field validation, submit logic (calls create or update based on `existing`) |
+| `src/screens/seller/listings/ListingFormScreen.tsx` | Render-only form screen — all logic from hook |
+
+**Form fields:**
+
+| Field | Type | Required? | Notes |
+|-------|------|-----------|-------|
+| نوع الباقة (type) | Chip selector | ✅ | `MEAL_BAG` / `SPECIFIC_PARCEL` |
+| عنوان الباقة (title) | TextInput | ✅ | 2–100 chars. AI title scorer runs on blur |
+| الفئة (category) | Chip selector | ✅ | `MEALS` / `BREAD_AND_PASTRIES` / `GROCERIES` / `MIXED` |
+| الكمية (quantity) | Stepper (+/−) | ✅ | Min 1 |
+| السعر الأصلي (originalPrice) | Numeric input | ✅ | Must be positive |
+| السعر المخفض (discountedPrice) | Numeric input | ✅ | Must be < originalPrice and ≥ 0.50. AI price suggestion chip appears automatically |
+| نافذة الاستلام (pickupStart/End) | Time stepper | ✅ | HH:MM → converted to smart ISO (advances to tomorrow if time has passed) |
+| تاريخ الصلاحية (expiryDate) | Date stepper (D/M/Y) | ✅ only for `SPECIFIC_PARCEL` | Hidden for `MEAL_BAG`. Must be a future date |
+| طازجية المنتج (freshnessBadge) | Chip selector | ✅ | `eat_today` / `fresh_tonight` / `good_1_2_days` |
+| السعر المتناقص (isPriceDecaying) | Switch toggle | — | When ON → reveals floor price field |
+| الحد الأدنى للسعر (floorPrice) | Numeric input | ✅ when decaying | Must be < discountedPrice |
+| ملاحظة الحساسية (allergenNote) | Multiline text | — | AI auto-detect button uses title to suggest allergens |
+| وصف (description) | Multiline text | — | Free text description of bag contents |
+| رابط الصورة (photoUrl) | TextInput (URL) | — | Optional image URL |
+
+**Dashboard — Listings tab actions (per card):**
+
+| Button | Behavior |
+|--------|----------|
+| QR | Opens QR modal — shows `qrCodeUrl` image (220×220), 3 instruction steps, share via `Share.share()` |
+| تعديل (Edit) | Navigates to `seller-edit-listing` passing `listing` object |
+| نفد (Sold Out) | `Alert` confirm → `PATCH /api/listings/:id/sold-out` → optimistic status update in state |
+| حذف (Delete) | `Alert` confirm (destructive) → `DELETE /api/listings/:id` → removes from local list |
+| تبرع (Donate) | Navigates to `seller-donate-surplus` passing `listing` |
+
+**Dashboard — FAB:**
+- Orange `+` button (bottom-right, 56×56 px) visible only on the Listings tab
+- Navigates to `seller-create-listing`
+
+**Navigation entries (App.tsx):**
+- `"seller-create-listing"` → `<ListingFormScreen existing={undefined} />`
+- `"seller-edit-listing"` → `<ListingFormScreen existing={listingToEdit} />`
+- On complete → `dashboardRefreshKey` incremented, which triggers `fetchListings()` in the dashboard
+
+**API endpoints:**
+
+| Method | Endpoint | Hook |
+|--------|----------|------|
+| POST | `/api/listings` | `useListingForm.submit()` — create mode |
+| PUT | `/api/listings/:id` | `useListingForm.submit()` — edit mode |
+| DELETE | `/api/listings/:id` | `handleDeleteListing` in SellerDashboardScreen |
+| PATCH | `/api/listings/:id/sold-out` | `handleMarkSoldOut` in SellerDashboardScreen |
+
+#### Seller Registration — 5-Step Flow (`RoleSpecificInfoScreen.tsx`)
+
+A fully stepped form with a custom 5-dot progress indicator. Buyer and charity paths in the same screen are completely unchanged.
+
+| Step | Label | Fields | Validation |
+|------|-------|--------|------------|
+| 1 | Business Info | Business type (RESTAURANT / MARKET / BAKERY, required), description (optional), contact phone & website (optional) | Business type required |
+| 2 | Location | Map picker **or** manual address toggle | Location required |
+| 3 | Registration Number | `registrationNumber` in format `NE-XXXXXX` (required) | `/^NE-\d{6}$/` regex |
+| 4 | Documents | Trade License + Health/Food-Safety Certificate (both optional) — uploaded immediately via `POST /api/documents/upload`; "Skip this step" link | None (optional) |
+| 5 | Review & Submit | Summary card of all entered info | Submits on tap |
+
+**Registration number behaviour:**
+- `400` from backend → navigates back to Step 3, shows Arabic inline error: "رقم التسجيل غير معتمد في قائمتنا"
+- `409` → account already exists for this phone
+- `200` → `onPending()` called → PendingScreen (under-review until admin approves)
+
+**Document upload:**
+- Each file is uploaded to `POST /api/documents/upload` immediately when picked (separate Trade License and Health Certificate uploads)
+- Resulting URLs are collected into `documentUrls?: string[]` and sent in the final `POST /api/sellers/register` body
+- If documents are skipped, `documentUrls` is omitted from the request body
+
+**API fields sent:**
+```ts
+{
+  businessName: string,        // from registration name
+  businessType: "RESTAURANT" | "MARKET" | "BAKERY",
+  location: { latitude, longitude, address? },
+  description?: string,
+  registrationNumber: string,  // NE-XXXXXX
+  contactInfo?: { phone?, website? },
+  documentUrls?: string[]      // omitted when no documents uploaded
+}
+```
 
 ### Charity
 | Screen | Details |
 |--------|---------|
 | CharityInfoScreen | Org name, description, region (map pin), contact phone, registration number. Full RTL. |
 | CharityDocumentScreen | JPEG/PNG/PDF upload (max 5 MB), real-time progress bar → `POST /api/auth/register` (CHARITY role) |
-| CharityDashboardScreen | Real user name, status badge (Approved / Under Review / Rejected) |
+| CharityDashboardScreen | Full MVVM rewrite — 3-tab layout (Incoming / Picked Up / Completed), impact counter, inline seller rating, proof upload modal. See changelog below. |
 
 ---
 
@@ -394,6 +501,9 @@ AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants lo
 | GET | `/api/listings` | useListings → Home + Browse (`status=ACTIVE`) |
 | GET | `/api/listings/search` | search.service → SearchScreen (client-side ACTIVE filter) |
 | GET | `/api/listings/:id` | listing.service → StoreDetailsScreen |
+| POST | `/api/listings` | useListingForm → ListingFormScreen (create) |
+| PUT | `/api/listings/:id` | useListingForm → ListingFormScreen (edit) |
+| DELETE | `/api/listings/:id` | seller.service → SellerDashboardScreen |
 | PATCH | `/api/listings/:id/sold-out` | SellerDashboardScreen |
 | GET | `/api/users/me` | profileService → ProfileScreen |
 | GET | `/api/orders/me` | order.service → OrdersScreen; profileService → ProfileScreen |
@@ -534,21 +644,34 @@ npx tsc --noEmit
 New `AppStep` values: `"forgot-password"`, `"reset-password"`.
 New service calls in `auth.service.ts`: `forgotPassword(phone)`, `resetPassword(phone, otp, newPassword)`.
 
-#### Charity Dashboard (Full Rebuild)
-Previous: placeholder card. Now: fully functional dashboard.
+#### Charity Dashboard (Full MVVM Rewrite — T0-1)
+
+Complete rewrite. Separate service, hook, and two new components. Screen is now a pure view.
 
 | File | Role |
 |------|------|
-| `src/screens/charity/CharityDashboardScreen.tsx` | Replaced placeholder — 2 tabs (Pending / History), 4 stat cards, donation list with actions |
-| `src/services/charity/charity.service.ts` | `fetchCharityDonations()`, `confirmDonationPickup()`, `confirmDonationWithProof()` |
+| `src/screens/charity/CharityDashboardScreen.tsx` | Pure view — no API calls. 3-tab layout, impact banner, modal wiring |
+| `src/hooks/charity/useCharityDonations.ts` | All state: pagination, optimistic updates, rated-set tracking |
+| `src/services/charity/charity.service.ts` | `getMyDonations()`, `markPickedUp()`, `confirmDonation()`, `uploadProof()`, `rateSellerAfterDonation()` |
+| `src/components/charity/DonationIncomingCard.tsx` | Presentational card — adapts CTA and rating UI per tab mode |
+| `src/components/charity/ProofUploadModal.tsx` | Bottom-sheet modal with optional photo selection via `expo-image-picker` |
 
-**Features:**
-- `GET /api/donations/me` — loads all donations for the charity
-- Pending tab: donations with status `PENDING` or `CONFIRMED`
-- History tab: `PICKED_UP` or `CANCELLED`
-- **Confirm Pickup** button → `PATCH /api/donations/:id/pickup`
-- **Upload Proof** (image picker via `expo-image-picker`) + **Confirm with Proof** → `PATCH /api/donations/:id/confirm` (multipart)
-- Pull-to-refresh, loading/error states, full RTL
+**3-tab layout:**
+
+| Tab | Status filter | CTA |
+|-----|--------------|-----|
+| قادم (Incoming) | `PENDING` | "تم الاستلام" → `PATCH /api/donations/:id/pickup` (optimistic) |
+| مستلمة (Picked Up) | `PICKED_UP` | "رفع إثبات التوزيع" → opens `ProofUploadModal` → upload + `PATCH /api/donations/:id/confirm` |
+| مكتملة (Completed) | `CONFIRMED` | Inline star-rating form (3 rows + comment) → `POST /api/reviews/charity`; shows "تم التقييم ✓" once submitted |
+
+**Additional features:**
+- Impact banner: large green count of `CONFIRMED` donations + "وجبة استلمتموها حتى الآن 🤝"
+- Paginated load (`page` + `limit=10`) with `loadMore()` on scroll
+- Pull-to-refresh resets to page 1
+- Optimistic status update for mark-picked-up (reverts on error)
+- Rated donation IDs tracked in local `Set<string>` — persists within session
+- Full RTL on every flex container and text alignment
+- Proof photo upload: `POST /api/documents/upload` (multipart) → `fileUrl` → confirm body
 
 #### Notifications
 | File | Role |
@@ -693,3 +816,342 @@ Requires a valid `registrationNumber` from the backend seed data (`MOI-10002` et
 - [ ] Submit review twice → 409 handled, "Already reviewed" toast, button still hidden
 - [ ] Close app and reopen → reviewed orders still show no Leave Review button (AsyncStorage)
 - [ ] Seller reviews appear on StoreDetailsScreen after at least 1 review submitted
+
+---
+
+## Bug Fixes — Seller Dashboard (June 2026)
+
+Four interconnected bugs in the seller dashboard and registration flow were identified and fixed. All changes are surgical — no rewrites, no new dependencies.
+
+---
+
+### BUG 1 — Map in Seller Registration (Step 2) Lacked GPS Pre-centering
+
+**Symptom:** Tapping "Choose on map" in seller step 2 opened the map at the default Palestine-wide zoom with no indication of the user's location. On devices where location permission had not yet been granted, nothing happened when pressing the "My Location" button inside the map.
+
+**Root cause:** The map modal was opened with `setShowMap(true)` directly, without first requesting location permission or pre-loading the user's GPS position.
+
+**Fix (`RoleSpecificInfoScreen.tsx`):**
+- Added `expo-location` and `Linking` imports.
+- Added `openSellerMap()` async function that: (1) requests `foregroundPermissionsAsync`, (2) if denied — sets `locationPermDenied` state and shows an inline error banner with a **Settings** deep-link button, (3) if granted — calls `getCurrentPositionAsync` and passes the result as `mapInitLocation` to `MapLocationPicker` so the map opens centered on the user.
+- Both the "Choose on map" button and the "Tap to change" card now call `openSellerMap()` instead of `setShowMap(true)`.
+- The `Modal`-wrapped `MapLocationPicker` now receives `initialLocation={mapInitLocation ?? pickedLocation ?? undefined}`, prioritizing the live GPS fix over any previously picked location.
+
+---
+
+### BUG 2 — Orders Tab Loaded Infinitely (Never Showed Orders or Empty State)
+
+**Symptom:** Switching to the Orders tab showed a loading spinner that never resolved.
+
+**Root cause (two-part):**
+1. **`useSellerOrders.ts`** — `fetchOrders` was wrapped in `useCallback([page])`. Every time `page` incremented (on each successful fetch), `fetchOrders` was recreated as a new function reference.
+2. **`SellerDashboardScreen.tsx`** — A `useEffect` had `fetchOrders` in its dependency array: `useEffect(() => { if (activeTab === "orders") fetchOrders(); }, [activeTab, fetchOrders])`. This meant: each page increment → new `fetchOrders` reference → effect fired → `fetchOrders` ran → page incremented → new reference → **infinite loop**. Additionally, **identical effect blocks were registered twice** (lines ~266–281 and ~348–351), both firing simultaneously.
+
+**Fix:**
+- `useSellerOrders.ts`: replaced `page` state in `useCallback` with `pageRef = useRef(1)`. `fetchOrders` is now a stable function reference (`useCallback([], [])`). Also removed `pickupStart`/`pickupEnd` from `SellerOrder` (backend does not return these on the orders endpoint).
+- `SellerDashboardScreen.tsx`: removed the four duplicate `useEffect` blocks at lines 348–351. Fixed the orders effect to `useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab])` — reset=true on tab switch, `fetchOrders` omitted from deps.
+
+---
+
+### BUG 3 — Settings "Save" Toast Fired but Changes Were Never Persisted
+
+**Symptom:** Tapping "Save Changes" showed the success banner, but phone, website, social media, and other fields reverted to their old values on the next profile load.
+
+**Root cause:** The Swagger schema for `PATCH /api/sellers/me` expects **flat top-level fields** (`phone`, `website`, `socialMedia`, `description`). The frontend was sending them **nested** under a `contactInfo` object, which the backend silently ignored. Additionally, `businessName` and `location` were included in the body but are not accepted by this endpoint.
+
+**Fix:**
+- `seller.service.ts`: updated `UpdateSellerParams` interface to match the actual backend schema (flat fields, no `contactInfo` nesting).
+- `SellerDashboardScreen.tsx`: rewrote `handleSaveSettings` to send `{ description, phone, website, socialMedia }` as flat root-level fields. Removed `businessName` and `location` (not updatable via this endpoint). Removed the unsupported `address` field from both `SettingsForm` and the settings tab UI.
+- Updated `fetchProfile` and the settings pre-population `useEffect` to read from `p.phone`, `p.website`, `p.socialMedia` directly (with `p.contactInfo?.phone` fallback for backwards compat).
+- Updated `SellerProfile` interface to include flat fields alongside legacy nested fields.
+- Fixed overview tab to read `profile?.phone ?? profile?.contactInfo?.phone` (flat first).
+
+---
+
+### BUG 4 — Seller Listing Card Was Poorly Formed
+
+**Symptom:** Listing cards in the seller dashboard showed a plain horizontal row with a package icon, title, quantity, and a small price — no photo, no status context, and action buttons were inaccessible on narrow devices. TypeScript also reported `styles.listingCardInner` (non-existent style key).
+
+**Fix (`SellerDashboardScreen.tsx`):**
+- Added `Image` to React Native imports.
+- Replaced the inline listing row with a new `SellerListingCard` sub-component (defined in the same file). Layout:
+  - **110px image block** — shows `listing.photoUrl` if set, otherwise a category-colored background with a contextual emoji (🍱 / 🥖 / 🛒 / 🎁).
+  - **Status badge overlay** (top-left) — green Active / red Sold Out / gray Expired.
+  - **Freshness badge overlay** (top-right) — amber Eat Today / blue Fresh Tonight / green 1-2 Days.
+  - **Title row** with type chip (Bag / Parcel).
+  - **Pickup time** and **quantity** meta rows.
+  - **Price row** — original price with strikethrough, discounted price in orange, green discount-% pill.
+  - **5-button action strip** separated by hairline dividers: QR (placeholder), Edit, Sold Out, Delete, Donate (shown only if `onDonateFromListing` prop is provided).
+- Fixed `profile?.activeListings` → `profile?.activeListingsCount` (TS typo).
+- Removed two duplicate style definitions (`saveBtn`, `saveBtnText`, `settingsField`, `settingsInput`) that caused TS `TS1117` errors.
+- Removed the second duplicate ORDERS JSX block (lines ~681–756) and the dead DONATIONS JSX block (`activeTab === "donations"` — unreachable since no such tab exists) which both referenced non-existent styles and wrong config field names (`cfg.bg`, `cfg.ar`, `cfg.en`).
+- Added missing `stateText` style definition.
+
+---
+
+## Bug Fixes & Features — Seller Listing Flow (June 2026)
+
+Four fixes across the seller listing and donation screens. No new dependencies installed. Zero buyer/charity/backend changes.
+
+---
+
+### FIX 1 — "X" Button on Listing Card Now Marks as Sold Out (with Confirmation)
+
+**Before:** Tapping the "X" button on a listing card silently called `PATCH /api/listings/:id/sold-out` with no confirmation and then re-fetched the full listings list from the network.
+
+**After:**
+- Tapping "X" shows a confirmation alert: *"تحديد كنفد؟ — سيتم تحديد هذا الإدراج كنافد الكمية..."*
+- On confirm: API is called, listing state is updated **locally** (no re-fetch), a floating success toast appears: *"تم تحديد الإدراج كنافد"*.
+- `SOLD_OUT` cards dim to `opacity: 0.7`, their status badge changes to gray *"نفد ●"*, and the "X" button is hidden (no point marking sold-out again).
+- The "X" button color changed from red to gray `#6B7280` to match its non-destructive nature (it doesn't delete data).
+
+**Files changed:** `SellerDashboardScreen.tsx`
+
+---
+
+### FIX 2 — QR Code Button Opens a Proper Explanation Modal
+
+**Before:** The "QR" button on every listing card showed a placeholder `Alert.alert("Coming soon")`.
+
+**After:** Opens a full modal with:
+- The listing's QR code image rendered from `listing.qrCodeUrl` (base64 data URL — displayed directly via React Native `Image`).
+- If `qrCodeUrl` is null/undefined: a placeholder message with a re-publish hint.
+- A 3-step instruction block explaining the pickup flow (display in shop → buyer scans → confirmed automatically).
+- A 24-hour expiry warning banner.
+- **Share** button via React Native `Share.share()` API.
+- **Close** button.
+
+**New field:** `qrCodeUrl?: string` added to `SellerListing` interface in `seller.service.ts`.
+
+**Files changed:** `SellerDashboardScreen.tsx`, `src/services/seller/seller.service.ts`
+
+---
+
+### FIX 3 — Pickup Time Picker: Arrow Incrementer Replaces Free-Text Input
+
+**Before:** The donate surplus screen had two free-text inputs for pickup start/end times (expecting `HH:MM` format). Error-prone and gave no visual feedback.
+
+**After:** Both fields are replaced with a new `TimeArrowPicker` component — up/down chevron arrows for hour (0–23) and minute (snaps to 0, 15, 30, 45 increments), plus an ص/م (AM/PM) toggle. The `Confirm Donation` button is disabled when end time ≤ start time, and an inline Arabic error explains why.
+
+**New component:** `src/components/shared/TimeArrowPicker.tsx`
+
+```
+Props:
+  value: Date | null      — controlled value
+  onChange: (date: Date) → void
+  label: string
+  minTime?: Date          — optional lower bound for validation display
+```
+
+Internal state: 24-hour `hours` + `minutes` snapped to 15-min steps. Calls `onChange` on every arrow press with a `new Date()` with the selected time. Defaults to current hour + 1 (start) / current hour + 2 (end) when no `value` prop is supplied.
+
+**Files changed:** `src/components/shared/TimeArrowPicker.tsx` (new), `src/screens/seller/donations/SellerDonateSurplusScreen.tsx`
+
+---
+
+### FIX 4 — Total Donations Counter Stays Current
+
+**Before:** The "إجمالي التبرعات" stat in the seller dashboard overview was read from `profile?.totalDonations` (a single field in `GET /api/sellers/me`). If that field was absent or stale, it showed 0 even after donations were confirmed.
+
+**After (two-part fix):**
+1. **Fallback count:** `confirmedDonationsCount` is computed from the already-fetched `donations` array (`donations.filter(d => d.status === "CONFIRMED").length`). The stat now displays `profile?.totalDonations ?? confirmedDonationsCount` — so even if the profile field is missing, confirmed donations from the history list are counted.
+2. **Pull-to-refresh also refreshes donations:** The overview tab's `RefreshControl.onRefresh` now calls both `fetchProfile(true)` and `fetchDonations()` together. Pulling down on the overview tab brings both stats and the history list up to date in one gesture.
+
+**Files changed:** `SellerDashboardScreen.tsx`
+
+---
+
+## Fix — Seller Document Upload Rules + Approval Messaging (June 2026)
+
+Two product-driven corrections to the seller registration flow. Zero API changes. Zero buyer/charity screen changes.
+
+---
+
+### FIX A — Health Certificate Hidden for MARKET Sellers
+
+**Rule:** RESTAURANT and BAKERY sellers prepare food and require a health/food-safety certificate. MARKET sellers sell packaged goods and do not.
+
+**Before:** Health certificate upload was always shown on step 4 regardless of business type.
+
+**After (`RoleSpecificInfoScreen.tsx`):**
+- Health certificate upload section is wrapped in `(businessType === "RESTAURANT" || businessType === "BAKERY") && (...)` — hidden entirely for MARKET.
+- MARKET sellers see an informational card instead: *"السوبرماركت لا يحتاج شهادة سلامة غذائية — تكفي رخصة التجارة فقط"*
+- `businessType` is already stored in the shared component state set in step 1 — no prop threading needed.
+
+---
+
+### FIX B — All "Document Review" Messaging Corrected
+
+**Truth:** Documents are stored for reference only. The approval gate is the NE-XXXXXX registration number — if it's in the whitelist, the seller is instantly APPROVED. Documents are never reviewed for approval; admins check them manually only when a seller receives food-quality complaints.
+
+**All text changes made:**
+
+| Location | Old (wrong) | New (correct) |
+|----------|-------------|---------------|
+| Step 4 subtitle | "ارفع وثائق ترخيص منشأتك — هذه الخطوة اختيارية" | "الوثائق اختيارية وتُستخدم للمرجعية فقط — لا تؤثر على قبول حسابك" |
+| Step 4 info note | "لكنها تساعد في تسريع مراجعة طلبك" | "نحتفظ بها كمرجع في حال وجود شكاوى تتعلق بجودة الطعام. لن تؤثر على قبول حسابك." |
+| Step 4 skip button | "تخطي هذه الخطوة" | "تخطي — الوثائق اختيارية" |
+| Step 3 info card | (missing demo hint) | Added: "للتجربة: استخدم أي رقم من NE-200001 إلى NE-200020" |
+
+---
+
+### FIX C — PendingScreen Shows Correct State After Registration
+
+**Before:** `PendingScreen` always showed a single "under review" message with "Document review" as a step, in English, regardless of whether the seller was actually approved.
+
+**After (`PendingScreen.tsx`):**
+On mount, fetches `GET /api/sellers/me` to get the live `status` field. Then renders one of two states:
+
+**Case A — `status === "APPROVED"` (registration number in whitelist):**
+- Green pulse animation + ✅ emoji
+- Title: *"تم تفعيل حسابك! ✅"*
+- Body: *"رقم تسجيلك معتمد. يمكنك الآن نشر إدراجاتك..."*
+- Button: *"ابدأ الآن ←"* → navigates directly to seller dashboard
+
+**Case B — `status === "PENDING"` (registration number not in whitelist):**
+- Orange pulse animation + ⏳ emoji
+- Title: *"طلبك قيد المراجعة"*
+- Body: *"رقم تسجيلك غير موجود في قائمتنا المعتمدة..."*
+- Note: *"لا علاقة لهذا بالوثائق التي رفعتها"* — explicitly tells seller their documents are not the issue
+- Steps: "تم استلام طلبك" ✅ → "التحقق من رقم التسجيل" → "تفعيل الحساب"
+- Buttons: "تواصل مع الدعم" + *"العودة للرئيسية"*
+
+**Loading state:** `ActivityIndicator` shown inside the icon circle while the status fetch is in flight.
+
+**`App.tsx` (1-line change):** Added `onApproved={() => goTo("seller-dashboard")}` prop to the `PendingScreen` render — wires the APPROVED "ابدأ الآن ←" button to navigate directly to the seller dashboard.
+
+**Files changed:** `RoleSpecificInfoScreen.tsx`, `PendingScreen.tsx`, `App.tsx`
+
+---
+
+## UI Improvement — Seller Location Display (June 2026)
+
+**Before:** The seller overview tab showed the store address only when a text address was explicitly saved. Stores that only had GPS coordinates showed nothing in the location section.
+
+**After:** The location section is always rendered, with three intelligent display tiers:
+
+| Scenario | What shows |
+|----------|-----------|
+| `location.address` is set | Address text shown directly |
+| Coordinates-only (no address) | `expo-location.reverseGeocodeAsync` resolves to street, district, city, region |
+| Reverse geocode fails / returns nothing | Graceful fallback: *"نابلس، فلسطين"* + coordinate line in `32.2211° ش، 35.2544° ط` format |
+| `location` is entirely null | Muted text: *"الموقع غير محدد"* |
+
+**New component:** `SellerLocationDisplay` (inline in `SellerDashboardScreen.tsx`)
+- White card with 1px border and subtle shadow, RTL-native layout
+- Orange pin icon + *"الموقع"* label row
+- Spinner + *"جاري تحديد الموقع..."* while reverse geocoding
+- *"افتح في الخريطة"* pill button — opens Apple Maps (iOS) / Google Maps (Android) native app, falls back to `maps.google.com` if no maps app is installed
+- Coordinates shown only when no readable address is available; raw decimal pairs never displayed alone
+
+**New imports added to `SellerDashboardScreen.tsx`:** `Linking` (react-native), `* as Location` (expo-location — already installed, used in registration flow).
+
+**No new libraries installed. No API calls added. No buyer or charity screen changes.**
+
+**Files changed:** `SellerDashboardScreen.tsx`
+
+---
+
+## Fix — Black Map in Seller Registration Step 2 (June 2026)
+
+**Symptom:** When a seller opens the "Choose on map" modal during registration step 2, the map renders completely black (no tiles). The Google Maps watermark is visible, but no tile data loads.
+
+**Root cause (confirmed by audit):** `MapLocationPicker` used `react-native-maps MapView` with `PROVIDER_DEFAULT`. On Android, this uses the Google Maps SDK which **requires a Google Maps API key**. No API key exists anywhere in the project — not in `app.json`, `AndroidManifest.xml`, or any `.env` file.
+
+The "working buyer map" (`LeafletBrowseMap`) does NOT use `react-native-maps` at all — it is a WebView embedding Leaflet.js with OpenStreetMap tiles, which require no API key. That is why the buyer map works while the seller map was black.
+
+**Fix (`src/components/buyer/MapLocationPicker.tsx`):**
+Replaced `react-native-maps MapView` with a `WebView`-based Leaflet map, matching the same rendering approach used by `LeafletBrowseMap`. No new library was installed — `react-native-webview` was already a project dependency.
+
+| Before | After |
+|--------|-------|
+| `react-native-maps` `MapView` + `Marker` | `WebView` + Leaflet.js + OpenStreetMap |
+| Required Google Maps API key | No API key needed |
+| Tiles rendered black on Android | Tiles load immediately |
+
+**How it works:**
+- `buildMapHtml(centerLat, centerLng, hasPin)` generates inline Leaflet HTML — same CDN approach as `LeafletBrowseMap`
+- WebView posts `{ type: 'pin', lat, lng }` messages to React Native when the user taps the map or drags the marker
+- GPS button injects `window.moveTo(lat, lng)` via `webviewRef.current?.injectJavaScript(...)` to re-center the map
+- All UI chrome (top bar, bottom card, GPS button, address display) is unchanged — only the map renderer changed
+- Map opens centered on Nablus (32.2211°N, 35.2544°E) at zoom 15 if no `initialLocation` is provided
+- If `initialLocation` is passed (seller previously picked a point), the map opens with that pin pre-placed
+
+**Files changed:** `src/components/buyer/MapLocationPicker.tsx`
+
+---
+
+## Fix — Seller Document Upload Required + Remove Demo Hint (June 2026)
+
+Two corrections to seller registration step 4 (documents) and step 3 (registration number).
+
+---
+
+### FIX 1 — Trade License is Now Required
+
+**Before:** Step 4 said documents were optional, showed a skip button, and the Continue button was always enabled.
+
+**After (`RoleSpecificInfoScreen.tsx`):**
+- Step 4 subtitle changed to: *"يرجى رفع وثائق ترخيص منشأتك للمتابعة"* / *"Please upload your business documents to continue"*
+- The "تخطي — الوثائق اختيارية" skip button has been removed entirely
+- The approval note card ("رفع الوثائق اختياري...") has been removed
+- Continue button is disabled (grayed, 0.5 opacity) until `tradeDocUrl !== null` — trade license upload is the gate
+- `validateSellerStep()` step 4 block added: if no trade license uploaded, sets `errors.tradeLicense` and shows inline error below the upload button
+- Health certificate (RESTAURANT/BAKERY) and MARKET info card are unchanged
+
+---
+
+### FIX 2 — Demo Registration Number Hint Removed
+
+**Before:** Step 3 info card showed: *"للتجربة: استخدم أي رقم من NE-200001 إلى NE-200020"*
+
+**After:** That `<Text>` block and its `regNumDemoHint` style entry have been removed. The only text below the input field is the format instruction already in the subtitle (*"أدخل رقم تسجيل منشأتك بالصيغة NE-XXXXXX"*) and the on-demand validation error.
+
+**Files changed:** `src/screens/registration/RoleSpecificInfoScreen.tsx`
+
+---
+
+## Feature — Seller Location Editor in Settings Tab (June 2026)
+
+Sellers can now update their store location directly from the settings tab, without going through registration again.
+
+---
+
+### What was added
+
+**`src/screens/seller/SellerDashboardScreen.tsx`:**
+
+A collapsible location editor card is added to the settings tab, between the social media field and the "Save Changes" button.
+
+**Collapsed state:** Shows a "📍 الموقع" / "Location" label, the current address (or lat/lng if no address), and an "Edit →" / "تعديل ←" toggle.
+
+**Expanded state:** Shows:
+1. A 260px Leaflet/OpenStreetMap map (same WebView approach used in registration) centered on the seller's current location with a draggable marker
+2. Tapping the map or dragging the marker updates `editLatitude` / `editLongitude` via `postMessage`
+3. An address `TextInput` pre-filled from the profile
+4. A "Use My Current Location" GPS button — requests permission then calls `window.moveTo(lat, lng)` via `injectJavaScript`
+5. A "حفظ الموقع" / "Save Location" orange full-width button — separate from the main "Save Changes" button
+
+**API call:** `PATCH /api/sellers/me` with `{ location: { latitude, longitude, address? } }` — the same nested structure used in seller registration.
+
+**On save success:**
+- Local `profile` state updated with new coordinates and address
+- The overview tab's `SellerLocationDisplay` immediately reflects the new location (reads from `profile`)
+- Editor collapses
+- Toast: "تم حفظ الموقع بنجاح 📍"
+
+**State added:**
+| Variable | Purpose |
+|---|---|
+| `locationExpanded` | Controls collapsed/expanded card |
+| `editLatitude`, `editLongitude` | Current pin position |
+| `editAddress` | Address text field value |
+| `savingLocation` | Disables save button while request is in flight |
+| `locationMapRef` | `useRef<WebView>` — for `injectJavaScript` |
+| `locationMapHtml` | `useRef<string>` — HTML captured once when editor opens, so map doesn't reload on state change |
+
+**Initialization:** All location state is populated from `profile` in the existing profile `useEffect` (`[!!profile]` dep). Defaults to Nablus (32.2211, 35.2544) if profile has no location.
+
+**No new library installed.** `react-native-webview` was already a dependency.
+
+**Files changed:** `src/screens/seller/SellerDashboardScreen.tsx`

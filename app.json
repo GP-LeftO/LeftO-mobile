@@ -45,8 +45,7 @@
           "locationWhenInUsePermission": "LeftO needs your location to show nearby sellers."
         }
       ],
-      "expo-asset",
-      "@stripe/stripe-react-native"
+      "expo-asset"
     ],
     "extra": {
       "eas": {

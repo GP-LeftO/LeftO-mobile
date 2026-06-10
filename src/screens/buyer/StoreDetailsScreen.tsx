@@ -18,7 +18,6 @@ import {
 import LeafletMap from "../../components/shared/LeafletMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useStripe } from "@stripe/stripe-react-native";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";

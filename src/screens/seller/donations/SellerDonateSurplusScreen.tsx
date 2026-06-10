@@ -9,6 +9,7 @@ import { Colors, Spacing } from "../../../theme";
 import { isRTL } from "../../../i18n";
 import { useCharities } from "../../../hooks/buyer/reserve/useCharities";
 import { createSellerDonation } from "../../../services/seller/donation.service";
+import TimeArrowPicker from "../../../components/shared/TimeArrowPicker";
 import type { SellerListing } from "../../../services/seller/seller.service";
 import type { Charity } from "../../../types/charity.types";
 
@@ -22,11 +23,10 @@ interface SellerDonateSurplusScreenProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function hhmmToIso(hhmm: string): string {
-  const [h, m] = hhmm.split(":").map(Number);
+function makeDefaultTime(hoursFromNow: number): Date {
   const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
+  d.setHours(d.getHours() + hoursFromNow, 0, 0, 0);
+  return d;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -43,22 +43,23 @@ export default function SellerDonateSurplusScreen({
 
   const { charities, loading: charitiesLoading, error: charitiesError, refetch } = useCharities();
 
-  const [quantity,      setQuantity]      = useState(listing.quantity?.toString() ?? "1");
-  const [pickupStart,   setPickupStart]   = useState("");
-  const [pickupEnd,     setPickupEnd]     = useState("");
-  const [selectedCharity, setSelectedCharity] = useState<Charity | null>(null);
-  const [submitting,    setSubmitting]    = useState(false);
-  const [submitError,   setSubmitError]   = useState("");
-  const [errors,        setErrors]        = useState<Record<string, string>>({});
+  const [quantity,         setQuantity]         = useState(listing.quantity?.toString() ?? "1");
+  const [pickupStart,      setPickupStart]       = useState<Date>(() => makeDefaultTime(1));
+  const [pickupEnd,        setPickupEnd]         = useState<Date>(() => makeDefaultTime(2));
+  const [selectedCharity,  setSelectedCharity]   = useState<Charity | null>(null);
+  const [submitting,       setSubmitting]        = useState(false);
+  const [submitError,      setSubmitError]       = useState("");
+  const [errors,           setErrors]            = useState<Record<string, string>>({});
+
+  const timeWindowValid = pickupEnd > pickupStart;
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     const qty = Number(quantity);
-    if (!quantity || isNaN(qty) || qty < 1)                e.quantity    = rtl ? "أدخل كمية صحيحة" : "Enter a valid quantity";
-    if (qty > (listing.quantity ?? 99))                    e.quantity    = rtl ? `الحد الأقصى ${listing.quantity}` : `Max is ${listing.quantity}`;
-    if (!/^\d{2}:\d{2}$/.test(pickupStart))               e.pickupStart = rtl ? "استخدم صيغة HH:MM" : "Use HH:MM format";
-    if (!/^\d{2}:\d{2}$/.test(pickupEnd))                 e.pickupEnd   = rtl ? "استخدم صيغة HH:MM" : "Use HH:MM format";
-    if (!selectedCharity)                                  e.charity     = rtl ? "اختر جمعية خيرية" : "Select a charity";
+    if (!quantity || isNaN(qty) || qty < 1)    e.quantity  = rtl ? "أدخل كمية صحيحة" : "Enter a valid quantity";
+    if (qty > (listing.quantity ?? 99))        e.quantity  = rtl ? `الحد الأقصى ${listing.quantity}` : `Max is ${listing.quantity}`;
+    if (!timeWindowValid)                      e.pickupEnd = "وقت الانتهاء يجب أن يكون بعد وقت البداية";
+    if (!selectedCharity)                      e.charity   = rtl ? "اختر جمعية خيرية" : "Select a charity";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -72,8 +73,8 @@ export default function SellerDonateSurplusScreen({
         listingId:   listing.id,
         charityId:   selectedCharity.id,
         quantity:    Number(quantity),
-        pickupStart: hhmmToIso(pickupStart),
-        pickupEnd:   hhmmToIso(pickupEnd),
+        pickupStart: pickupStart.toISOString(),
+        pickupEnd:   pickupEnd.toISOString(),
       });
       onComplete(selectedCharity.orgName);
     } catch {
@@ -144,37 +145,33 @@ export default function SellerDonateSurplusScreen({
         {/* Pickup window */}
         <View style={styles.section}>
           <Text style={[styles.label, rtl && styles.textRight]}>
-            {rtl ? "وقت الاستلام (HH:MM)" : "Pickup Window (HH:MM)"} <Text style={styles.required}>*</Text>
+            {rtl ? "وقت الاستلام" : "Pickup Window"} <Text style={styles.required}>*</Text>
           </Text>
-          <View style={[styles.row, rtl && styles.rowRTL]}>
-            <View style={styles.halfField}>
-              <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "من" : "From"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupStart && styles.inputError, rtl && styles.textRight]}
-                value={pickupStart}
-                onChangeText={v => { setPickupStart(v); clearError("pickupStart"); }}
-                placeholder="17:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.pickupStart && <Text style={styles.errorText}>{errors.pickupStart}</Text>}
-            </View>
-            <View style={styles.halfField}>
-              <Text style={[styles.fieldLabel, rtl && styles.textRight]}>{rtl ? "إلى" : "To"}</Text>
-              <TextInput
-                style={[styles.input, errors.pickupEnd && styles.inputError, rtl && styles.textRight]}
-                value={pickupEnd}
-                onChangeText={v => { setPickupEnd(v); clearError("pickupEnd"); }}
-                placeholder="20:00"
-                placeholderTextColor={Colors.grayMedium}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                textAlign={rtl ? "right" : "left"}
-              />
-              {errors.pickupEnd && <Text style={styles.errorText}>{errors.pickupEnd}</Text>}
-            </View>
+          <View style={styles.timePickersCol}>
+            <TimeArrowPicker
+              label={rtl ? "وقت البداية" : "Start Time"}
+              value={pickupStart}
+              onChange={(date) => {
+                setPickupStart(date);
+                clearError("pickupEnd");
+              }}
+            />
+            <TimeArrowPicker
+              label={rtl ? "وقت الانتهاء" : "End Time"}
+              value={pickupEnd}
+              onChange={(date) => {
+                setPickupEnd(date);
+                clearError("pickupEnd");
+              }}
+              minTime={pickupStart}
+            />
+            {errors.pickupEnd ? (
+              <Text style={styles.errorText}>{errors.pickupEnd}</Text>
+            ) : !timeWindowValid ? (
+              <Text style={styles.errorText}>
+                {rtl ? "وقت الانتهاء يجب أن يكون بعد وقت البداية" : "End time must be after start time"}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -228,9 +225,9 @@ export default function SellerDonateSurplusScreen({
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: botPadding + 12 }]}>
         <TouchableOpacity
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (submitting || !timeWindowValid) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || !timeWindowValid}
           activeOpacity={0.85}
         >
           {submitting ? (
@@ -323,7 +320,6 @@ const styles = StyleSheet.create({
 
   section: { marginBottom: Spacing.lg },
   label:      { fontSize: 13, fontWeight: "700", color: Colors.grayDark, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldLabel: { fontSize: 12, fontWeight: "600", color: Colors.grayMedium, marginBottom: 6 },
   required:   { color: "#ef4444" },
   hint:       { fontSize: 12, color: Colors.grayMedium, marginTop: 4 },
   errorText:  { fontSize: 12, color: "#ef4444", marginTop: 4 },
@@ -338,7 +334,8 @@ const styles = StyleSheet.create({
 
   row:    { flexDirection: "row",         gap: 12 },
   rowRTL: { flexDirection: "row-reverse", gap: 12 },
-  halfField: { flex: 1 },
+
+  timePickersCol: { gap: Spacing.md },
 
   charitiesLoading: { flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.md },
   charitiesLoadingText: { fontSize: 14, color: Colors.grayMedium },

@@ -3,7 +3,7 @@ import {
   StyleSheet, View, Text, TouchableOpacity,
   ActivityIndicator, Platform,
 } from "react-native";
-import MapView, { Marker, MapPressEvent, Region, PROVIDER_DEFAULT } from "react-native-maps";
+import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
@@ -22,16 +22,56 @@ interface MapLocationPickerProps {
   initialLocation?: { latitude: number; longitude: number };
 }
 
-const PALESTINE_DEFAULT: Region = {
-  latitude: 32.2211,
-  longitude: 35.2544,
-  latitudeDelta: 0.8,
-  longitudeDelta: 0.8,
+const NABLUS_LAT = 32.2211;
+const NABLUS_LNG = 35.2544;
+
+function buildMapHtml(centerLat: number, centerLng: number, hasPin: boolean): string {
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body,#map{width:100%;height:100%;background:#e8eaed}
+</style>
+</head><body><div id="map"></div><script>
+var marker=null;
+var map=L.map('map',{center:[${centerLat},${centerLng}],zoom:15,zoomControl:false,attributionControl:false});
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+function postPin(lat,lng){
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'pin',lat:lat,lng:lng}));
+}
+
+function placeMarker(lat,lng){
+  if(marker){marker.setLatLng([lat,lng]);}
+  else{
+    marker=L.marker([lat,lng],{draggable:true}).addTo(map);
+    marker.on('dragend',function(){var p=marker.getLatLng();postPin(p.lat,p.lng);});
+  }
+  postPin(lat,lng);
+}
+
+${hasPin ? `placeMarker(${centerLat},${centerLng});` : ""}
+
+map.on('click',function(e){
+  placeMarker(e.latlng.lat,e.latlng.lng);
+  map.panTo([e.latlng.lat,e.latlng.lng]);
+});
+
+window.moveTo=function(lat,lng){
+  map.setView([lat,lng],15,{animate:true});
+  placeMarker(lat,lng);
 };
+</script></body></html>`;
+}
 
 export default function MapLocationPicker({ onConfirm, onCancel, initialLocation }: MapLocationPickerProps) {
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const webviewRef = useRef<WebView>(null);
+
+  const startLat = initialLocation?.latitude ?? NABLUS_LAT;
+  const startLng = initialLocation?.longitude ?? NABLUS_LNG;
 
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(
     initialLocation ?? null
@@ -62,10 +102,14 @@ export default function MapLocationPicker({ onConfirm, onCancel, initialLocation
     }
   };
 
-  const handleMapPress = (e: MapPressEvent) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    setPin({ latitude, longitude });
-    reverseGeocode(latitude, longitude);
+  const handleWebViewMessage = (event: { nativeEvent: { data: string } }) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data) as { type: string; lat: number; lng: number };
+      if (msg.type === "pin") {
+        setPin({ latitude: msg.lat, longitude: msg.lng });
+        reverseGeocode(msg.lat, msg.lng);
+      }
+    } catch {}
   };
 
   const handleMyLocation = async () => {
@@ -78,14 +122,9 @@ export default function MapLocationPicker({ onConfirm, onCancel, initialLocation
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
-      setPin({ latitude, longitude });
-      reverseGeocode(latitude, longitude);
-      mapRef.current?.animateToRegion(
-        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-        800
-      );
+      webviewRef.current?.injectJavaScript(`window.moveTo(${latitude}, ${longitude}); true;`);
     } catch {
-      // silent
+      // silent — user stays on Nablus view
     } finally {
       setLocating(false);
     }
@@ -96,33 +135,19 @@ export default function MapLocationPicker({ onConfirm, onCancel, initialLocation
     onConfirm({ latitude: pin.latitude, longitude: pin.longitude, address });
   };
 
+  const mapHtml = buildMapHtml(startLat, startLng, !!initialLocation);
+
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
+      <WebView
+        ref={webviewRef}
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
-        initialRegion={
-          initialLocation
-            ? { ...initialLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 }
-            : PALESTINE_DEFAULT
-        }
-        onPress={handleMapPress}
-        showsUserLocation
-        showsMyLocationButton={false}
-        showsCompass={false}
-      >
-        {pin && (
-          <Marker coordinate={pin} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.markerContainer}>
-              <View style={styles.markerBubble}>
-                <Feather name="map-pin" size={18} color={Colors.white} />
-              </View>
-              <View style={styles.markerTail} />
-            </View>
-          </Marker>
-        )}
-      </MapView>
+        source={{ html: mapHtml }}
+        javaScriptEnabled
+        originWhitelist={["*"]}
+        onMessage={handleWebViewMessage}
+        scrollEnabled={false}
+      />
 
       <Animated.View
         entering={FadeInDown.duration(400).springify()}
@@ -210,23 +235,6 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: Colors.orangeLight,
     alignItems: "center", justifyContent: "center",
-  },
-
-  markerContainer: { alignItems: "center" },
-  markerBubble: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Colors.primaryOrange,
-    alignItems: "center", justifyContent: "center",
-    shadowColor: Colors.primaryOrange,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45, shadowRadius: 8, elevation: 6,
-  },
-  markerTail: {
-    width: 0, height: 0,
-    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 10,
-    borderLeftColor: "transparent", borderRightColor: "transparent",
-    borderTopColor: Colors.primaryOrange,
-    marginTop: -1,
   },
 
   hint: {

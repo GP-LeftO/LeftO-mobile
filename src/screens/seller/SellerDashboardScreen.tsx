@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  StyleSheet, Text, View, Platform, TextInput,
+  StyleSheet, Text, View, Platform, TextInput, Image,
   TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, Modal, Share, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -22,6 +22,8 @@ import type { SellerListing, SellerDonation } from "../../services/seller/seller
 import { getMyPerformance } from "../../services/seller/listingAI.service";
 import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { SellerOrder } from "../../hooks/seller/useSellerOrders";
+import * as Location from "expo-location";
+import { WebView } from "react-native-webview";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,14 @@ interface SellerProfile {
   verifiedBadge?: boolean;
   description?: string;
   operatingHours?: string;
+  // flat fields — actual backend response shape
+  phone?: string;
+  website?: string;
+  socialMedia?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  // legacy nested fields (kept for backwards compat)
   location?: { latitude?: number; longitude?: number; address?: string };
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
   activeListingsCount?: number;
@@ -51,7 +61,6 @@ interface SettingsForm {
   phone: string;
   website: string;
   socialMedia: string;
-  address: string;
 }
 
 type Tab = "overview" | "listings" | "orders" | "settings";
@@ -104,6 +113,30 @@ function formatDate(iso: string): string {
   } catch { return ""; }
 }
 
+// ─── Location map HTML builder (WebView + Leaflet, no API key needed) ─────────
+
+function buildLocationMapHtml(lat: number, lng: number): string {
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body,#map{width:100%;height:100%;background:#e8eaed}</style>
+</head><body><div id="map"></div><script>
+var marker=null;
+var map=L.map('map',{center:[${lat},${lng}],zoom:15,zoomControl:false,attributionControl:false});
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+function postPin(la,ln){window.ReactNativeWebView.postMessage(JSON.stringify({type:'pin',lat:la,lng:ln}));}
+function placeMarker(la,ln){
+  if(marker){marker.setLatLng([la,ln]);}
+  else{marker=L.marker([la,ln],{draggable:true}).addTo(map);marker.on('dragend',function(){var p=marker.getLatLng();postPin(p.lat,p.lng);});}
+  postPin(la,ln);
+}
+placeMarker(${lat},${lng});
+map.on('click',function(e){placeMarker(e.latlng.lat,e.latlng.lng);map.panTo([e.latlng.lat,e.latlng.lng]);});
+window.moveTo=function(la,ln){map.setView([la,ln],15,{animate:true});placeMarker(la,ln);};
+</script></body></html>`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SellerDashboardScreen({
@@ -133,14 +166,24 @@ export default function SellerDashboardScreen({
   const [listingsError,   setListingsError]   = useState("");
   const [soldOutLoading,  setSoldOutLoading]  = useState<string | null>(null);
   const [deleteLoading,   setDeleteLoading]   = useState<string | null>(null);
+  const [toastMessage,    setToastMessage]    = useState<string | null>(null);
 
   // ── Settings form state ───────────────────────────────────────────────────
   const [settingsForm,    setSettingsForm]    = useState<SettingsForm>({
-    businessName: "", description: "", phone: "", website: "", socialMedia: "", address: "",
+    businessName: "", description: "", phone: "", website: "", socialMedia: "",
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaved,   setSettingsSaved]   = useState(false);
   const [settingsError,   setSettingsError]   = useState("");
+
+  // ── Location editor state ─────────────────────────────────────────────────
+  const [locationExpanded, setLocationExpanded] = useState(false);
+  const [editLatitude,     setEditLatitude]     = useState<number>(32.2211);
+  const [editLongitude,    setEditLongitude]    = useState<number>(35.2544);
+  const [editAddress,      setEditAddress]      = useState<string>("");
+  const [savingLocation,   setSavingLocation]   = useState(false);
+  const locationMapRef  = useRef<WebView>(null);
+  const locationMapHtml = useRef<string>("");
 
   // ── Donations state ───────────────────────────────────────────────────────
   const [donations,        setDonations]        = useState<SellerDonation[]>([]);
@@ -185,10 +228,9 @@ export default function SellerDashboardScreen({
       setSettingsForm({
         businessName: p.businessName ?? "",
         description:  p.description  ?? "",
-        phone:        p.contactInfo?.phone        ?? "",
-        website:      p.contactInfo?.website      ?? "",
-        socialMedia:  p.contactInfo?.socialMedia  ?? "",
-        address:      p.location?.address         ?? "",
+        phone:        p.phone ?? p.contactInfo?.phone ?? "",
+        website:      p.website ?? p.contactInfo?.website ?? "",
+        socialMedia:  p.socialMedia ?? p.contactInfo?.socialMedia ?? "",
       });
     } catch {
       setFetchError(rtl ? "تعذّر تحميل بيانات المتجر" : "Could not load store data");
@@ -201,7 +243,7 @@ export default function SellerDashboardScreen({
   const fetchKaramBalance = useCallback(async (sellerId: string) => {
     try {
       const bal = await fetchSellerKaramBalance(sellerId);
-      setKaramBalance(bal as { sponsored: number; claimed: number; available: number });
+      setKaramBalance(bal as unknown as { sponsored: number; claimed: number; available: number });
     } catch {
       // Karam balance is non-critical, silently fail
     }
@@ -275,7 +317,9 @@ export default function SellerDashboardScreen({
   }, [profile?.id, profile?.participatesInKaram, fetchKaramBalance]);
 
   useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
-  useEffect(() => { if (activeTab === "orders") fetchOrders(); }, [activeTab, fetchOrders]);
+  // fetchOrders omitted from deps intentionally — fetchOrders is stable (no page dep)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab]);
   useEffect(() => { fetchDonations(); }, [fetchDonations]);
   useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey, activeTab, fetchListings]);
 
@@ -284,13 +328,17 @@ export default function SellerDashboardScreen({
     if (profile) {
       setSettingsForm({
         businessName: profile.businessName ?? "",
-        description:  profile.description ?? "",
-        phone:        profile.contactInfo?.phone ?? "",
-        website:      profile.contactInfo?.website ?? "",
-        socialMedia:  profile.contactInfo?.socialMedia ?? "",
-        address:      profile.location?.address ?? "",
+        description:  profile.description  ?? "",
+        phone:        profile.phone ?? profile.contactInfo?.phone ?? "",
+        website:      profile.website ?? profile.contactInfo?.website ?? "",
+        socialMedia:  profile.socialMedia ?? profile.contactInfo?.socialMedia ?? "",
       });
       setSettingsKaram(profile.participatesInKaram ?? false);
+      const lat = profile.latitude ?? profile.location?.latitude ?? 32.2211;
+      const lng = profile.longitude ?? profile.location?.longitude ?? 35.2544;
+      setEditLatitude(lat);
+      setEditLongitude(lng);
+      setEditAddress(profile.address ?? profile.location?.address ?? "");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!profile]);
@@ -345,23 +393,41 @@ export default function SellerDashboardScreen({
     }
   };
 
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
-  useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
-  useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab]);
-  useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey]);
-
   // ─── Listing actions ───────────────────────────────────────────────────────
 
-  const handleMarkSoldOut = async (listingId: string) => {
-    setSoldOutLoading(listingId);
-    try {
-      await api.patch(`/api/listings/${listingId}/sold-out`);
-      await fetchListings();
-    } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحديث حالة القائمة" : "Could not update listing status");
-    } finally {
-      setSoldOutLoading(null);
-    }
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleMarkSoldOut = (listingId: string) => {
+    Alert.alert(
+      "تحديد كنفد؟",
+      "سيتم تحديد هذا الإدراج كنافد الكمية وسيظهر للمشترين كـ 'نفد'.",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "تأكيد",
+          onPress: async () => {
+            setSoldOutLoading(listingId);
+            try {
+              await api.patch(`/api/listings/${listingId}/sold-out`);
+              setListings(prev =>
+                prev.map(l => l.id === listingId ? { ...l, status: "SOLD_OUT" } : l)
+              );
+              showToast("تم تحديد الإدراج كنافد");
+            } catch {
+              Alert.alert(
+                rtl ? "خطأ" : "Error",
+                rtl ? "تعذّر تحديث حالة القائمة" : "Could not update listing status"
+              );
+            } finally {
+              setSoldOutLoading(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteListing = (listingId: string, title: string) => {
@@ -398,14 +464,9 @@ export default function SellerDashboardScreen({
       await api.patch("/api/sellers/me", {
         businessName: settingsForm.businessName.trim() || undefined,
         description:  settingsForm.description.trim()  || undefined,
-        contactInfo: {
-          phone:       settingsForm.phone.trim()       || undefined,
-          website:     settingsForm.website.trim()     || undefined,
-          socialMedia: settingsForm.socialMedia.trim() || undefined,
-        },
-        location: settingsForm.address.trim()
-          ? { address: settingsForm.address.trim() }
-          : undefined,
+        phone:        settingsForm.phone.trim()         || undefined,
+        website:      settingsForm.website.trim()       || undefined,
+        socialMedia:  settingsForm.socialMedia.trim()   || undefined,
       });
       setSettingsSaved(true);
       await fetchProfile();
@@ -414,6 +475,59 @@ export default function SellerDashboardScreen({
       setSettingsError(rtl ? "تعذّر حفظ التغييرات" : "Could not save changes. Please try again.");
     } finally {
       setSettingsLoading(false);
+    }
+  };
+
+  // ─── Location editor actions ───────────────────────────────────────────────
+
+  const handleToggleLocationEditor = () => {
+    if (!locationExpanded) {
+      locationMapHtml.current = buildLocationMapHtml(editLatitude, editLongitude);
+    }
+    setLocationExpanded(prev => !prev);
+  };
+
+  const handleUseCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        showToast(rtl ? "يرجى السماح بالوصول للموقع" : "Please allow location access");
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setEditLatitude(lat);
+      setEditLongitude(lng);
+      locationMapRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}); true;`);
+    } catch {
+      showToast(rtl ? "تعذّر تحديد موقعك الحالي" : "Could not detect your location");
+    }
+  };
+
+  const handleSaveLocation = async () => {
+    setSavingLocation(true);
+    try {
+      await api.patch("/api/sellers/me", {
+        location: {
+          latitude: editLatitude,
+          longitude: editLongitude,
+          address: editAddress.trim() || undefined,
+        },
+      });
+      setProfile(prev => prev ? {
+        ...prev,
+        latitude:  editLatitude,
+        longitude: editLongitude,
+        address:   editAddress.trim() || prev.address,
+      } : prev);
+      setLocationExpanded(false);
+      showToast(rtl ? "تم حفظ الموقع بنجاح 📍" : "Location saved 📍");
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      showToast(apiErr.response?.data?.message ?? (rtl ? "فشل حفظ الموقع" : "Failed to save location"));
+    } finally {
+      setSavingLocation(false);
     }
   };
 
@@ -426,10 +540,24 @@ export default function SellerDashboardScreen({
     { key: "settings",  labelEn: "Settings",  labelAr: "الإعدادات", icon: "settings"     },
   ];
 
+  const confirmedDonationsCount = donations.filter(d => d.status === "CONFIRMED").length;
+
   const STATS = [
-    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListings ?? 0 },
-    { icon: "heart" as const,    color: Colors.greenMain,     label: rtl ? "إجمالي التبرعات"  : "Total Donations",     value: profile?.totalDonations  ?? 0 },
+    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCount ?? 0 },
+    { icon: "heart" as const,    color: Colors.greenMain,     label: rtl ? "إجمالي التبرعات"  : "Total Donations",     value: profile?.totalDonations ?? confirmedDonationsCount },
   ];
+
+  const sellerLocation = (() => {
+    if (!profile) return null;
+    const lat = profile.latitude ?? profile.location?.latitude;
+    const lng = profile.longitude ?? profile.location?.longitude;
+    if (lat == null || lng == null) return null;
+    return {
+      address: profile.address ?? profile.location?.address ?? null,
+      latitude: lat,
+      longitude: lng,
+    };
+  })();
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -504,7 +632,7 @@ export default function SellerDashboardScreen({
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.tabContent}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchProfile(true)} tintColor={Colors.primaryOrange} />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { fetchProfile(true); fetchDonations(); }} tintColor={Colors.primaryOrange} />}
             >
               <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
                 <View style={styles.statsGrid}>
@@ -529,18 +657,15 @@ export default function SellerDashboardScreen({
                     <Text style={[styles.infoCardBody, rtl && styles.rtl]}>{profile.description}</Text>
                   </View>
                 )}
-                {profile?.location?.address && (
-                  <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
-                    <Feather name="map-pin" size={14} color={Colors.primaryOrange} />
-                    <Text style={[styles.metaText, rtl && styles.rtl]} numberOfLines={2}>{profile.location.address}</Text>
-                  </View>
-                )}
-                {profile?.contactInfo?.phone && (
+                <SellerLocationDisplay location={sellerLocation} />
+                {(profile?.phone ?? profile?.contactInfo?.phone) ? (
                   <View style={[styles.metaRow, rtl && styles.metaRowRTL]}>
                     <Feather name="phone" size={14} color={Colors.primaryOrange} />
-                    <Text style={[styles.metaText, rtl && styles.rtl]}>{profile.contactInfo.phone}</Text>
+                    <Text style={[styles.metaText, rtl && styles.rtl]}>
+                      {profile?.phone ?? profile?.contactInfo?.phone}
+                    </Text>
                   </View>
-                )}
+                ) : null}
               </Animated.View>
             </ScrollView>
           )}
@@ -571,52 +696,17 @@ export default function SellerDashboardScreen({
                   </View>
                 ) : (
                   listings.map((listing) => (
-                    <View key={listing.id} style={styles.listingCard}>
-                      <View style={[styles.listingCardInner, rtl && styles.listingCardInnerRTL]}>
-                        <View style={styles.listingIconWrap}>
-                          <Feather name="package" size={18} color={Colors.primaryOrange} />
-                        </View>
-                        <View style={styles.listingBody}>
-                          <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>{listing.title}</Text>
-                          {listing.pickupStart && listing.pickupEnd && (
-                            <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                              <Feather name="clock" size={12} color={Colors.grayMedium} />
-                              <Text style={styles.listingMetaText}>{formatPickup(listing.pickupStart, listing.pickupEnd)}</Text>
-                            </View>
-                          )}
-                          <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                            <Feather name="layers" size={12} color={Colors.grayMedium} />
-                            <Text style={styles.listingMetaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.listingActions}>
-                          <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
-                          <TouchableOpacity style={styles.actionIconBtn} onPress={() => onEditListing?.(listing)} activeOpacity={0.8}>
-                            <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.soldOutBtn}
-                            onPress={() => handleMarkSoldOut(listing.id)}
-                            disabled={soldOutLoading === listing.id}
-                            activeOpacity={0.8}
-                          >
-                            {soldOutLoading === listing.id
-                              ? <ActivityIndicator size="small" color="#ef4444" />
-                              : <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>}
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.deleteIconBtn}
-                            onPress={() => handleDeleteListing(listing.id, listing.title)}
-                            disabled={deleteLoading === listing.id}
-                            activeOpacity={0.8}
-                          >
-                            {deleteLoading === listing.id
-                              ? <ActivityIndicator size="small" color="#ef4444" />
-                              : <Feather name="trash-2" size={14} color="#ef4444" />}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
+                    <SellerListingCard
+                      key={listing.id}
+                      listing={listing}
+                      rtl={rtl}
+                      onEdit={onEditListing}
+                      onDelete={handleDeleteListing}
+                      onDonate={onDonateFromListing}
+                      onSoldOut={handleMarkSoldOut}
+                      soldOutLoading={soldOutLoading}
+                      deleteLoading={deleteLoading}
+                    />
                   ))
                 )}
               </Animated.View>
@@ -678,140 +768,6 @@ export default function SellerDashboardScreen({
             </ScrollView>
           )}
 
-          {/* ══════════ ORDERS TAB ══════════ */}
-          {activeTab === "orders" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-              {/* Status filter */}
-              <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
-                {(["RESERVED", "COMPLETED", "CANCELLED"] as OrderFilter[]).map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
-                    onPress={() => setOrdersFilter(f)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
-                      {rtl
-                        ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
-                        : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"
-                      }
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {ordersLoading ? (
-                <View style={styles.centeredState}>
-                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
-                </View>
-              ) : ordersError ? (
-                <View style={styles.centeredState}>
-                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
-                  <Text style={[styles.stateText, rtl && styles.rtl]}>{ordersError}</Text>
-                  <TouchableOpacity style={styles.retryBtn} onPress={fetchOrders} activeOpacity={0.8}>
-                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : filteredOrders.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyEmoji}>📋</Text>
-                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
-                    {rtl ? "لا توجد طلبات" : "No orders"}
-                  </Text>
-                </View>
-              ) : (
-                filteredOrders.map((order) => {
-                  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.RESERVED;
-                  const date = order.createdAt
-                    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
-                    : null;
-                  return (
-                    <View key={order.id} style={styles.orderCard}>
-                      <View style={[styles.orderInner, rtl && styles.orderInnerRTL]}>
-                        <View style={styles.orderIconWrap}>
-                          <Feather name="shopping-bag" size={16} color={Colors.primaryOrange} />
-                        </View>
-                        <View style={styles.orderBody}>
-                          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
-                            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
-                          </Text>
-                          <Text style={[styles.orderSub, rtl && styles.rtl]}>
-                            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
-                            {order.quantity ? ` · ${rtl ? "الكمية" : "Qty"}: ${order.quantity}` : ""}
-                            {date ? ` · ${date}` : ""}
-                          </Text>
-                        </View>
-                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
-                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
-                        </View>
-                      </View>
-                      {order.totalPrice != null && (
-                        <Text style={[styles.orderPrice, rtl && styles.rtl]}>₪{order.totalPrice}</Text>
-                      )}
-                    </View>
-                  );
-                })
-              )}
-            </Animated.View>
-          )}
-
-          {/* ══════════ DONATIONS TAB ══════════ */}
-          {activeTab === "donations" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-              {donationsLoading ? (
-                <View style={styles.centeredState}>
-                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
-                </View>
-              ) : donationsError ? (
-                <View style={styles.centeredState}>
-                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
-                  <Text style={[styles.stateText, rtl && styles.rtl]}>{donationsError}</Text>
-                  <TouchableOpacity style={styles.retryBtn} onPress={fetchDonations} activeOpacity={0.8}>
-                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : donations.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyEmoji}>🎁</Text>
-                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد تبرعات بعد" : "No donations yet"}</Text>
-                  <Text style={[styles.emptySub, rtl && styles.rtl]}>
-                    {rtl ? "اضغط \"تبرع بالفائض\" من نظرة عامة" : "Use \"Donate Surplus\" from the Overview tab"}
-                  </Text>
-                </View>
-              ) : (
-                donations.map((don) => {
-                  const cfg = DONATION_STATUS_CONFIG[don.status] ?? DONATION_STATUS_CONFIG.PENDING;
-                  const charityName = don.charity?.orgName ?? don.charity?.name ?? (rtl ? "جمعية" : "Charity");
-                  const date = don.createdAt
-                    ? new Date(don.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
-                    : null;
-                  return (
-                    <View key={don.id} style={styles.donationCard}>
-                      <View style={[styles.donationInner, rtl && styles.donationInnerRTL]}>
-                        <View style={styles.donationIconWrap}>
-                          <Feather name="gift" size={16} color={Colors.greenMain} />
-                        </View>
-                        <View style={styles.donationBody}>
-                          <Text style={[styles.donationTitle, rtl && styles.rtl]} numberOfLines={1}>
-                            {don.listing?.title ?? (rtl ? "تبرع" : "Donation")}
-                          </Text>
-                          <Text style={[styles.donationSub, rtl && styles.rtl]}>
-                            {rtl ? `إلى: ${charityName}` : `To: ${charityName}`}
-                            {` · ${rtl ? "كمية" : "Qty"}: ${don.quantity}`}
-                            {date ? ` · ${date}` : ""}
-                          </Text>
-                        </View>
-                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
-                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </Animated.View>
-          )}
-
           {/* ══════════ SETTINGS TAB ══════════ */}
           {activeTab === "settings" && (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -832,10 +788,10 @@ export default function SellerDashboardScreen({
                   )}
 
                   <SettingsField
-                    label={rtl ? "اسم المتجر" : "Business Name"}
+                    label={rtl ? "اسم المتجر" : "Store Name"}
                     value={settingsForm.businessName}
                     onChangeText={v => setSettingsForm(f => ({ ...f, businessName: v }))}
-                    placeholder={rtl ? "اسم متجرك" : "Your store name"}
+                    placeholder={rtl ? "مثال: مخبزة الفجر" : "e.g. Al-Fajr Bakery"}
                     rtl={rtl}
                   />
                   <SettingsField
@@ -869,13 +825,94 @@ export default function SellerDashboardScreen({
                     placeholder={rtl ? "@حساب_انستغرام" : "@instagram_handle"}
                     rtl={rtl}
                   />
-                  <SettingsField
-                    label={rtl ? "العنوان" : "Address"}
-                    value={settingsForm.address}
-                    onChangeText={v => setSettingsForm(f => ({ ...f, address: v }))}
-                    placeholder={rtl ? "مثال: شارع النزهة، رام الله" : "e.g. 14 Al-Nuzha St, Ramallah"}
-                    rtl={rtl}
-                  />
+
+                  {/* ── Location editor ── */}
+                  <View style={styles.locationEditorCard}>
+                    <TouchableOpacity
+                      style={[styles.locationEditorHeader, rtl && { flexDirection: "row-reverse" }]}
+                      onPress={handleToggleLocationEditor}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.locationEditorHeaderLeft, rtl && { flexDirection: "row-reverse" }]}>
+                        <Feather name="map-pin" size={16} color={Colors.primaryOrange} />
+                        <Text style={[styles.locationEditorLabel, rtl && styles.rtl]}>
+                          {rtl ? "الموقع" : "Location"}
+                        </Text>
+                      </View>
+                      <Text style={styles.locationEditorToggleBtn}>
+                        {locationExpanded ? (rtl ? "↑ إغلاق" : "↑ Close") : (rtl ? "← تعديل" : "Edit →")}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <Text style={[styles.locationEditorCurrentAddr, rtl && styles.rtl]} numberOfLines={1}>
+                      {editAddress || `${editLatitude.toFixed(4)}, ${editLongitude.toFixed(4)}`}
+                    </Text>
+
+                    {locationExpanded && (
+                      <>
+                        <View style={styles.locationEditorMapWrap}>
+                          <WebView
+                            ref={locationMapRef}
+                            style={styles.locationEditorMap}
+                            source={{ html: locationMapHtml.current }}
+                            javaScriptEnabled
+                            originWhitelist={["*"]}
+                            onMessage={(event) => {
+                              try {
+                                const msg = JSON.parse(event.nativeEvent.data) as { type: string; lat: number; lng: number };
+                                if (msg.type === "pin") {
+                                  setEditLatitude(msg.lat);
+                                  setEditLongitude(msg.lng);
+                                }
+                              } catch {}
+                            }}
+                            scrollEnabled={false}
+                          />
+                        </View>
+
+                        <Text style={[styles.settingsFieldLabel, rtl && styles.rtl]}>
+                          {rtl ? "العنوان" : "Address"}
+                        </Text>
+                        <TextInput
+                          style={[styles.settingsInput, rtl && styles.rtl]}
+                          value={editAddress}
+                          onChangeText={setEditAddress}
+                          placeholder={rtl ? "مثال: شارع فيصل، نابلس" : "e.g. Faisal Street, Nablus"}
+                          placeholderTextColor={Colors.grayMedium}
+                          textAlign={rtl ? "right" : "left"}
+                        />
+
+                        <TouchableOpacity
+                          style={[styles.locationEditorGpsBtn, rtl && { flexDirection: "row-reverse" }]}
+                          onPress={handleUseCurrentLocation}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="navigation" size={15} color={Colors.primaryOrange} />
+                          <Text style={styles.locationEditorGpsText}>
+                            {rtl ? "استخدم موقعي الحالي" : "Use My Current Location"}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.locationEditorSaveBtn, savingLocation && { opacity: 0.6 }]}
+                          onPress={handleSaveLocation}
+                          disabled={savingLocation}
+                          activeOpacity={0.85}
+                        >
+                          {savingLocation
+                            ? <ActivityIndicator size="small" color={Colors.white} />
+                            : (
+                              <>
+                                <Feather name="check" size={16} color={Colors.white} />
+                                <Text style={styles.locationEditorSaveBtnText}>
+                                  {rtl ? "حفظ الموقع" : "Save Location"}
+                                </Text>
+                              </>
+                            )}
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
 
                   <TouchableOpacity
                     style={[styles.saveBtn, settingsLoading && styles.saveBtnDisabled]}
@@ -893,6 +930,16 @@ export default function SellerDashboardScreen({
             </KeyboardAvoidingView>
           )}
         </>
+      )}
+
+      {/* Toast overlay */}
+      {toastMessage && (
+        <View style={styles.toastOverlay} pointerEvents="none">
+          <View style={styles.toastContainer}>
+            <Feather name="check-circle" size={16} color={Colors.white} />
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </View>
       )}
 
       {/* FAB: Add listing */}
@@ -927,8 +974,6 @@ function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
             {rtl ? `الكمية: ${order.quantity}` : `Qty: ${order.quantity}`}
           </Text>
           <Text style={[styles.orderMeta, rtl && styles.rtl]}>
-            {formatPickup(order.pickupStart, order.pickupEnd)}
-            {"  ·  "}
             {formatDate(order.createdAt)}
           </Text>
         </View>
@@ -941,6 +986,350 @@ function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
     </View>
   );
 }
+
+// ─── SellerListingCard ────────────────────────────────────────────────────────
+
+const CATEGORY_THEME: Record<string, { bg: string; emoji: string }> = {
+  MEALS:              { bg: "#FFF3E0", emoji: "🍱" },
+  BREAD_AND_PASTRIES: { bg: "#FFF8E1", emoji: "🥖" },
+  GROCERIES:          { bg: "#E8F5E9", emoji: "🛒" },
+  MIXED:              { bg: "#F3E5F5", emoji: "🎁" },
+};
+
+const FRESHNESS_THEME: Record<string, { bg: string; color: string; en: string; ar: string }> = {
+  eat_today:     { bg: "#FEF3C7", color: "#D97706", en: "Eat Today",     ar: "كل اليوم"    },
+  fresh_tonight: { bg: "#DBEAFE", color: "#2563EB", en: "Fresh Tonight", ar: "طازج الليلة" },
+  good_1_2_days: { bg: "#D1FAE5", color: "#059669", en: "1-2 Days",      ar: "يوم-يومين"   },
+};
+
+const LISTING_STATUS_THEME: Record<string, { bg: string; color: string; en: string; ar: string }> = {
+  ACTIVE:   { bg: "#D1FAE5", color: "#059669", en: "Active",   ar: "نشط"    },
+  SOLD_OUT: { bg: "#F3F4F6", color: "#6B7280", en: "Sold Out ●", ar: "نفد ●" },
+  EXPIRED:  { bg: "#F3F4F6", color: "#9CA3AF", en: "Expired",  ar: "منتهي"  },
+};
+
+function SellerListingCard({
+  listing, rtl, onEdit, onDelete, onDonate, onSoldOut, soldOutLoading, deleteLoading,
+}: {
+  listing: SellerListing;
+  rtl: boolean;
+  onEdit?: (l: SellerListing) => void;
+  onDelete?: (id: string, title: string) => void;
+  onDonate?: (l: SellerListing) => void;
+  onSoldOut?: (id: string) => void;
+  soldOutLoading: string | null;
+  deleteLoading: string | null;
+}) {
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+
+  const cat     = CATEGORY_THEME[listing.category ?? "MIXED"] ?? CATEGORY_THEME.MIXED;
+  const fresh   = listing.freshnessBadge ? FRESHNESS_THEME[listing.freshnessBadge] : null;
+  const statusT = listing.status ? LISTING_STATUS_THEME[listing.status] : null;
+  const isSoldOut = listing.status === "SOLD_OUT";
+
+  const discountPct = listing.originalPrice && listing.discountedPrice && listing.originalPrice > listing.discountedPrice
+    ? Math.round((1 - listing.discountedPrice / listing.originalPrice) * 100)
+    : null;
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `رمز استلام إدراج: ${listing.title}\nاستخدمه في تطبيق LeftO لتأكيد الاستلام.`,
+      });
+    } catch { /* share cancelled */ }
+  };
+
+  return (
+    <>
+      <View style={[lcStyles.card, isSoldOut && lcStyles.cardSoldOut]}>
+        {/* ── Photo / placeholder ── */}
+        <View style={[lcStyles.imageBlock, { backgroundColor: cat.bg }]}>
+          {listing.photoUrl
+            ? <Image source={{ uri: listing.photoUrl }} style={lcStyles.image} />
+            : <Text style={lcStyles.emoji}>{cat.emoji}</Text>
+          }
+          {statusT && (
+            <View style={[lcStyles.badge, lcStyles.badgeLeft, { backgroundColor: statusT.bg }]}>
+              <Text style={[lcStyles.badgeText, { color: statusT.color }]}>{rtl ? statusT.ar : statusT.en}</Text>
+            </View>
+          )}
+          {fresh && !isSoldOut && (
+            <View style={[lcStyles.badge, lcStyles.badgeRight, { backgroundColor: fresh.bg }]}>
+              <Text style={[lcStyles.badgeText, { color: fresh.color }]}>{rtl ? fresh.ar : fresh.en}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Content ── */}
+        <View style={lcStyles.content}>
+          <View style={[lcStyles.row, rtl && lcStyles.rowRTL]}>
+            <Text style={[lcStyles.title, rtl && lcStyles.rtl]} numberOfLines={1}>{listing.title}</Text>
+            {listing.type && (
+              <View style={lcStyles.typeChip}>
+                <Text style={lcStyles.typeChipText}>
+                  {listing.type === "MEAL_BAG" ? (rtl ? "حقيبة" : "Bag") : (rtl ? "محدد" : "Parcel")}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {listing.pickupStart && listing.pickupEnd && (
+            <View style={[lcStyles.metaRow, rtl && lcStyles.rowRTL]}>
+              <Feather name="clock" size={12} color={Colors.grayMedium} />
+              <Text style={lcStyles.metaText}>{formatPickup(listing.pickupStart, listing.pickupEnd)}</Text>
+            </View>
+          )}
+
+          <View style={[lcStyles.metaRow, rtl && lcStyles.rowRTL]}>
+            <Feather name="layers" size={12} color={Colors.grayMedium} />
+            <Text style={lcStyles.metaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
+          </View>
+
+          <View style={[lcStyles.priceRow, rtl && lcStyles.rowRTL]}>
+            {listing.originalPrice != null && listing.discountedPrice != null && listing.originalPrice > listing.discountedPrice && (
+              <Text style={lcStyles.originalPrice}>₪{listing.originalPrice}</Text>
+            )}
+            <Text style={lcStyles.discountedPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
+            {discountPct && discountPct > 0 && (
+              <View style={lcStyles.discountPill}>
+                <Text style={lcStyles.discountPillText}>-{discountPct}%</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ── Action buttons ── */}
+        <View style={[lcStyles.actions, rtl && lcStyles.rowRTL]}>
+          <TouchableOpacity
+            style={lcStyles.actionBtn}
+            onPress={() => setQrModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Feather name="maximize" size={14} color={Colors.grayMedium} />
+            <Text style={lcStyles.actionText}>QR</Text>
+          </TouchableOpacity>
+          <View style={lcStyles.actionDivider} />
+          <TouchableOpacity style={lcStyles.actionBtn} onPress={() => onEdit?.(listing)} activeOpacity={0.8}>
+            <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
+            <Text style={[lcStyles.actionText, { color: Colors.primaryOrange }]}>{rtl ? "تعديل" : "Edit"}</Text>
+          </TouchableOpacity>
+          {!isSoldOut && (
+            <>
+              <View style={lcStyles.actionDivider} />
+              <TouchableOpacity
+                style={lcStyles.actionBtn}
+                onPress={() => onSoldOut?.(listing.id)}
+                disabled={soldOutLoading === listing.id}
+                activeOpacity={0.8}
+              >
+                {soldOutLoading === listing.id
+                  ? <ActivityIndicator size="small" color="#6B7280" />
+                  : <>
+                      <Feather name="x-circle" size={14} color="#6B7280" />
+                      <Text style={[lcStyles.actionText, { color: "#6B7280" }]}>{rtl ? "نفد" : "Out"}</Text>
+                    </>
+                }
+              </TouchableOpacity>
+            </>
+          )}
+          <View style={lcStyles.actionDivider} />
+          <TouchableOpacity
+            style={lcStyles.actionBtn}
+            onPress={() => onDelete?.(listing.id, listing.title)}
+            disabled={deleteLoading === listing.id}
+            activeOpacity={0.8}
+          >
+            {deleteLoading === listing.id
+              ? <ActivityIndicator size="small" color="#EF4444" />
+              : <Feather name="trash-2" size={14} color="#EF4444" />
+            }
+          </TouchableOpacity>
+          {onDonate && (
+            <>
+              <View style={lcStyles.actionDivider} />
+              <TouchableOpacity style={lcStyles.actionBtn} onPress={() => onDonate(listing)} activeOpacity={0.8}>
+                <Feather name="gift" size={14} color={Colors.greenMain} />
+                <Text style={[lcStyles.actionText, { color: Colors.greenMain }]}>{rtl ? "تبرع" : "Donate"}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+
+      {/* ── QR Modal ── */}
+      <Modal
+        visible={qrModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrModalVisible(false)}
+      >
+        <View style={qrStyles.overlay}>
+          <View style={qrStyles.card}>
+            {/* Header */}
+            <View style={qrStyles.header}>
+              <TouchableOpacity onPress={() => setQrModalVisible(false)} style={qrStyles.closeBtn} activeOpacity={0.8}>
+                <Feather name="x" size={20} color={Colors.grayDark} />
+              </TouchableOpacity>
+              <Text style={qrStyles.title}>رمز الاستلام</Text>
+              <View style={{ width: 36 }} />
+            </View>
+
+            {/* QR image */}
+            {listing.qrCodeUrl ? (
+              <View style={qrStyles.qrWrap}>
+                <Image
+                  source={{ uri: listing.qrCodeUrl }}
+                  style={qrStyles.qrImage}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : (
+              <View style={qrStyles.qrPlaceholder}>
+                <Feather name="alert-circle" size={36} color={Colors.grayMedium} />
+                <Text style={qrStyles.qrPlaceholderText}>رمز QR غير متاح — قد يكون الإدراج قديماً</Text>
+                <Text style={qrStyles.qrPlaceholderSub}>أعد نشر الإدراج للحصول على رمز جديد</Text>
+              </View>
+            )}
+
+            {/* Instructions */}
+            <View style={qrStyles.instructionsBox}>
+              <Text style={qrStyles.instructionsTitle}>كيف يعمل رمز QR؟</Text>
+              <View style={qrStyles.step}>
+                <Text style={qrStyles.stepNum}>١</Text>
+                <Text style={qrStyles.stepText}>اعرض هذا الرمز في محلك</Text>
+              </View>
+              <View style={qrStyles.step}>
+                <Text style={qrStyles.stepNum}>٢</Text>
+                <Text style={qrStyles.stepText}>المشتري يمسح الرمز عند الاستلام</Text>
+              </View>
+              <View style={qrStyles.step}>
+                <Text style={qrStyles.stepNum}>٣</Text>
+                <Text style={qrStyles.stepText}>يتم تأكيد الاستلام تلقائياً</Text>
+              </View>
+            </View>
+
+            {/* Expiry warning */}
+            <View style={qrStyles.warningRow}>
+              <Feather name="alert-triangle" size={14} color="#D97706" />
+              <Text style={qrStyles.warningText}>الرمز صالح لمدة 24 ساعة من وقت النشر</Text>
+            </View>
+
+            {/* Actions */}
+            <View style={qrStyles.actions}>
+              <TouchableOpacity style={qrStyles.shareBtn} onPress={handleShare} activeOpacity={0.85}>
+                <Feather name="share-2" size={16} color={Colors.white} />
+                <Text style={qrStyles.shareBtnText}>مشاركة الرمز</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={qrStyles.closeActionBtn} onPress={() => setQrModalVisible(false)} activeOpacity={0.85}>
+                <Text style={qrStyles.closeActionBtnText}>إغلاق</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const lcStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 18, overflow: "hidden",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  cardSoldOut: { opacity: 0.7 },
+  imageBlock: { height: 110, alignItems: "center", justifyContent: "center" },
+  image: { width: "100%", height: "100%", resizeMode: "cover" },
+  emoji: { fontSize: 44 },
+  badge: {
+    position: "absolute", top: 8, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  badgeLeft: { left: 8 },
+  badgeRight: { right: 8 },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+  content: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 4, gap: 5 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  rowRTL: { flexDirection: "row-reverse" },
+  rtl: { textAlign: "right" },
+  title: { flex: 1, fontSize: 15, fontWeight: "700", color: Colors.grayDark },
+  typeChip: { backgroundColor: Colors.orangeLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  typeChipText: { fontSize: 10, fontWeight: "700", color: Colors.primaryOrange },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  metaText: { fontSize: 12, color: Colors.grayMedium },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  originalPrice: { fontSize: 12, color: Colors.grayMedium, textDecorationLine: "line-through" },
+  discountedPrice: { fontSize: 17, fontWeight: "800", color: Colors.primaryOrange },
+  discountPill: { backgroundColor: "#D1FAE5", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  discountPillText: { fontSize: 11, fontWeight: "700", color: "#059669" },
+  actions: {
+    flexDirection: "row", borderTopWidth: 1, borderTopColor: Colors.grayLight,
+    marginTop: Spacing.sm,
+  },
+  actionBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 4, paddingVertical: 12,
+  },
+  actionText: { fontSize: 11, fontWeight: "600", color: Colors.grayMedium },
+  actionDivider: { width: 1, backgroundColor: Colors.grayLight },
+});
+
+// ─── QR Modal styles ──────────────────────────────────────────────────────────
+
+const qrStyles = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center", justifyContent: "center", padding: 24,
+  },
+  card: {
+    backgroundColor: Colors.white, borderRadius: 24,
+    width: "100%", maxWidth: 360, padding: Spacing.xl, gap: Spacing.md,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12,
+  },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.background, alignItems: "center", justifyContent: "center",
+  },
+  title: { fontSize: 17, fontWeight: "800", color: Colors.grayDark },
+  qrWrap: {
+    alignItems: "center", padding: Spacing.md,
+    backgroundColor: "#F9FAFB", borderRadius: 16,
+  },
+  qrImage: { width: 220, height: 220 },
+  qrPlaceholder: {
+    alignItems: "center", gap: 8, padding: Spacing.xl,
+    backgroundColor: "#F9FAFB", borderRadius: 16,
+  },
+  qrPlaceholderText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium, textAlign: "center" },
+  qrPlaceholderSub: { fontSize: 12, color: Colors.grayMedium, textAlign: "center" },
+  instructionsBox: {
+    backgroundColor: "#F9FAFB", borderRadius: 14, padding: Spacing.md, gap: 10,
+  },
+  instructionsTitle: { fontSize: 13, fontWeight: "700", color: Colors.grayDark, marginBottom: 2, textAlign: "right" },
+  step: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  stepNum: { fontSize: 14, fontWeight: "800", color: Colors.primaryOrange, width: 22, textAlign: "center" },
+  stepText: { flex: 1, fontSize: 13, color: Colors.grayDark, textAlign: "right" },
+  warningRow: {
+    flexDirection: "row-reverse", alignItems: "center", gap: 8,
+    backgroundColor: "#FFFBEB", borderRadius: 10, padding: Spacing.sm,
+  },
+  warningText: { flex: 1, fontSize: 12, color: "#92400E", textAlign: "right" },
+  actions: { flexDirection: "row", gap: 10 },
+  shareBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingVertical: 13,
+  },
+  shareBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+  closeActionBtn: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.background, borderRadius: 14, paddingVertical: 13,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
+  closeActionBtnText: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+});
 
 // ─── SettingsField ────────────────────────────────────────────────────────────
 
@@ -1034,6 +1423,103 @@ function StatPill({ label, value }: { label: string; value: string }) {
     <View style={perfStyles.pill}>
       <Text style={perfStyles.pillVal}>{value}</Text>
       <Text style={perfStyles.pillLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// ─── SellerLocationDisplay ────────────────────────────────────────────────────
+
+function SellerLocationDisplay({
+  location,
+}: {
+  location: { address?: string | null; latitude: number; longitude: number } | null;
+}) {
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
+
+  useEffect(() => {
+    if (location?.address) {
+      setResolvedAddress(location.address);
+      return;
+    }
+    if (!location?.latitude || !location?.longitude) return;
+
+    const reverseGeocode = async () => {
+      setLoadingAddress(true);
+      try {
+        const results = await Location.reverseGeocodeAsync({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+        if (results && results.length > 0) {
+          const r = results[0];
+          const parts = [r.street, r.district, r.city, r.region].filter(Boolean);
+          setResolvedAddress(parts.length > 0 ? parts.join("، ") : null);
+        }
+      } catch {
+        setResolvedAddress(null);
+      } finally {
+        setLoadingAddress(false);
+      }
+    };
+
+    reverseGeocode();
+  }, [location?.latitude, location?.longitude, location?.address]);
+
+  const openInMaps = () => {
+    if (!location) return;
+    const url =
+      Platform.OS === "ios"
+        ? `maps:0,0?q=${location.latitude},${location.longitude}`
+        : `geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/?q=${location.latitude},${location.longitude}`);
+    });
+  };
+
+  if (!location) {
+    return (
+      <View style={styles.locationContainer}>
+        <View style={styles.locationRow}>
+          <Feather name="map-pin" size={16} color="#9CA3AF" />
+          <Text style={styles.locationEmpty}>الموقع غير محدد</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const coordText = `${Math.abs(location.latitude).toFixed(4)}° ${location.latitude >= 0 ? "ش" : "ج"}،  ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude >= 0 ? "ط" : "غ"}`;
+
+  return (
+    <View style={styles.locationContainer}>
+      <View style={styles.locationHeaderRow}>
+        <Feather name="map-pin" size={16} color="#DE985A" />
+        <Text style={styles.locationLabel}>الموقع</Text>
+      </View>
+
+      {loadingAddress ? (
+        <View style={styles.locationLoadingRow}>
+          <ActivityIndicator size="small" color="#DE985A" />
+          <Text style={styles.locationLoadingText}>جاري تحديد الموقع...</Text>
+        </View>
+      ) : resolvedAddress ? (
+        <Text style={styles.locationAddress}>{resolvedAddress}</Text>
+      ) : (
+        <Text style={styles.locationAddress}>نابلس، فلسطين</Text>
+      )}
+
+      {!resolvedAddress && !loadingAddress && (
+        <Text style={styles.locationCoords}>{coordText}</Text>
+      )}
+
+      <TouchableOpacity
+        style={styles.openMapsButton}
+        onPress={openInMaps}
+        activeOpacity={0.7}
+      >
+        <Feather name="navigation" size={13} color="#DE985A" />
+        <Text style={styles.openMapsText}>افتح في الخريطة</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -1257,40 +1743,7 @@ const styles = StyleSheet.create({
   // Status pill (shared)
   statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   statusPillText: { fontSize: 11, fontWeight: "700" },
-
-  // Settings
-  settingsField: { gap: 6 },
-  settingsLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
-  settingsInput: {
-    backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1.5,
-    borderColor: Colors.grayLight, paddingHorizontal: Spacing.md,
-    height: 48, fontSize: 14, color: Colors.grayDark,
-  },
-  settingsTextArea: { height: 88, paddingTop: 12 },
-  rtlInput: { textAlign: "right" },
-
-  bizTypeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  bizTypeRowRTL: { flexDirection: "row-reverse" },
-  bizTypeChip: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.grayLight,
-    backgroundColor: Colors.white,
-  },
-  bizTypeChipActive: { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
-  bizTypeChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
-  bizTypeChipTextActive: { color: Colors.primaryOrange },
-
-  settingsMsg: { borderRadius: 10, padding: 12 },
-  settingsMsgSuccess: { backgroundColor: Colors.greenLight },
-  settingsMsgError: { backgroundColor: "#fef2f2" },
-  settingsMsgText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
-
-  saveBtn: {
-    backgroundColor: Colors.primaryOrange, borderRadius: 14,
-    paddingVertical: 14, alignItems: "center", justifyContent: "center",
-    flexDirection: "row", gap: 8,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+  stateText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
 
   karamToggleCard: {
     backgroundColor: "#f0fdf4", borderRadius: 16, padding: Spacing.md,
@@ -1309,6 +1762,19 @@ const styles = StyleSheet.create({
   },
   switchBuyerBtnText: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
 
+  // Toast
+  toastOverlay: {
+    position: "absolute", bottom: 96, left: 0, right: 0,
+    alignItems: "center", zIndex: 99,
+  },
+  toastContainer: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.grayDark, borderRadius: 24,
+    paddingHorizontal: 20, paddingVertical: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 6,
+  },
+  toastText: { fontSize: 13, fontWeight: "600", color: Colors.white },
+
   // FAB
   fab: {
     position: "absolute", bottom: 28,
@@ -1320,6 +1786,129 @@ const styles = StyleSheet.create({
   },
   fabLTR: { right: 24 },
   fabRTL: { left: 24 },
+
+  // Location display
+  locationContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  locationHeaderRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  locationRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+  },
+  locationLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    textAlign: "right",
+  },
+  locationAddress: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#404040",
+    textAlign: "right",
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  locationCoords: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "right",
+    marginBottom: 8,
+  },
+  locationLoadingRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  locationLoadingText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
+  locationEmpty: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "right",
+    marginRight: 6,
+  },
+  openMapsButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#FFE8D6",
+    borderRadius: 20,
+    marginTop: 6,
+  },
+  openMapsText: {
+    fontSize: 13,
+    color: "#DE985A",
+    fontWeight: "600",
+  },
+
+  // ── Location editor (settings tab) ─────────────────────────────────────────
+  locationEditorCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.grayLight,
+    padding: Spacing.md, gap: 8,
+  },
+  locationEditorHeader: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  locationEditorHeaderLeft: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
+  locationEditorLabel: {
+    fontSize: 13, fontWeight: "700", color: Colors.grayDark,
+  },
+  locationEditorToggleBtn: {
+    fontSize: 13, fontWeight: "600", color: Colors.primaryOrange,
+  },
+  locationEditorCurrentAddr: {
+    fontSize: 14, color: Colors.grayMedium, marginBottom: 2,
+  },
+  locationEditorMapWrap: {
+    height: 260, borderRadius: 12, overflow: "hidden",
+    borderWidth: 1, borderColor: Colors.grayLight,
+  },
+  locationEditorMap: {
+    flex: 1,
+  },
+  locationEditorGpsBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 10, paddingHorizontal: 12,
+    backgroundColor: Colors.orangeLight, borderRadius: 10,
+    alignSelf: "flex-start",
+  },
+  locationEditorGpsText: {
+    fontSize: 13, fontWeight: "600", color: Colors.primaryOrange,
+  },
+  locationEditorSaveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, backgroundColor: Colors.primaryOrange,
+    borderRadius: 14, paddingVertical: 13,
+  },
+  locationEditorSaveBtnText: {
+    fontSize: 15, fontWeight: "700", color: Colors.white,
+  },
 
   // Donate modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },

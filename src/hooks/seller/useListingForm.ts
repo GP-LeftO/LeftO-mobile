@@ -6,7 +6,6 @@ import type { SellerListing, ListingFormData } from "../../services/seller/selle
 
 function isoToHHMM(iso: string): string {
   try {
-    // Already HH:MM
     if (/^\d{2}:\d{2}$/.test(iso)) return iso;
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "";
@@ -16,7 +15,6 @@ function isoToHHMM(iso: string): string {
   }
 }
 
-// Normalize partial time input to HH:MM — e.g. "9" → "09:00", "17" → "17:00", "17:3" → "17:03"
 function normalizeTime(raw: string): string {
   const clean = raw.replace(/[^\d:]/g, "");
   if (!clean) return "";
@@ -27,18 +25,30 @@ function normalizeTime(raw: string): string {
   return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
 }
 
-// Convert HH:MM to ISO datetime. If the resulting time is already in the past today,
-// advance to tomorrow so the backend never rejects it as expired.
+// Converts HH:MM to ISO datetime, advancing to tomorrow if the time has already passed today.
 function hhmmToSmartIso(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  // If this time has already passed today, advance to tomorrow
   if (d.getTime() <= Date.now()) {
     d.setDate(d.getDate() + 1);
     d.setHours(h, m, 0, 0);
   }
   return d.toISOString();
+}
+
+function isoToDateStr(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${day}`;
+  } catch {
+    return "";
+  }
 }
 
 // ─── Form state shape ─────────────────────────────────────────────────────────
@@ -52,9 +62,13 @@ export interface ListingFormState {
   quantity: string;
   pickupStart: string;
   pickupEnd: string;
+  expiryDate: string;       // "YYYY-MM-DD" or "" — only required for SPECIFIC_PARCEL
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote: string;
+  description: string;
   photoUrl: string;
+  isPriceDecaying: boolean;
+  floorPrice: string;       // only relevant when isPriceDecaying is true
 }
 
 export type FormErrors = Partial<Record<keyof ListingFormState, string>>;
@@ -65,17 +79,21 @@ export function useListingForm(existing?: SellerListing) {
   const isEdit = Boolean(existing?.id);
 
   const [form, setForm] = useState<ListingFormState>({
-    title:          existing?.title ?? "",
-    type:           existing?.type ?? "MEAL_BAG",
-    category:       existing?.category ?? "MEALS",
-    originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
-    discountedPrice: (existing?.discountedPrice)?.toString() ?? "",
-    quantity:       existing?.quantity?.toString() ?? "",
-    pickupStart:    existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
-    pickupEnd:      existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
-    freshnessBadge: existing?.freshnessBadge ?? "eat_today",
-    allergenNote:   existing?.allergenNote ?? "",
-    photoUrl:       existing?.photoUrl ?? "",
+    title:           existing?.title           ?? "",
+    type:            existing?.type            ?? "MEAL_BAG",
+    category:        existing?.category        ?? "MEALS",
+    originalPrice:   (existing?.originalPrice  ?? existing?.price)?.toString() ?? "",
+    discountedPrice: existing?.discountedPrice?.toString()  ?? "",
+    quantity:        existing?.quantity?.toString()         ?? "",
+    pickupStart:     existing?.pickupStart  ? isoToHHMM(existing.pickupStart) : "",
+    pickupEnd:       existing?.pickupEnd    ? isoToHHMM(existing.pickupEnd)   : "",
+    expiryDate:      isoToDateStr(existing?.expiryDate),
+    freshnessBadge:  existing?.freshnessBadge  ?? "eat_today",
+    allergenNote:    existing?.allergenNote    ?? "",
+    description:     existing?.description     ?? "",
+    photoUrl:        existing?.photoUrl        ?? "",
+    isPriceDecaying: existing?.isPriceDecaying ?? false,
+    floorPrice:      existing?.floorPrice?.toString() ?? "",
   });
 
   const [errors,      setErrors]      = useState<FormErrors>({});
@@ -88,33 +106,52 @@ export function useListingForm(existing?: SellerListing) {
   };
 
   const validate = (): boolean => {
-    // Auto-normalize time fields before validating so partial input ("17") doesn't block
     const normalizedStart = normalizeTime(form.pickupStart);
     const normalizedEnd   = normalizeTime(form.pickupEnd);
-    if (normalizedStart) setForm((p) => ({ ...p, pickupStart: normalizedStart }));
-    if (normalizedEnd)   setForm((p) => ({ ...p, pickupEnd:   normalizedEnd }));
+    if (normalizedStart) setForm(p => ({ ...p, pickupStart: normalizedStart }));
+    if (normalizedEnd)   setForm(p => ({ ...p, pickupEnd:   normalizedEnd }));
 
     const e: FormErrors = {};
-    if (!form.title.trim())
-      e.title = "Required";
-    if (!form.originalPrice || isNaN(Number(form.originalPrice)))
-      e.originalPrice = "Enter a valid price";
+
+    if (!form.title.trim() || form.title.trim().length < 2 || form.title.trim().length > 100)
+      e.title = "العنوان مطلوب (2–100 حرف)";
+    if (!form.originalPrice || isNaN(Number(form.originalPrice)) || Number(form.originalPrice) <= 0)
+      e.originalPrice = "أدخل سعراً صحيحاً";
     if (!form.discountedPrice || isNaN(Number(form.discountedPrice)))
-      e.discountedPrice = "Enter a valid price";
-    if (Number(form.discountedPrice) >= Number(form.originalPrice))
-      e.discountedPrice = "Must be less than original price";
+      e.discountedPrice = "أدخل سعراً صحيحاً";
+    else if (Number(form.discountedPrice) >= Number(form.originalPrice))
+      e.discountedPrice = "يجب أن يكون أقل من السعر الأصلي";
+    else if (Number(form.discountedPrice) < 0.5)
+      e.discountedPrice = "الحد الأدنى للسعر هو ₪0.50";
     if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) < 1)
-      e.quantity = "Min 1";
+      e.quantity = "الحد الأدنى للكمية هو 1";
     if (!normalizedStart)
-      e.pickupStart = "Enter pickup start (e.g. 17:00)";
+      e.pickupStart = "أدخل وقت بدء الاستلام (مثال: 17:00)";
     if (!normalizedEnd)
-      e.pickupEnd = "Enter pickup end (e.g. 20:00)";
+      e.pickupEnd = "أدخل وقت انتهاء الاستلام (مثال: 20:00)";
+    else if (normalizedEnd <= normalizedStart)
+      e.pickupEnd = "يجب أن يكون بعد وقت البدء";
+
+    if (form.type === "SPECIFIC_PARCEL") {
+      if (!form.expiryDate)
+        e.expiryDate = "تاريخ الصلاحية مطلوب للطرد المحدد";
+      else if (new Date(form.expiryDate).getTime() <= Date.now())
+        e.expiryDate = "يجب أن يكون تاريخاً مستقبلياً";
+    }
+
+    if (form.isPriceDecaying) {
+      if (!form.floorPrice || isNaN(Number(form.floorPrice)) || Number(form.floorPrice) <= 0)
+        e.floorPrice = "أدخل الحد الأدنى للسعر";
+      else if (Number(form.floorPrice) >= Number(form.discountedPrice))
+        e.floorPrice = "يجب أن يكون أقل من السعر المخفض";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const submit = async (): Promise<void> => {
-    if (!validate()) return;
+  const submit = async (): Promise<SellerListing> => {
+    if (!validate()) throw new Error("validation_failed");
     setLoading(true);
     setSubmitError("");
     try {
@@ -125,21 +162,30 @@ export function useListingForm(existing?: SellerListing) {
         originalPrice:   Number(form.originalPrice),
         discountedPrice: Number(form.discountedPrice),
         quantity:        Number(form.quantity),
-        // API requires ISO datetime — smart converter advances to tomorrow if time has passed
         pickupStart:     hhmmToSmartIso(normalizeTime(form.pickupStart)),
         pickupEnd:       hhmmToSmartIso(normalizeTime(form.pickupEnd)),
         freshnessBadge:  form.freshnessBadge,
-        allergenNote:    form.allergenNote.trim() || undefined,
-        photoUrl:        form.photoUrl.trim() || undefined,
+        allergenNote:    form.allergenNote.trim()  || undefined,
+        description:     form.description.trim()   || undefined,
+        photoUrl:        form.photoUrl.trim()       || undefined,
+        isPriceDecaying: form.isPriceDecaying       || undefined,
+        floorPrice:      form.isPriceDecaying && form.floorPrice
+                           ? Number(form.floorPrice) : undefined,
+        expiryDate:      form.type === "SPECIFIC_PARCEL" && form.expiryDate
+                           ? new Date(form.expiryDate).toISOString() : undefined,
       };
+
+      let result: SellerListing;
       if (isEdit && existing?.id) {
-        await updateListing(existing.id, payload);
+        result = await updateListing(existing.id, payload);
       } else {
-        await createListing(payload);
+        result = await createListing(payload);
       }
-    } catch {
-      setSubmitError("Something went wrong. Please try again.");
-      throw new Error("submit_failed");
+      return result;
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setSubmitError(msg ?? "حدث خطأ. يرجى المحاولة مجدداً.");
+      throw err;
     } finally {
       setLoading(false);
     }
