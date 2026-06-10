@@ -445,7 +445,7 @@ function KaramCard({
   seller, rtl, onSponsor, sponsoringId,
 }: { seller: KaramSeller; rtl: boolean; onSponsor: (s: KaramSeller) => void; sponsoringId: string | null }) {
   const isSponsoring = sponsoringId === seller.sellerId;
-  const { available } = seller.today;
+  const available = seller.today?.available ?? 0;
   return (
     <View style={styles.communityCard}>
       <View style={styles.communityCardTop}>

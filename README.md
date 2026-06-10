@@ -384,7 +384,7 @@ AI-powered GPS discovery feature. Buyer taps the entry button on Home, grants lo
 |--------|----------|---------|
 | POST | `/api/auth/send-otp` | PhoneEntryScreen |
 | POST | `/api/auth/verify-otp` | OTPVerificationScreen |
-| POST | `/api/auth/login` | SignInScreen |
+| POST | `/api/auth/login` | SignInScreen; PhoneEntryScreen (pre-OTP existence check) |
 | POST | `/api/auth/register` | BasicInfoScreen, CharityDocumentScreen |
 | POST | `/api/auth/refresh` | Axios 401 interceptor (silent) |
 | POST | `/api/sellers/register` | RoleSpecificInfoScreen |
@@ -623,6 +623,31 @@ New `AppStep` values: `"seller-donate-surplus"`, `"seller-donations-history"`.
 
 New `AppStep` values: `"seller-donate-surplus"`, `"seller-donations-history"`.
 "Donate Surplus" CTA on listing cards in the Listings tab navigates to `SellerDonateSurplusScreen` with the selected listing passed as prop.
+
+---
+
+### ✅ Sprint 7 — UX Guards & Auth Polish
+
+#### Early Phone Existence Check
+
+Prevents users from reaching step 5 of registration only to discover their phone is already registered.
+
+| File | Change |
+|------|--------|
+| `src/screens/auth/PhoneEntryScreen.tsx` | Pre-OTP probe on Continue tap; `checking` state; inline error + "Sign in instead" link |
+| `src/services/auth/auth.service.ts` | `checkPhoneExists(phone): Promise<boolean>` — login probe with sentinel password |
+
+**Flow:**
+1. User taps **Send Code** → button shows spinner immediately
+2. `checkPhoneExists` calls `POST /api/auth/login` with `password: "____probe____"`
+3. `401 "Invalid credentials"` → user found (wrong password) → phone **exists** → inline error shown, `send-otp` never called
+4. `404` → user not found → phone is free → proceed to `POST /api/auth/send-otp` → navigate to OTP screen
+5. `200` → somehow authenticated → phone exists → inline error shown
+6. `5xx` / network error → fail open, proceed to OTP (registration endpoint is the real server-side guard)
+
+**Error UI:** Inline below phone input — `"This number is already registered."` + tappable `"Sign in instead →"` that calls `onSignIn`. No modal, no automatic navigation. Continue button loading covers both the probe and OTP call.
+
+**⚠️ Pending backend fix:** The backend currently returns `401 "Invalid credentials"` for both unknown and wrong-password cases (security measure). The probe requires the backend to return `404 NotFoundException` when the phone is not found, keeping `401` only for wrong-password. Until that change is deployed, the probe fails open and does not block registration.
 
 ---
 

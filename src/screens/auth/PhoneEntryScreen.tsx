@@ -11,6 +11,7 @@ import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
 import StepIndicator from "../../components/auth/StepIndicator";
 import { useAuth } from "../../hooks/auth/useAuth";
+import { checkPhoneExists } from "../../services/auth/auth.service";
 
 interface PhoneEntryScreenProps {
   onComplete?: (phone: string) => void;
@@ -31,6 +32,8 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [focused, setFocused] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
 
   const validate = () => {
     const digits = phone.replace(/\D/g, "");
@@ -45,6 +48,17 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
   const handleContinue = async () => {
     if (!validate()) return;
     const full = phone.replace(/\D/g, "");
+    setPhoneExists(false);
+    setChecking(true);
+    try {
+      const exists = await checkPhoneExists(full);
+      if (exists) {
+        setPhoneExists(true);
+        return;
+      }
+    } finally {
+      setChecking(false);
+    }
     try {
       await sendOtp(full);
       if (onComplete) onComplete(full);
@@ -89,12 +103,12 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.inputGroup}>
-          <View style={[styles.phoneRow, focused && styles.phoneFocused, !!displayError && styles.phoneError]}>
+          <View style={[styles.phoneRow, focused && styles.phoneFocused, (!!displayError || phoneExists) && styles.phoneError]}>
             <TextInput
               ref={phoneRef}
               style={[styles.phoneInput, rtl && styles.rtl]}
               value={phone}
-              onChangeText={(v) => { setPhone(v); setError(""); }}
+              onChangeText={(v) => { setPhone(v); setError(""); setPhoneExists(false); }}
               placeholder="0590000000"
               placeholderTextColor={Colors.grayMedium}
               keyboardType="phone-pad"
@@ -104,10 +118,23 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
               onBlur={() => setFocused(false)}
               maxLength={15}
               textAlign={rtl ? "right" : "left"}
-              editable={!sendOtpState.loading}
+              editable={!checking && !sendOtpState.loading}
             />
           </View>
-          {!!displayError && <Text style={[styles.errorText, rtl && styles.rtl]}>{displayError}</Text>}
+          {phoneExists ? (
+            <View style={[styles.existsRow, rtl && styles.existsRowRTL]}>
+              <Text style={[styles.errorText, styles.existsText, rtl && styles.rtl]}>
+                {rtl ? "هذا الرقم مسجّل بالفعل." : "This phone is already registered."}
+              </Text>
+              <TouchableOpacity onPress={onSignIn} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Text style={styles.existsLink}>
+                  {rtl ? "سجّل دخولك" : "Sign in instead"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : !!displayError ? (
+            <Text style={[styles.errorText, rtl && styles.rtl]}>{displayError}</Text>
+          ) : null}
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(500).springify()} style={[styles.note, rtl && styles.noteRTL]}>
@@ -124,7 +151,7 @@ export default function PhoneEntryScreen({ onComplete, onBack, onSignIn, navigat
             label={rtl ? "إرسال الرمز" : "Send Code"}
             onPress={handleContinue}
             variant="primary"
-            loading={sendOtpState.loading}
+            loading={checking || sendOtpState.loading}
             testID="send-code"
           />
         </Animated.View>
@@ -188,4 +215,9 @@ const styles = StyleSheet.create({
   signInRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   signInLabel: { fontSize: 14, color: Colors.grayMedium },
   signInLink: { fontSize: 14, fontWeight: "700", color: Colors.primaryOrange },
+
+  existsRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 },
+  existsRowRTL: { flexDirection: "row-reverse" },
+  existsText: { flexShrink: 1 },
+  existsLink: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange, textDecorationLine: "underline" },
 });

@@ -7,13 +7,13 @@
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
+    "updates": {
+      "enabled": false
+    },
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff",
-      "updates": {
-        "enabled": false
-      }
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
