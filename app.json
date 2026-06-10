@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#DE985A"
       },
-      "package": "com.anonymous.lefto",
+      "package": "lefto.com",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",
