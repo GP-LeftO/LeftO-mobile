@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "654325071291",
+    "project_id": "lefto-6f61b",
+    "storage_bucket": "lefto-6f61b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:654325071291:android:0ee6ee952ce6911a92d89e",
+        "android_client_info": {
+          "package_name": "lefto.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmkEg4yTCXeVXA050cGx1sk75aEQc5FRg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
