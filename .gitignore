@@ -44,3 +44,14 @@ yarn-error.*
 # Claude Code session notes (persist across branches, not tracked by git)
 .claude/fe-gap-analysis.md
 .claude/implementation-plan.md
+
+API_REFERENCE.md
+AUDIT_AND_ROADMAP.md
+CODE_REVIEW.md
+FE_CHECKLIST.md
+FINAL_ROADMAP.md
+PR_fix-code-review-fixes.md
+PR_sprint5_ghayda.md
+TASKS_GHAYDA.md
+TASKS_TALA.md
+sprint5.md
