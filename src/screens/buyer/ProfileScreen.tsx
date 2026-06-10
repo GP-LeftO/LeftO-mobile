@@ -19,7 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
-import { t, isRTL } from "../../i18n";
+import { t, isRTL, setLanguageAsync } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useProfile, ProfileTab } from "../../hooks/buyer/profile/useProfile";
 import { useNotificationSettings } from "../../hooks/buyer/useNotificationSettings";
@@ -616,6 +616,41 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
             </Text>
             <Feather name={rtl ? "chevron-left" : "chevron-right"} size={15} color={Colors.grayLight} />
           </TouchableOpacity>
+
+          {/* Language toggle */}
+          <View style={[styles.settingsDivider, rtl && { marginRight: 52, marginLeft: 0 }]} />
+          <View style={[styles.settingsRow, rtl && styles.rowReverse]}>
+            <View style={[styles.settingsIconWrap, { backgroundColor: "#6366F118" }]}>
+              <Feather name="globe" size={16} color="#6366F1" />
+            </View>
+            <Text style={[styles.settingsRowLabel, rtl && styles.rtl, { flex: 1 }]}>
+              {rtl ? "اللغة" : "Language"}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {(["ar", "en"] as const).map(lang => (
+                <TouchableOpacity
+                  key={lang}
+                  onPress={() => setLanguageAsync(lang)}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 5,
+                    borderRadius: 20,
+                    backgroundColor: (rtl ? lang === "ar" : lang === "en")
+                      ? Colors.primaryOrange : Colors.background,
+                    borderWidth: 1.5,
+                    borderColor: (rtl ? lang === "ar" : lang === "en")
+                      ? Colors.primaryOrange : Colors.grayLight,
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 12, fontWeight: "700",
+                    color: (rtl ? lang === "ar" : lang === "en") ? "#fff" : Colors.grayMedium,
+                  }}>
+                    {lang === "ar" ? "ع" : "EN"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
       )}
 

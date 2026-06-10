@@ -35,23 +35,3 @@ export const getMyPerformance = (): Promise<PerformanceResult> =>
 
 export const getPublicPerformance = (sellerId: string): Promise<Omit<PerformanceResult, 'stats'>> =>
   api.get(`/api/listings/ai/performance/${sellerId}`).then(r => r.data.data);
-
-export interface ImageAnalysisResult {
-  suggestedTitle?: string;
-  suggestedCategory?: string;
-  suggestedAllergens?: string[];
-  description?: string;
-  confidence?: string;
-}
-
-export const analyzeListingImage = async (localUri: string): Promise<ImageAnalysisResult> => {
-  const form = new FormData();
-  const filename = localUri.split('/').pop() ?? 'photo.jpg';
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : 'image/jpeg';
-  form.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
-  const res = await api.post('/api/listings/ai/analyze-image', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return res.data.data;
-};

@@ -25,7 +25,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   if (finalStatus !== "granted") return null;
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const tokenData = await Notifications.getDevicePushTokenAsync();
   return tokenData.data;
 }
 

@@ -23,6 +23,7 @@ interface RoleSpecificInfoScreenProps {
   name?: string;
   email?: string;
   password?: string;
+  isUpgrade?: boolean;
   onComplete?: () => void;
   onPending?: () => void;
   onBack?: () => void;
@@ -41,6 +42,7 @@ const PICKUP_WINDOWS = ["Morning (7–10 AM)", "Noon (12–2 PM)", "Afternoon (4
 
 export default function RoleSpecificInfoScreen({
   role = "buyer", phone = "", name = "", email = "", password = "",
+  isUpgrade = false,
   onComplete, onPending, onBack, navigation,
 }: RoleSpecificInfoScreenProps) {
   const insets = useSafeAreaInsets();
@@ -61,10 +63,11 @@ export default function RoleSpecificInfoScreen({
   const [selectedWindows,  setSelectedWindows]  = useState<string[]>([]);
 
   // ── seller / charity state
-  const [businessType,     setBusinessType]     = useState<"RESTAURANT" | "MARKET" | "BAKERY" | "">("");
-  const [description,      setDescription]      = useState("");
-  const [docUri,           setDocUri]           = useState<string | null>(null);
-  const [docName,          setDocName]          = useState("");
+  const [businessType,       setBusinessType]       = useState<"RESTAURANT" | "MARKET" | "BAKERY" | "">("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [description,        setDescription]        = useState("");
+  const [docUri,             setDocUri]             = useState<string | null>(null);
+  const [docName,            setDocName]            = useState("");
 
   // ── submission state
   const [isSubmitting,   setIsSubmitting]   = useState(false);
@@ -108,6 +111,7 @@ export default function RoleSpecificInfoScreen({
     }
     if (role === "seller") {
       if (!businessType)               e.btype = rtl ? "اختر نوع عملك"  : "Select your business type";
+      if (!registrationNumber.trim())  e.regNum = rtl ? "أدخل رقم السجل التجاري" : "Enter your registration number";
       if (locationMode === "map" && !pickedLocation)
                                        e.location = rtl ? "يرجى تحديد موقع عملك على الخريطة" : "Please select your business location on the map";
       if (locationMode === "manual" && !manualAddress.trim())
@@ -175,19 +179,31 @@ export default function RoleSpecificInfoScreen({
     // ── Step 3: seller-specific registration ────────────────────────────────
     try {
       if (role === "seller") {
-        await registerSeller({
-          businessName: name,
-          businessType: businessType as "RESTAURANT" | "MARKET" | "BAKERY",
-          location: locationMode === "manual"
-            ? { latitude: 0, longitude: 0, address: manualAddress.trim() }
-            : {
-                latitude:  pickedLocation?.latitude  ?? 0,
-                longitude: pickedLocation?.longitude ?? 0,
-                address:   pickedLocation?.address,
-              },
-          description: description || undefined,
-          documentUrls,
-        });
+        try {
+          await registerSeller({
+            businessName: name,
+            businessType: businessType as "RESTAURANT" | "MARKET" | "BAKERY",
+            registrationNumber: registrationNumber.trim() || undefined,
+            location: locationMode === "manual"
+              ? { latitude: 0, longitude: 0, address: manualAddress.trim() }
+              : {
+                  latitude:  pickedLocation?.latitude  ?? 0,
+                  longitude: pickedLocation?.longitude ?? 0,
+                  address:   pickedLocation?.address,
+                },
+            description: description || undefined,
+            documentUrls,
+          });
+        } catch (regErr: unknown) {
+          const axiosErr = regErr as { response?: { status?: number; data?: { message?: string } } };
+          // 409 = profile already exists — treat as success for upgrade flow
+          if (axiosErr.response?.status !== 409) throw regErr;
+        }
+        // Registration number in whitelist → immediately APPROVED → call onComplete
+        if (isUpgrade && onComplete) {
+          onComplete();
+          return;
+        }
       }
 
       if (onPending) onPending();
@@ -323,6 +339,30 @@ export default function RoleSpecificInfoScreen({
                 ))}
               </View>
               {!!errors.btype && <Text style={styles.errorText}>{errors.btype}</Text>}
+            </Animated.View>
+          )}
+
+          {/* ── SELLER: registration number ── */}
+          {role === "seller" && (
+            <Animated.View entering={FadeInDown.delay(200).duration(400).springify()} style={styles.section}>
+              <Text style={styles.sectionLabel}>{rtl ? "رقم السجل التجاري *" : "Registration Number *"}</Text>
+              <View style={[styles.textAreaWrap, !!errors.regNum && styles.inputError]}>
+                <TextInput
+                  style={styles.addressInput}
+                  placeholder={rtl ? "مثال: NE-200001" : "e.g. NE-200001"}
+                  placeholderTextColor="#9CA3AF"
+                  value={registrationNumber}
+                  onChangeText={v => { setRegistrationNumber(v); setErrors(e => ({ ...e, regNum: "" })); }}
+                  autoCapitalize="characters"
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {!!errors.regNum && <Text style={styles.errorText}>{errors.regNum}</Text>}
+              <Text style={styles.sectionHint}>
+                {rtl
+                  ? "رقم غرفة التجارة. للتجربة: NE-200001 إلى NE-200020"
+                  : "Chamber of Commerce number. Demo values: NE-200001 to NE-200020"}
+              </Text>
             </Animated.View>
           )}
 

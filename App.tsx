@@ -95,7 +95,8 @@ type AppStep =
   | "seller-donate-surplus"
   | "seller-donations-history"
   | "admin-dashboard"
-  | "admin-user-detail";
+  | "admin-user-detail"
+  | "seller-upgrade";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -451,6 +452,33 @@ function AppContent() {
         )
       }
 
+      {step === "seller-upgrade" &&
+        screen(
+          <RoleSpecificInfoScreen
+            role="seller"
+            onBack={goBack}
+            isUpgrade
+            onComplete={async () => {
+              ctx.setHasSeller(true);
+              await ctx.saveSession({
+                user: ctx.user!,
+                accessToken: ctx.accessToken!,
+                sellerStatus: "APPROVED",
+                hasSeller: true,
+              });
+              try {
+                await ctx.switchRoleToken("SELLER");
+              } catch { /* best-effort */ }
+              goTo("seller-dashboard");
+            }}
+            onPending={() => {
+              ctx.setHasSeller(true);
+              goTo("under-review");
+            }}
+          />
+        )
+      }
+
       {step === "sign-in" &&
         screen(
           <SignInScreen
@@ -506,6 +534,13 @@ function AppContent() {
             onOpenNearMe={handleOpenNearMe}
             onOpenNotifications={() => goTo("notifications")}
             onOpenQRScan={(params) => { setQrScanParams(params); goTo("qr-scan"); }}
+            onNavigateToSellerDashboard={async () => {
+              try {
+                await ctx.switchRoleToken("SELLER");
+                goTo("seller-dashboard");
+              } catch { /* silently ignore — ProfileScreen handles UI states */ }
+            }}
+            onNavigateToSellerRegister={() => goTo("seller-upgrade")}
           />
         )
       }
