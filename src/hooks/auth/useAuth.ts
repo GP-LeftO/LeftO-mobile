@@ -135,6 +135,7 @@ export function useAuth() {
         refreshToken: result.refreshToken,
         sellerStatus: result.sellerStatus,
         charityStatus: result.charityStatus,
+        hasSeller: !!(result as unknown as { hasSeller?: boolean }).hasSeller,
       });
       setLoginState({ loading: false, error: null, data: result });
       return result;
@@ -165,6 +166,11 @@ export function useAuth() {
     isInitializing:  ctx.isInitializing,
     sellerStatus:    ctx.sellerStatus,
     charityStatus:   ctx.charityStatus,
+    hasSeller:       ctx.hasSeller,
+
+    // ── Role switching
+    switchRoleToken: ctx.switchRoleToken,
+    setHasSeller:    ctx.setHasSeller,
 
     // ── Functions + their states
     sendOtp,       sendOtpState,
