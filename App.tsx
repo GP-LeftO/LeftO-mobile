@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
+import * as Notifications from "expo-notifications";
+import {
+  registerForPushNotifications,
+  savePushToken,
+  clearPushToken,
+} from "./src/services/shared/pushNotifications.service";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { AuthProvider } from "./src/context/AuthContext";
@@ -38,6 +44,7 @@ import NotificationsScreen        from "./src/screens/shared/NotificationsScreen
 import QRScanScreen               from "./src/screens/buyer/QRScanScreen";
 import SellerDonateSurplusScreen  from "./src/screens/seller/donations/SellerDonateSurplusScreen";
 import SellerDonationsHistoryScreen from "./src/screens/seller/donations/SellerDonationsHistoryScreen";
+import AdminRedirectScreen        from "./src/screens/admin/AdminRedirectScreen";
 import AdminDashboardScreen       from "./src/screens/admin/AdminDashboardScreen";
 import AdminUserDetailScreen      from "./src/screens/admin/AdminUserDetailScreen";
 
@@ -167,6 +174,49 @@ function AppContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.viewMode]);
+
+  // ── Push notifications: register on login, clear on logout ───────────────────
+  const notifListenerRef = useRef<Notifications.Subscription | null>(null);
+
+  useEffect(() => {
+    if (!ctx.isAuthenticated) {
+      clearPushToken();
+      notifListenerRef.current?.remove();
+      notifListenerRef.current = null;
+      return;
+    }
+    (async () => {
+      const token = await registerForPushNotifications();
+      if (token) await savePushToken(token);
+    })();
+
+    // Handle tap on a push notification (app backgrounded or killed)
+    notifListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as Record<string, unknown>;
+      const type = data?.type as string | undefined;
+
+      if (!ctx.isAuthenticated) return;
+
+      if (type === "SELLER_APPROVED") {
+        goTo("seller-dashboard");
+      } else if (type === "SELLER_REJECTED") {
+        goTo("rejected");
+      } else if (type === "CHARITY_APPROVED") {
+        goTo("charity-dashboard");
+      } else if (type === "ACCOUNT_BLOCKED") {
+        goTo("buyer-home");
+      } else {
+        // All other types → show the in-app notifications screen
+        goTo("notifications");
+      }
+    });
+
+    return () => {
+      notifListenerRef.current?.remove();
+      notifListenerRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.isAuthenticated]);
 
   // ── Resolve home route from user role + status ─────────────────────────────
   const resolveHomeRoute = (
@@ -532,12 +582,7 @@ function AppContent() {
       }
 
       {step === "admin-dashboard" &&
-        screen(
-          <AdminDashboardScreen
-            onLogout={handleLogout}
-            onViewUser={(id) => { setAdminUserId(id); goTo("admin-user-detail"); }}
-          />
-        )
+        screen(<AdminRedirectScreen onLogout={handleLogout} />)
       }
 
       {step === "admin-user-detail" && adminUserId &&

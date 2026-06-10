@@ -18,15 +18,22 @@ interface NotificationsScreenProps {
 }
 
 const TYPE_ICON: Record<NotificationType, { icon: keyof typeof Feather.glyphMap; color: string; bg: string }> = {
-  ORDER_RESERVED:     { icon: "shopping-bag", color: Colors.primaryOrange, bg: Colors.orangeLight },
-  ORDER_COMPLETED:    { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  ORDER_CANCELLED:    { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
-  DONATION_RECEIVED:  { icon: "gift",          color: "#8b5cf6",            bg: "#ede9fe" },
-  DONATION_CONFIRMED: { icon: "heart",         color: Colors.greenMain,     bg: Colors.greenLight },
-  SELLER_APPROVED:    { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  SELLER_REJECTED:    { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
-  CHARITY_APPROVED:   { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  SYSTEM:             { icon: "bell",          color: Colors.grayMedium,    bg: Colors.grayLight },
+  ORDER_RESERVED:            { icon: "shopping-bag", color: Colors.primaryOrange, bg: Colors.orangeLight },
+  ORDER_COMPLETED:           { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
+  ORDER_CANCELLED:           { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
+  DONATION_RECEIVED:         { icon: "gift",          color: "#8b5cf6",            bg: "#ede9fe" },
+  DONATION_CONFIRMED:        { icon: "heart",         color: Colors.greenMain,     bg: Colors.greenLight },
+  SELLER_APPROVED:           { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
+  SELLER_REJECTED:           { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
+  CHARITY_APPROVED:          { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
+  NEW_LISTING_FROM_FAVORITE: { icon: "star",          color: Colors.primaryOrange, bg: Colors.orangeLight },
+  LISTING_EXPIRING_SOON:     { icon: "clock",         color: "#f59e0b",            bg: "#fffbeb" },
+  WASTE_PATTERN_ALERT:       { icon: "alert-triangle", color: "#f59e0b",           bg: "#fffbeb" },
+  DEAL_WINDOW_TIP:           { icon: "zap",           color: Colors.primaryOrange, bg: Colors.orangeLight },
+  ACCOUNT_BLOCKED:           { icon: "slash",         color: "#ef4444",            bg: "#fef2f2" },
+  LISTING_REPORTED:          { icon: "flag",          color: "#f59e0b",            bg: "#fffbeb" },
+  LISTING_REMOVED:           { icon: "trash-2",       color: "#ef4444",            bg: "#fef2f2" },
+  SYSTEM:                    { icon: "bell",          color: Colors.grayMedium,    bg: Colors.grayLight },
 };
 
 function timeAgo(iso: string, rtl: boolean): string {

@@ -56,6 +56,8 @@ export interface ListingFormState {
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote: string;
   photoUrl: string;
+  isPriceDecaying: boolean;
+  floorPrice: string;
 }
 
 export type FormErrors = Partial<Record<keyof ListingFormState, string>>;
@@ -66,18 +68,20 @@ export function useListingForm(existing?: SellerListing) {
   const isEdit = Boolean(existing?.id);
 
   const [form, setForm] = useState<ListingFormState>({
-    title:          existing?.title ?? "",
-    description:    existing?.description ?? "",
-    type:           existing?.type ?? "MEAL_BAG",
-    category:       existing?.category ?? "MEALS",
-    originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
+    title:           existing?.title ?? "",
+    description:     existing?.description ?? "",
+    type:            existing?.type ?? "MEAL_BAG",
+    category:        existing?.category ?? "MEALS",
+    originalPrice:   (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
     discountedPrice: (existing?.discountedPrice)?.toString() ?? "",
-    quantity:       existing?.quantity?.toString() ?? "",
-    pickupStart:    existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
-    pickupEnd:      existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
-    freshnessBadge: existing?.freshnessBadge ?? "eat_today",
-    allergenNote:   existing?.allergenNote ?? "",
-    photoUrl:       existing?.photoUrl ?? "",
+    quantity:        existing?.quantity?.toString() ?? "",
+    pickupStart:     existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
+    pickupEnd:       existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
+    freshnessBadge:  existing?.freshnessBadge ?? "eat_today",
+    allergenNote:    existing?.allergenNote ?? "",
+    photoUrl:        existing?.photoUrl ?? "",
+    isPriceDecaying: existing?.isPriceDecaying ?? false,
+    floorPrice:      existing?.floorPrice?.toString() ?? "",
   });
 
   const [errors,      setErrors]      = useState<FormErrors>({});
@@ -134,6 +138,8 @@ export function useListingForm(existing?: SellerListing) {
         freshnessBadge:  form.freshnessBadge,
         allergenNote:    form.allergenNote.trim() || undefined,
         photoUrl:        form.photoUrl.trim() || undefined,
+        isPriceDecaying: form.isPriceDecaying || undefined,
+        floorPrice:      form.isPriceDecaying && form.floorPrice ? Number(form.floorPrice) : undefined,
       };
       if (isEdit && existing?.id) {
         await updateListing(existing.id, payload);

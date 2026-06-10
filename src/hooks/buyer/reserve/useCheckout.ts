@@ -33,8 +33,11 @@ export function useCheckout(availableQuantity: number): UseCheckoutResult {
       const order = await createOrder({ listingId: params.listingId, quantity, type: "PURCHASE" });
       return order;
     } catch (err: unknown) {
-      const axErr = err as { response?: { data?: { message?: string } } };
-      const msg = axErr.response?.data?.message ?? "Something went wrong. Please try again.";
+      const axErr = err as { response?: { status?: number; data?: { message?: string } } };
+      const status = axErr.response?.status;
+      const msg = status === 403
+        ? "حسابك موقوف مؤقتاً بسبب إلغاءات متعددة. تواصل مع الدعم لإعادة التفعيل."
+        : (axErr.response?.data?.message ?? "Something went wrong. Please try again.");
       setError(msg);
       throw err;
     } finally {

@@ -1,18 +1,17 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView, Alert,
+  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView, Alert, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { Colors, Spacing } from "../../../theme";
 import { isRTL } from "../../../i18n";
 import { useListingForm } from "../../../hooks/seller/useListingForm";
 import {
-  scoreListingTitle, getPriceSuggestion, suggestAllergens, analyzeListingImage,
+  scoreListingTitle, getPriceSuggestion, suggestAllergens,
 } from "../../../services/seller/listingAI.service";
-import type { TitleScoreResult, PriceSuggestionResult, ImageAnalysisResult } from "../../../services/seller/listingAI.service";
+import type { TitleScoreResult, PriceSuggestionResult } from "../../../services/seller/listingAI.service";
 import type { SellerListing } from "../../../services/seller/seller.service";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -58,14 +57,12 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   const [titleScoring,     setTitleScoring]     = useState(false);
   const [priceSugg,        setPriceSugg]        = useState<PriceSuggestionResult | null>(null);
   const [allergenDetecting, setAllergenDetecting] = useState(false);
-  const [imageAnalysis,    setImageAnalysis]    = useState<ImageAnalysisResult | null>(null);
-  const [imageAnalyzing,   setImageAnalyzing]   = useState(false);
-
   // ── AI handlers ───────────────────────────────────────────────────────────────
 
-  const handleTitleBlur = useCallback(async () => {
+  const handleScoreTitle = useCallback(async () => {
     if (form.title.trim().length < 3) return;
     setTitleScoring(true);
+    setTitleScore(null);
     try {
       const res = await scoreListingTitle(form.title.trim(), form.category);
       setTitleScore(res);
@@ -102,30 +99,6 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
     }
   }, [form.title, rtl, setField]);
 
-  const handleAnalyzeImage = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(rtl ? "إذن مطلوب" : "Permission Required", rtl ? "يرجى السماح بالوصول إلى الصور" : "Please allow access to your photo library");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-      allowsEditing: true,
-    });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    setImageAnalyzing(true);
-    setImageAnalysis(null);
-    try {
-      const analysis = await analyzeListingImage(result.assets[0].uri);
-      setImageAnalysis(analysis);
-    } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحليل الصورة" : "Could not analyze image");
-    } finally {
-      setImageAnalyzing(false);
-    }
-  }, [rtl]);
-
   // Trigger price suggestion whenever category or original price changes
   React.useEffect(() => {
     const orig = Number(form.originalPrice);
@@ -135,15 +108,15 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
     }
   }, [form.category, form.originalPrice]);
 
-  // ── Score bar color ──────────────────────────────────────────────────────────
+  // ── Score bar color (0–49 red, 50–74 orange, 75–100 green) ──────────────────
   const scoreColor = !titleScore ? Colors.grayMedium
-    : titleScore.score >= 70 ? Colors.greenMain
-    : titleScore.score >= 41 ? Colors.primaryOrange
+    : titleScore.score >= 75 ? Colors.greenMain
+    : titleScore.score >= 50 ? Colors.primaryOrange
     : "#EF4444";
 
   const scoreLabel = !titleScore ? ""
-    : titleScore.score >= 70 ? (rtl ? "ممتاز" : "Excellent")
-    : titleScore.score >= 41 ? (rtl ? "مقبول" : "Acceptable")
+    : titleScore.score >= 75 ? (rtl ? "ممتاز" : "Excellent")
+    : titleScore.score >= 50 ? (rtl ? "مقبول" : "Acceptable")
     : (rtl ? "ضعيف" : "Weak");
 
   const handleSubmit = async () => {
@@ -183,24 +156,30 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
             {rtl ? "عنوان القائمة" : "Listing Title"} <Text style={styles.required}>*</Text>
           </Text>
-          <TextInput
-            style={[styles.input, errors.title && styles.inputError, rtl && styles.textRight]}
-            placeholder={rtl ? "مثال: كيس مفاجأة المساء" : "e.g. Evening Surprise Bag"}
-            placeholderTextColor={Colors.grayMedium}
-            value={form.title}
-            onChangeText={v => { setField("title", v); setTitleScore(null); }}
-            onBlur={handleTitleBlur}
-            textAlign={rtl ? "right" : "left"}
-          />
+          <View style={[styles.titleRow, rtl && { flexDirection: "row-reverse" }]}>
+            <TextInput
+              style={[styles.input, styles.titleInput, errors.title && styles.inputError, rtl && styles.textRight]}
+              placeholder={rtl ? "مثال: كيس مفاجأة المساء" : "e.g. Evening Surprise Bag"}
+              placeholderTextColor={Colors.grayMedium}
+              value={form.title}
+              onChangeText={v => { setField("title", v); setTitleScore(null); }}
+              textAlign={rtl ? "right" : "left"}
+            />
+            <TouchableOpacity
+              style={[styles.scoreTitleBtn, (titleScoring || form.title.trim().length < 3) && styles.scoreTitleBtnDisabled]}
+              onPress={handleScoreTitle}
+              disabled={titleScoring || form.title.trim().length < 3}
+              activeOpacity={0.8}
+            >
+              {titleScoring
+                ? <ActivityIndicator size="small" color={Colors.primaryOrange} />
+                : <Text style={styles.scoreTitleBtnText}>✨ {rtl ? "قيّم" : "Score"}</Text>
+              }
+            </TouchableOpacity>
+          </View>
           {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
 
-          {/* Title scorer */}
-          {titleScoring && (
-            <View style={styles.scoreRow}>
-              <ActivityIndicator size="small" color={Colors.primaryOrange} />
-              <Text style={styles.scoringText}>{rtl ? "جارٍ تقييم العنوان..." : "Scoring title..."}</Text>
-            </View>
-          )}
+          {/* Title score result */}
           {titleScore && !titleScoring && (
             <View style={styles.scoreCard}>
               <View style={[styles.scoreBarRow, rtl && { flexDirection: "row-reverse" }]}>
@@ -212,13 +191,14 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
                 </Text>
               </View>
               <Text style={[styles.scoreFeedback, rtl && { textAlign: "right" }]}>{titleScore.feedback}</Text>
-              {titleScore.suggestedTitle && (
+              {titleScore.suggestedTitle && titleScore.score < 60 && (
                 <TouchableOpacity
+                  style={styles.scoreSuggBtn}
                   onPress={() => { setField("title", titleScore.suggestedTitle!); setTitleScore(null); }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.scoreSuggestion}>
-                    💡 {rtl ? "تطبيق العنوان المقترح" : "Apply suggested title"}: "{titleScore.suggestedTitle}"
+                  <Text style={styles.scoreSuggBtnText}>
+                    💡 {rtl ? "استخدام العنوان المقترح" : "Use this title"}: "{titleScore.suggestedTitle}"
                   </Text>
                 </TouchableOpacity>
               )}
@@ -345,6 +325,46 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           )}
           {priceSugg?.reasoning && (
             <Text style={[styles.priceSuggReason, rtl && { textAlign: "right" }]}>{priceSugg.reasoning}</Text>
+          )}
+
+          {/* Dynamic price decay toggle */}
+          <View style={[styles.decayRow, rtl && { flexDirection: "row-reverse" }]}>
+            <View style={[styles.decayLabelWrap, rtl && { alignItems: "flex-end" }]}>
+              <Text style={styles.decayTitle}>
+                🔥 {rtl ? "تفعيل انخفاض السعر تلقائياً" : "Enable auto price decay"}
+              </Text>
+              <Text style={styles.decaySub}>
+                {rtl
+                  ? "ينخفض السعر تدريجياً حتى وقت الاستلام"
+                  : "Price drops gradually toward pickup time"}
+              </Text>
+            </View>
+            <Switch
+              value={form.isPriceDecaying}
+              onValueChange={v => setField("isPriceDecaying", v)}
+              trackColor={{ false: Colors.grayLight, true: Colors.primaryOrange }}
+              thumbColor={Colors.white}
+            />
+          </View>
+
+          {form.isPriceDecaying && (
+            <View style={styles.floorPriceWrap}>
+              <Text style={[styles.fieldLabel, rtl && styles.textRight]}>
+                {rtl ? "الحد الأدنى للسعر (₪)" : "Floor price (₪)"}
+              </Text>
+              <TextInput
+                style={[styles.input, styles.inputShort, rtl && styles.textRight]}
+                placeholder="0.00"
+                placeholderTextColor={Colors.grayMedium}
+                keyboardType="decimal-pad"
+                value={form.floorPrice}
+                onChangeText={v => setField("floorPrice", v)}
+                textAlign={rtl ? "right" : "left"}
+              />
+              <Text style={[styles.decaySub, { marginTop: 4 }]}>
+                {rtl ? "السعر لن ينخفض أقل من هذا الرقم" : "Price will not drop below this amount"}
+              </Text>
+            </View>
           )}
         </View>
 
@@ -485,74 +505,6 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             textAlign={rtl ? "right" : "left"}
           />
 
-          {/* AI analyze image button */}
-          <TouchableOpacity
-            style={[styles.aiAnalyzeBtn, imageAnalyzing && styles.aiAnalyzeBtnDisabled]}
-            onPress={handleAnalyzeImage}
-            disabled={imageAnalyzing}
-            activeOpacity={0.8}
-          >
-            {imageAnalyzing ? (
-              <ActivityIndicator size="small" color={Colors.primaryOrange} />
-            ) : (
-              <Feather name="camera" size={14} color={Colors.primaryOrange} />
-            )}
-            <Text style={styles.aiAnalyzeBtnText}>
-              {imageAnalyzing
-                ? (rtl ? "جارٍ تحليل الصورة..." : "Analyzing image...")
-                : (rtl ? "✨ تحليل صورة بالذكاء الاصطناعي" : "✨ AI: Analyze Food Photo")}
-            </Text>
-          </TouchableOpacity>
-
-          {/* AI analysis result card */}
-          {imageAnalysis && !imageAnalyzing && (
-            <View style={styles.aiAnalysisCard}>
-              <Text style={[styles.aiAnalysisTitle, rtl && styles.textRight]}>
-                {rtl ? "نتائج التحليل" : "Analysis Results"}
-                {imageAnalysis.confidence ? ` · ${imageAnalysis.confidence}` : ""}
-              </Text>
-
-              {imageAnalysis.suggestedTitle && (
-                <TouchableOpacity
-                  style={styles.aiAnalysisRow}
-                  onPress={() => { setField("title", imageAnalysis.suggestedTitle!); setTitleScore(null); }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "العنوان المقترح" : "Suggested Title"}</Text>
-                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]} numberOfLines={2}>{imageAnalysis.suggestedTitle}</Text>
-                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
-                </TouchableOpacity>
-              )}
-
-              {imageAnalysis.description && (
-                <TouchableOpacity
-                  style={styles.aiAnalysisRow}
-                  onPress={() => setField("description", imageAnalysis.description!)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "الوصف المقترح" : "Suggested Description"}</Text>
-                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]} numberOfLines={3}>{imageAnalysis.description}</Text>
-                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
-                </TouchableOpacity>
-              )}
-
-              {imageAnalysis.suggestedAllergens && imageAnalysis.suggestedAllergens.length > 0 && (
-                <TouchableOpacity
-                  style={styles.aiAnalysisRow}
-                  onPress={() => setField("allergenNote", imageAnalysis.suggestedAllergens!.join("، "))}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "مسببات الحساسية" : "Allergens"}</Text>
-                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]}>{imageAnalysis.suggestedAllergens.join(" · ")}</Text>
-                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity onPress={() => setImageAnalysis(null)} style={{ alignSelf: "flex-end", marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: Colors.grayMedium }}>{rtl ? "إغلاق" : "Dismiss"}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         {/* ── Submit error ── */}
@@ -773,22 +725,33 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText:     { fontSize: 16, fontWeight: "800", color: Colors.white },
 
-  // ── AI styles ──────────────────────────────────────────────────────────────
-  scoreRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  scoringText: { fontSize: 12, color: Colors.grayMedium },
+  // ── Title scorer ───────────────────────────────────────────────────────────
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  titleInput: { flex: 1 },
+  scoreTitleBtn: {
+    paddingHorizontal: 12, paddingVertical: 11,
+    borderRadius: 12, borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    backgroundColor: Colors.orangeLight, minWidth: 64, alignItems: "center",
+  },
+  scoreTitleBtnDisabled: { opacity: 0.4 },
+  scoreTitleBtnText: { fontSize: 12, fontWeight: "700", color: Colors.primaryOrange },
 
   scoreCard: {
     marginTop: 8, backgroundColor: "#F9FAFB", borderRadius: 10,
-    padding: 10, gap: 4,
+    padding: 10, gap: 6,
   },
   scoreBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   scoreBarBg: {
-    flex: 1, height: 6, backgroundColor: Colors.grayLight, borderRadius: 3, overflow: "hidden",
+    flex: 1, height: 7, backgroundColor: Colors.grayLight, borderRadius: 4, overflow: "hidden",
   },
-  scoreBarFill: { height: "100%", borderRadius: 3 },
-  scoreNumber: { fontSize: 12, fontWeight: "700", minWidth: 90 },
-  scoreFeedback: { fontSize: 11, color: Colors.grayMedium },
-  scoreSuggestion: { fontSize: 11, color: Colors.primaryOrange, marginTop: 2 },
+  scoreBarFill: { height: "100%", borderRadius: 4 },
+  scoreNumber: { fontSize: 12, fontWeight: "700", minWidth: 96 },
+  scoreFeedback: { fontSize: 12, color: Colors.grayDark, lineHeight: 17 },
+  scoreSuggBtn: {
+    marginTop: 2, backgroundColor: Colors.orangeLight, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.primaryOrange, paddingHorizontal: 10, paddingVertical: 8,
+  },
+  scoreSuggBtnText: { fontSize: 12, color: Colors.primaryOrange, fontWeight: "600", lineHeight: 17 },
 
   priceSuggChip: {
     marginTop: 8, backgroundColor: Colors.orangeLight,
@@ -807,24 +770,13 @@ const styles = StyleSheet.create({
 
   textArea: { minHeight: 80, paddingTop: 12, textAlignVertical: "top" },
 
-  aiAnalyzeBtn: {
-    marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, borderWidth: 1.5, borderColor: Colors.primaryOrange, borderStyle: "dashed",
-    borderRadius: 10, paddingVertical: 10, backgroundColor: Colors.orangeLight,
+  decayRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: 12, gap: 12,
   },
-  aiAnalyzeBtnDisabled: { opacity: 0.5 },
-  aiAnalyzeBtnText: { fontSize: 13, color: Colors.primaryOrange, fontWeight: "600" },
+  decayLabelWrap: { flex: 1 },
+  decayTitle: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
+  decaySub:   { fontSize: 11, color: Colors.grayMedium, marginTop: 2 },
+  floorPriceWrap: { marginTop: 10, gap: 4 },
 
-  aiAnalysisCard: {
-    marginTop: 10, backgroundColor: "#F0FDF4", borderRadius: 12,
-    borderWidth: 1, borderColor: "#BBF7D0", padding: 12, gap: 6,
-  },
-  aiAnalysisTitle: { fontSize: 12, fontWeight: "700", color: Colors.greenMain, marginBottom: 4 },
-  aiAnalysisRow: {
-    backgroundColor: Colors.white, borderRadius: 8, padding: 10,
-    borderWidth: 1, borderColor: "#D1FAE5",
-  },
-  aiAnalysisLabel: { fontSize: 10, fontWeight: "700", color: Colors.grayMedium, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 },
-  aiAnalysisValue: { fontSize: 13, color: Colors.grayDark, fontWeight: "500" },
-  aiApplyText: { fontSize: 11, color: Colors.primaryOrange, fontWeight: "700", marginTop: 4 },
 });

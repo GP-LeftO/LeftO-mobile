@@ -40,6 +40,8 @@ export interface SellerListing {
   allergenNote?: string;
   photoUrl?: string;
   status?: string;
+  isPriceDecaying?: boolean;
+  floorPrice?: number | null;
 }
 
 export interface ListingFormData {
@@ -55,6 +57,8 @@ export interface ListingFormData {
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote?: string;
   photoUrl?: string;
+  isPriceDecaying?: boolean;
+  floorPrice?: number | null;
 }
 
 // ─── Seller registration ──────────────────────────────────────────────────────
