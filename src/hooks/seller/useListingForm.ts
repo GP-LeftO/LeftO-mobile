@@ -55,6 +55,7 @@ function isoToDateStr(iso: string | null | undefined): string {
 
 export interface ListingFormState {
   title: string;
+  description: string;
   type: "MEAL_BAG" | "SPECIFIC_PARCEL";
   category: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice: string;
@@ -68,7 +69,7 @@ export interface ListingFormState {
   description: string;
   photoUrl: string;
   isPriceDecaying: boolean;
-  floorPrice: string;       // only relevant when isPriceDecaying is true
+  floorPrice: string;
 }
 
 export type FormErrors = Partial<Record<keyof ListingFormState, string>>;
@@ -79,21 +80,17 @@ export function useListingForm(existing?: SellerListing) {
   const isEdit = Boolean(existing?.id);
 
   const [form, setForm] = useState<ListingFormState>({
-    title:           existing?.title           ?? "",
-    type:            existing?.type            ?? "MEAL_BAG",
-    category:        existing?.category        ?? "MEALS",
-    originalPrice:   (existing?.originalPrice  ?? existing?.price)?.toString() ?? "",
-    discountedPrice: existing?.discountedPrice?.toString()  ?? "",
-    quantity:        existing?.quantity?.toString()         ?? "",
-    pickupStart:     existing?.pickupStart  ? isoToHHMM(existing.pickupStart) : "",
-    pickupEnd:       existing?.pickupEnd    ? isoToHHMM(existing.pickupEnd)   : "",
-    expiryDate:      isoToDateStr(existing?.expiryDate),
-    freshnessBadge:  existing?.freshnessBadge  ?? "eat_today",
-    allergenNote:    existing?.allergenNote    ?? "",
-    description:     existing?.description     ?? "",
-    photoUrl:        existing?.photoUrl        ?? "",
-    isPriceDecaying: existing?.isPriceDecaying ?? false,
-    floorPrice:      existing?.floorPrice?.toString() ?? "",
+    title:          existing?.title ?? "",
+    type:           existing?.type ?? "MEAL_BAG",
+    category:       existing?.category ?? "MEALS",
+    originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
+    discountedPrice: (existing?.discountedPrice)?.toString() ?? "",
+    quantity:       existing?.quantity?.toString() ?? "",
+    pickupStart:    existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
+    pickupEnd:      existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
+    freshnessBadge: existing?.freshnessBadge ?? "eat_today",
+    allergenNote:   existing?.allergenNote ?? "",
+    photoUrl:       existing?.photoUrl ?? "",
   });
 
   const [errors,      setErrors]      = useState<FormErrors>({});
@@ -157,6 +154,7 @@ export function useListingForm(existing?: SellerListing) {
     try {
       const payload: ListingFormData = {
         title:           form.title.trim(),
+        description:     form.description.trim() || undefined,
         type:            form.type,
         category:        form.category,
         originalPrice:   Number(form.originalPrice),
@@ -165,17 +163,9 @@ export function useListingForm(existing?: SellerListing) {
         pickupStart:     hhmmToSmartIso(normalizeTime(form.pickupStart)),
         pickupEnd:       hhmmToSmartIso(normalizeTime(form.pickupEnd)),
         freshnessBadge:  form.freshnessBadge,
-        allergenNote:    form.allergenNote.trim()  || undefined,
-        description:     form.description.trim()   || undefined,
-        photoUrl:        form.photoUrl.trim()       || undefined,
-        isPriceDecaying: form.isPriceDecaying       || undefined,
-        floorPrice:      form.isPriceDecaying && form.floorPrice
-                           ? Number(form.floorPrice) : undefined,
-        expiryDate:      form.type === "SPECIFIC_PARCEL" && form.expiryDate
-                           ? new Date(form.expiryDate).toISOString() : undefined,
+        allergenNote:    form.allergenNote.trim() || undefined,
+        photoUrl:        form.photoUrl.trim() || undefined,
       };
-
-      let result: SellerListing;
       if (isEdit && existing?.id) {
         result = await updateListing(existing.id, payload);
       } else {

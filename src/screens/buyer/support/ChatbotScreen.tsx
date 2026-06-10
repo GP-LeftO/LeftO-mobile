@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StatusBar,
   Animated,
@@ -129,10 +130,18 @@ export default function ChatbotScreen({ onBack }: ChatbotScreenProps) {
     messages,
     inputText,
     isLoading,
+    isRecording,
     chipsVisible,
+    hasReceivedReply,
+    ratingSheetOpen,
+    ratingSubmitted,
     setInputText,
     sendMessage,
     handleChipTap,
+    startRecording,
+    stopRecording,
+    openRatingSheet,
+    submitRating,
   } = useChatbot();
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
@@ -174,7 +183,17 @@ export default function ChatbotScreen({ onBack }: ChatbotScreenProps) {
 
         <Text style={styles.headerTitle}>LeftO Bot</Text>
 
-        <View style={styles.headerSpacer} />
+        <View style={[styles.headerSpacer, { alignItems: 'flex-end' }]}>
+          {hasReceivedReply && !ratingSubmitted && (
+            <TouchableOpacity onPress={openRatingSheet} activeOpacity={0.8} style={styles.rateBtn}>
+              <Feather name="star" size={14} color={Colors.white} />
+              <Text style={styles.rateBtnText}>قيّم</Text>
+            </TouchableOpacity>
+          )}
+          {ratingSubmitted && (
+            <Text style={styles.ratedText}>شكراً 😊</Text>
+          )}
+        </View>
       </View>
 
       {/* ── Suggested chips ── */}
@@ -236,6 +255,14 @@ export default function ChatbotScreen({ onBack }: ChatbotScreenProps) {
           onSubmitEditing={() => sendMessage(inputText)}
         />
         <TouchableOpacity
+          style={[styles.micBtn, isRecording && styles.micBtnActive]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isLoading}
+          activeOpacity={0.8}
+        >
+          <Feather name={isRecording ? "square" : "mic"} size={20} color={isRecording ? Colors.white : Colors.primaryOrange} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.sendBtn, isSendDisabled && styles.sendBtnDisabled]}
           onPress={() => sendMessage(inputText)}
           disabled={isSendDisabled}
@@ -244,6 +271,30 @@ export default function ChatbotScreen({ onBack }: ChatbotScreenProps) {
           <Feather name="send" size={20} color={Colors.white} />
         </TouchableOpacity>
       </View>
+      {/* ── Rating bottom sheet ── */}
+      <Modal
+        visible={ratingSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => submitRating(0)}
+      >
+        <TouchableOpacity
+          style={ratingStyles.overlay}
+          activeOpacity={1}
+          onPress={() => submitRating(0)}
+        />
+        <View style={ratingStyles.sheet}>
+          <Text style={ratingStyles.title}>قيّم تجربتك مع البوت 🤖</Text>
+          <View style={ratingStyles.stars}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <TouchableOpacity key={n} onPress={() => submitRating(n)} activeOpacity={0.7} style={ratingStyles.starBtn}>
+                <Text style={ratingStyles.starEmoji}>⭐</Text>
+                <Text style={ratingStyles.starNum}>{n}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -430,6 +481,20 @@ const styles = StyleSheet.create({
     color: Colors.grayDark,
     backgroundColor: Colors.background,
   },
+  micBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryOrange,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micBtnActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
   sendBtn: {
     width: 44,
     height: 44,
@@ -441,4 +506,27 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     backgroundColor: '#BDBDBD',
   },
+
+  // ── Rate button in header
+  rateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  rateBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  ratedText: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600' },
+});
+
+const ratingStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 28, alignItems: 'center', gap: 20,
+  },
+  title: { fontSize: 17, fontWeight: '800', color: Colors.grayDark, textAlign: 'center' },
+  stars: { flexDirection: 'row', gap: 12 },
+  starBtn: { alignItems: 'center', gap: 4 },
+  starEmoji: { fontSize: 28 },
+  starNum: { fontSize: 12, color: Colors.grayMedium, fontWeight: '700' },
 });

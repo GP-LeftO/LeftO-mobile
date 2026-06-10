@@ -2,6 +2,7 @@ import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 import type { MapSeller, Coordinate } from "../types/browse.types";
+import type { HeatSpot } from "../../../services/buyer/stats.service";
 
 interface Props {
   sellers:                 MapSeller[];
@@ -11,6 +12,7 @@ interface Props {
   locationPermissionDenied: boolean;
   onSellerSelect:          (seller: MapSeller | null) => void;
   onMapTap:                () => void;
+  heatspots?:              HeatSpot[];
 }
 
 const NABLUS: Coordinate = { latitude: 32.2211, longitude: 35.2566 };
@@ -27,6 +29,7 @@ function buildHtml(
   center:       Coordinate,
   radiusMeters: number,
   showUserPin:  boolean,
+  heatspots:    HeatSpot[],
 ): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -92,6 +95,19 @@ map.on('click',function(){
   window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapTap'}));
 });
 
+// ── Heatmap activity circles ──
+var heatspots=${JSON.stringify(heatspots)};
+heatspots.forEach(function(h){
+  var r=20+(h.activeListings*8);
+  var cm=L.circleMarker([h.lat,h.lng],{
+    radius:r,
+    color:'#DE985A',weight:1.5,
+    fillColor:'#DE985A',fillOpacity:0.30
+  }).addTo(map);
+  cm.bindPopup('<b>'+h.businessName+'</b><br/>'+h.activeListings+' إدراجات نشطة',{closeButton:false});
+  cm.on('click',function(e){L.DomEvent.stopPropagation(e);cm.openPopup();});
+});
+
 window.recenter=function(lat,lng){map.setView([lat,lng],14,{animate:true});};
 window.selectSeller=function(id){
   selectedId=id;
@@ -102,7 +118,7 @@ window.selectSeller=function(id){
 }
 
 const LeafletBrowseMap = forwardRef<WebView, Props>(function LeafletBrowseMap(
-  { sellers, selectedSellerId, userLocation, radiusMeters, locationPermissionDenied, onSellerSelect, onMapTap },
+  { sellers, selectedSellerId, userLocation, radiusMeters, locationPermissionDenied, onSellerSelect, onMapTap, heatspots = [] },
   ref,
 ) {
   const center     = userLocation ?? NABLUS;
@@ -110,8 +126,8 @@ const LeafletBrowseMap = forwardRef<WebView, Props>(function LeafletBrowseMap(
   const [loaded, setLoaded] = useState(false);
   const prevSel    = useRef<string | null>(null);
 
-  // Rebuild HTML when sellers/location/radius change
-  const html = buildHtml(sellers, center, radiusMeters, showUserPin);
+  // Rebuild HTML when sellers/location/radius/heatspots change
+  const html = buildHtml(sellers, center, radiusMeters, showUserPin, heatspots);
 
   // Use injectJavaScript for selection changes (avoids full WebView reload)
   useEffect(() => {

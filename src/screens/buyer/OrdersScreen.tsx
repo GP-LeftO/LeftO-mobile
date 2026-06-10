@@ -138,6 +138,23 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
             try {
               await api.patch(`/api/orders/${orderId}/cancel`);
               await fetchOrders();
+              // Fetch updated profile to read current cancellation count
+              try {
+                const profileRes = await api.get("/api/users/me");
+                const profile = profileRes.data?.data ?? profileRes.data;
+                const count: number = profile?.cancellationCount ?? 0;
+                const remaining = Math.max(0, 5 - count);
+                if (count >= 3) {
+                  Alert.alert(
+                    rtl ? "تنبيه" : "Warning",
+                    rtl
+                      ? `تم الإلغاء. لديك ${count} إلغاءات — ${remaining} إلغاء متبقي قبل تعليق الحساب.`
+                      : `Cancelled. You have ${count} cancellations — ${remaining} left before your account is suspended.`
+                  );
+                }
+              } catch {
+                // Non-critical — profile fetch failure doesn't affect the cancel
+              }
             } catch {
               Alert.alert(
                 rtl ? "خطأ" : "Error",

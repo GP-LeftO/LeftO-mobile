@@ -69,3 +69,14 @@ export const forgotPassword = (phone: string) =>
 
 export const resetPassword = (phone: string, code: string, newPassword: string) =>
   api.post("/api/auth/reset-password", { phone, code, newPassword });
+
+export const getMe = () =>
+  api.get<{ data: { userId: string; role: string; hasSeller: boolean; sellerStatus: SellerStatus; sellerName: string | null } }>(
+    "/api/auth/me"
+  );
+
+export const switchRole = (role: "BUYER" | "SELLER") =>
+  api.patch<{ data: { accessToken: string; activeRole: string } }>(
+    "/api/auth/switch-role",
+    { role }
+  );

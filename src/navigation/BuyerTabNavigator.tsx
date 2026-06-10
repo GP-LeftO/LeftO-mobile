@@ -44,6 +44,8 @@ export interface BuyerTabNavigatorProps {
   onOpenNearMe?: (coords: NearMeCoords) => void;
   onOpenNotifications?: () => void;
   onOpenQRScan?: (params: { orderId: string; orderTitle?: string }) => void;
+  onNavigateToSellerDashboard?: () => void;
+  onNavigateToSellerRegister?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -70,7 +72,7 @@ export default function BuyerTabNavigator(props: BuyerTabNavigatorProps) {
 
 // ─── Inner content — has access to FavoritesContext ───────────────────────────
 
-function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe, onOpenNotifications, onOpenQRScan }: BuyerTabNavigatorProps) {
+function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe, onOpenNotifications, onOpenQRScan, onNavigateToSellerDashboard, onNavigateToSellerRegister }: BuyerTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const botPad = Platform.OS === "web" ? 16 : insets.bottom;
   const rtl = isRTL();
@@ -116,7 +118,14 @@ function BuyerTabContent({ onLogout, onListingPress, onOpenChatbot, onOpenNearMe
       case "orders":
         return <OrdersScreen onOpenQRScan={onOpenQRScan} />;
       case "profile":
-        return <ProfileScreen onLogout={onLogout} onOpenChatbot={onOpenChatbot} />;
+        return (
+          <ProfileScreen
+            onLogout={onLogout}
+            onOpenChatbot={onOpenChatbot}
+            onNavigateToSellerDashboard={onNavigateToSellerDashboard}
+            onNavigateToSellerRegister={onNavigateToSellerRegister}
+          />
+        );
     }
   };
 

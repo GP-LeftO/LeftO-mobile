@@ -40,6 +40,7 @@ import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
 import { FilterPanel } from "../../components/buyer/filters/FilterPanel";
 import type { Listing, StoreDetailsParams } from "../../types";
 import { useBrowseMap } from "./hooks/useBrowseMap";
+import { useHeatmap } from "../../hooks/buyer/useHeatmap";
 import { MapViewToggle } from "./components/MapViewToggle";
 import { ListingCardPreview } from "./components/ListingCardPreview";
 import type { MapSeller } from "./types/browse.types";
@@ -129,6 +130,8 @@ export default function BrowseScreen({
     filters,
     activeFilterCount,
   } = useBrowseMap();
+
+  const { spots: heatspots } = useHeatmap();
 
   // ── Toggle handler ─────────────────────────────────────────────────────────
   const handleToggle = useCallback(
@@ -402,6 +405,7 @@ export default function BrowseScreen({
             locationPermissionDenied={locationPermissionDenied}
             onSellerSelect={selectSeller}
             onMapTap={() => selectSeller(null)}
+            heatspots={heatspots}
           />
 
           {/* Map loading overlay */}

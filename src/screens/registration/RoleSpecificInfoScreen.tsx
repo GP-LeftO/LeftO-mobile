@@ -24,6 +24,7 @@ interface RoleSpecificInfoScreenProps {
   name?: string;
   email?: string;
   password?: string;
+  isUpgrade?: boolean;
   onComplete?: () => void;
   onPending?: () => void;
   onBack?: () => void;
@@ -49,6 +50,7 @@ const SELLER_STEPS = [
 
 export default function RoleSpecificInfoScreen({
   role = "buyer", phone = "", name = "", email = "", password = "",
+  isUpgrade = false,
   onComplete, onPending, onBack, navigation,
 }: RoleSpecificInfoScreenProps) {
   const insets = useSafeAreaInsets();
@@ -91,29 +93,12 @@ export default function RoleSpecificInfoScreen({
   const [selectedPrefs,   setSelectedPrefs]   = useState<string[]>([]);
   const [selectedWindows, setSelectedWindows] = useState<string[]>([]);
 
-  // ── shared seller/charity state
-  const [businessType, setBusinessType] = useState<"RESTAURANT" | "MARKET" | "BAKERY" | "">("");
-  const [description,  setDescription]  = useState("");
-
-  // ── seller multi-step state
-  const [sellerStep,          setSellerStep]          = useState(1);
-  const [registrationNumber,  setRegistrationNumber]  = useState("");
-  const [contactPhone,        setContactPhone]        = useState("");
-  const [contactWebsite,      setContactWebsite]      = useState("");
-  // trade license upload
-  const [tradeName,        setTradeName]        = useState("");
-  const [tradeUploading,   setTradeUploading]   = useState(false);
-  const [tradeDocUrl,      setTradeDocUrl]      = useState<string | null>(null);
-  const [tradeUploadError, setTradeUploadError] = useState("");
-  // health certificate upload
-  const [healthName,        setHealthName]        = useState("");
-  const [healthUploading,   setHealthUploading]   = useState(false);
-  const [healthDocUrl,      setHealthDocUrl]      = useState<string | null>(null);
-  const [healthUploadError, setHealthUploadError] = useState("");
-
-  // ── charity document state
-  const [docUri,  setDocUri]  = useState<string | null>(null);
-  const [docName, setDocName] = useState("");
+  // ── seller / charity state
+  const [businessType,       setBusinessType]       = useState<"RESTAURANT" | "MARKET" | "BAKERY" | "">("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [description,        setDescription]        = useState("");
+  const [docUri,             setDocUri]             = useState<string | null>(null);
+  const [docName,            setDocName]            = useState("");
 
   // ── submission state
   const [isSubmitting,   setIsSubmitting]   = useState(false);
@@ -195,9 +180,14 @@ export default function RoleSpecificInfoScreen({
   // ── Seller: per-step validation
   const validateSellerStep = (): boolean => {
     const e: Record<string, string> = {};
-    if (sellerStep === 1) {
-      if (!businessType) e.btype = rtl ? "اختر نوع عملك" : "Select your business type";
-    } else if (sellerStep === 2) {
+    if (role === "buyer") {
+      if (!pickedLocation)             e.location = rtl ? "يرجى تحديد موقعك على الخريطة"        : "Please select your location on the map";
+      if (!selectedPrefs.length)       e.prefs    = rtl ? "اختر تفضيلاً غذائياً واحداً على الأقل" : "Pick at least one food preference";
+      if (!selectedWindows.length)     e.windows  = rtl ? "اختر وقت استلام واحداً على الأقل"      : "Pick at least one pickup time";
+    }
+    if (role === "seller") {
+      if (!businessType)               e.btype = rtl ? "اختر نوع عملك"  : "Select your business type";
+      if (!registrationNumber.trim())  e.regNum = rtl ? "أدخل رقم السجل التجاري" : "Enter your registration number";
       if (locationMode === "map" && !pickedLocation)
         e.location = rtl ? "يرجى تحديد موقع عملك على الخريطة" : "Please select your business location on the map";
       if (locationMode === "manual" && !manualAddress.trim())
@@ -347,9 +337,37 @@ export default function RoleSpecificInfoScreen({
       }
       setUploadStep(false);
     }
-    void documentUrls; // consumed by charity registration (handled server-side via auth token)
 
+    // ── Step 3: seller-specific registration ────────────────────────────────
     try {
+      if (role === "seller") {
+        try {
+          await registerSeller({
+            businessName: name,
+            businessType: businessType as "RESTAURANT" | "MARKET" | "BAKERY",
+            registrationNumber: registrationNumber.trim() || undefined,
+            location: locationMode === "manual"
+              ? { latitude: 0, longitude: 0, address: manualAddress.trim() }
+              : {
+                  latitude:  pickedLocation?.latitude  ?? 0,
+                  longitude: pickedLocation?.longitude ?? 0,
+                  address:   pickedLocation?.address,
+                },
+            description: description || undefined,
+            documentUrls,
+          });
+        } catch (regErr: unknown) {
+          const axiosErr = regErr as { response?: { status?: number; data?: { message?: string } } };
+          // 409 = profile already exists — treat as success for upgrade flow
+          if (axiosErr.response?.status !== 409) throw regErr;
+        }
+        // Registration number in whitelist → immediately APPROVED → call onComplete
+        if (isUpgrade && onComplete) {
+          onComplete();
+          return;
+        }
+      }
+
       if (onPending) onPending();
       else if (navigation) navigation.navigate("Pending");
     } catch (err: unknown) {
@@ -541,76 +559,52 @@ export default function RoleSpecificInfoScreen({
             </Animated.View>
           )}
 
-          {/* ════════════ SELLER — STEP 1: Business info ════════════ */}
-
-          {role === "seller" && sellerStep === 1 && (
-            <>
-              <Animated.View entering={FadeInDown.delay(180).duration(500).springify()} style={styles.section}>
-                <Text style={styles.sectionLabel}>{rtl ? "نوع العمل" : "Business type"}</Text>
-                <View style={styles.pillsWrap}>
-                  {BUSINESS_TYPES.map(bt => (
-                    <TouchableOpacity
-                      key={bt.value}
-                      style={[styles.pill, businessType === bt.value && styles.pillActive]}
-                      onPress={() => { setBusinessType(bt.value); setErrors(e => ({ ...e, btype: "" })); }}
-                    >
-                      <Text style={[styles.pillText, businessType === bt.value && styles.pillTextActive]}>{bt.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {!!errors.btype && <Text style={styles.errorText}>{errors.btype}</Text>}
-              </Animated.View>
-
-              <Animated.View entering={FadeInDown.delay(240).duration(500).springify()} style={styles.section}>
-                <Text style={styles.sectionLabel}>{rtl ? "وصف العمل" : "Business description"}</Text>
-                <View style={styles.textAreaWrap}>
-                  <TextInput
-                    style={styles.textArea}
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder={rtl ? "صف عملك ونوع الطعام الذي تقدمه… (اختياري)" : "Describe your business and food type… (optional)"}
-                    placeholderTextColor={Colors.grayMedium}
-                    multiline numberOfLines={3} textAlignVertical="top"
-                    textAlign={rtl ? "right" : "left"}
-                  />
-                </View>
-              </Animated.View>
-
-              <Animated.View entering={FadeInDown.delay(300).duration(500).springify()} style={styles.section}>
-                <Text style={styles.sectionLabel}>{rtl ? "معلومات التواصل (اختياري)" : "Contact info (optional)"}</Text>
-                <View style={[styles.inlineInputWrap, { marginBottom: 8 }]}>
-                  <Feather name="phone" size={16} color={Colors.grayMedium} style={styles.inlineInputIcon} />
-                  <TextInput
-                    style={styles.inlineInput}
-                    value={contactPhone}
-                    onChangeText={setContactPhone}
-                    placeholder={rtl ? "رقم الهاتف" : "Phone number"}
-                    placeholderTextColor={Colors.grayMedium}
-                    keyboardType="phone-pad"
-                    textAlign={rtl ? "right" : "left"}
-                  />
-                </View>
-                <View style={styles.inlineInputWrap}>
-                  <Feather name="globe" size={16} color={Colors.grayMedium} style={styles.inlineInputIcon} />
-                  <TextInput
-                    style={styles.inlineInput}
-                    value={contactWebsite}
-                    onChangeText={setContactWebsite}
-                    placeholder={rtl ? "الموقع الإلكتروني (اختياري)" : "Website (optional)"}
-                    placeholderTextColor={Colors.grayMedium}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    textAlign={rtl ? "right" : "left"}
-                  />
-                </View>
-              </Animated.View>
-            </>
+          {/* ── SELLER: business type ── */}
+          {role === "seller" && (
+            <Animated.View entering={FadeInDown.delay(180).duration(500).springify()} style={styles.section}>
+              <Text style={styles.sectionLabel}>{rtl ? "نوع العمل" : "Business type"}</Text>
+              <View style={styles.pillsWrap}>
+                {BUSINESS_TYPES.map(bt => (
+                  <TouchableOpacity
+                    key={bt.value}
+                    style={[styles.pill, businessType === bt.value && styles.pillActive]}
+                    onPress={() => { setBusinessType(bt.value); setErrors(e => ({ ...e, btype: "" })); }}
+                  >
+                    <Text style={[styles.pillText, businessType === bt.value && styles.pillTextActive]}>{bt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!!errors.btype && <Text style={styles.errorText}>{errors.btype}</Text>}
+            </Animated.View>
           )}
 
-          {/* ════════════ SELLER — STEP 2: Location ════════════ */}
+          {/* ── SELLER: registration number ── */}
+          {role === "seller" && (
+            <Animated.View entering={FadeInDown.delay(200).duration(400).springify()} style={styles.section}>
+              <Text style={styles.sectionLabel}>{rtl ? "رقم السجل التجاري *" : "Registration Number *"}</Text>
+              <View style={[styles.textAreaWrap, !!errors.regNum && styles.inputError]}>
+                <TextInput
+                  style={styles.addressInput}
+                  placeholder={rtl ? "مثال: NE-200001" : "e.g. NE-200001"}
+                  placeholderTextColor="#9CA3AF"
+                  value={registrationNumber}
+                  onChangeText={v => { setRegistrationNumber(v); setErrors(e => ({ ...e, regNum: "" })); }}
+                  autoCapitalize="characters"
+                  textAlign={rtl ? "right" : "left"}
+                />
+              </View>
+              {!!errors.regNum && <Text style={styles.errorText}>{errors.regNum}</Text>}
+              <Text style={styles.sectionHint}>
+                {rtl
+                  ? "رقم غرفة التجارة. للتجربة: NE-200001 إلى NE-200020"
+                  : "Chamber of Commerce number. Demo values: NE-200001 to NE-200020"}
+              </Text>
+            </Animated.View>
+          )}
 
-          {role === "seller" && sellerStep === 2 && (
-            <Animated.View entering={FadeInDown.delay(180).duration(500).springify()} style={styles.section}>
+          {/* ── SELLER: location ── */}
+          {role === "seller" && (
+            <Animated.View entering={FadeInDown.delay(240).duration(500).springify()} style={styles.section}>
               <Text style={styles.sectionLabel}><Feather name="map-pin" size={14} color={Colors.primaryOrange} /> {rtl ? "موقع العمل" : "Business location"}</Text>
               <View style={styles.locationToggle}>
                 <TouchableOpacity

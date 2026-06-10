@@ -16,14 +16,16 @@ import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
-import { useCharityDonations } from "../../hooks/charity/useCharityDonations";
-import DonationIncomingCard from "../../components/charity/DonationIncomingCard";
-import ProofUploadModal from "../../components/charity/ProofUploadModal";
-import type { RatingInput } from "../../services/charity/charity.service";
+import {
+  fetchCharityDonations,
+  confirmDonationPickup,
+  confirmDonationWithProof,
+  getMyBasket,
+  setMyBasket,
+} from "../../services/charity/charity.service";
+import type { CharityDonation, DonationStatus, BasketCategory } from "../../services/charity/charity.service";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ActiveTab = "incoming" | "pickedUp" | "completed";
+type Tab = "pending" | "history" | "basket";
 
 interface Props {
   onLogout?: () => void;
@@ -63,42 +65,69 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const { user, charityStatus, logout } = useAuth();
-  const {
-    donations,
-    loading,
-    refreshing,
-    error,
-    ratedIds,
-    refresh,
-    loadMore,
-    markPickedUp,
-    confirmWithProof,
-    rateSeller,
-  } = useCharityDonations();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("incoming");
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedDonationId, setSelectedDonationId] = useState("");
+  const [activeTab,   setActiveTab]   = useState<Tab>("pending");
+  const [donations,   setDonations]   = useState<CharityDonation[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [fetchError,  setFetchError]  = useState("");
+  const [actionId,    setActionId]    = useState<string | null>(null);
+  const [proofUri,    setProofUri]    = useState<Record<string, string>>({});
+  const [successId,   setSuccessId]   = useState<string | null>(null);
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
+  // Basket state
+  const [basket,        setBasket]        = useState<BasketCategory[]>([]);
+  const [basketLoading, setBasketLoading] = useState(false);
+  const [basketSaving,  setBasketSaving]  = useState(false);
+  const [basketSaved,   setBasketSaved]   = useState(false);
 
-  const confirmedCount = useMemo(
-    () => donations.filter((d) => d.status === "CONFIRMED").length,
-    [donations]
-  );
+  const loadDonations = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setFetchError("");
+    try {
+      const all = await fetchCharityDonations();
 
-  const activeData = useMemo(() => {
-    if (activeTab === "incoming")  return donations.filter((d) => d.status === "PENDING");
-    if (activeTab === "pickedUp")  return donations.filter((d) => d.status === "PICKED_UP");
-    return donations.filter((d) => d.status === "CONFIRMED");
-  }, [donations, activeTab]);
+      setDonations(all);
+    } catch {
+      setFetchError(rtl ? "تعذّر تحميل التبرعات. يرجى المحاولة مجدداً." : "Could not load donations. Please try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [rtl]);
 
-  const statusInfo =
-    charityStatus && charityStatus in CHARITY_STATUS
-      ? CHARITY_STATUS[charityStatus as keyof typeof CHARITY_STATUS]
-      : null;
+  React.useEffect(() => { loadDonations(); }, [loadDonations]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  React.useEffect(() => {
+    if (activeTab === "basket" && basket.length === 0 && !basketLoading) {
+      setBasketLoading(true);
+      getMyBasket().then(setBasket).catch(() => {}).finally(() => setBasketLoading(false));
+    }
+  }, [activeTab]);
+
+  const toggleBasketCategory = (cat: BasketCategory) => {
+    setBasket(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+    setBasketSaved(false);
+  };
+
+  const handleSaveBasket = async () => {
+    if (basket.length === 0) {
+      Alert.alert(rtl ? "تنبيه" : "Note", rtl ? "يرجى اختيار فئة واحدة على الأقل" : "Please select at least one category");
+      return;
+    }
+    setBasketSaving(true);
+    try {
+      await setMyBasket(basket);
+      setBasketSaved(true);
+      setTimeout(() => setBasketSaved(false), 3000);
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر حفظ الطلب" : "Could not save basket");
+    } finally {
+      setBasketSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -185,42 +214,113 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
         </Text>
       </Animated.View>
 
-      {/* Tab Bar */}
-      <Animated.View
-        entering={FadeInDown.delay(200).duration(450).springify()}
-        style={styles.tabBar}
-      >
-        {TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tabItem, active && styles.tabItemActive]}
-              onPress={() => setActiveTab(tab.key)}
-              activeOpacity={0.8}
-            >
-              <Feather
-                name={tab.icon}
-                size={14}
-                color={active ? Colors.primaryOrange : Colors.grayMedium}
-              />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Tab bar */}
+      <Animated.View entering={FadeInDown.delay(220).duration(500).springify()} style={styles.tabBar}>
+        {([
+          { key: "pending", icon: "inbox",  labelEn: "Pending",  labelAr: "قيد الانتظار" },
+          { key: "history", icon: "archive", labelEn: "History",  labelAr: "السجل"        },
+          { key: "basket",  icon: "list",   labelEn: "Needs",    labelAr: "احتياجاتي"    },
+        ] as { key: Tab; icon: "inbox" | "archive" | "list"; labelEn: string; labelAr: string }[]).map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.key)}
+            activeOpacity={0.8}
+          >
+            <Feather
+              name={tab.icon}
+              size={15}
+              color={activeTab === tab.key ? Colors.primaryOrange : Colors.grayMedium}
+            />
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {rtl ? tab.labelAr : tab.labelEn}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </Animated.View>
 
       {/* Content */}
-      {loading ? (
+      {/* ── Basket tab ── */}
+      {activeTab === "basket" && (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.basketContent}>
+          <Animated.View entering={FadeInDown.delay(50).duration(400).springify()}>
+            <Text style={[styles.basketTitle, rtl && styles.rtl]}>
+              {rtl ? "احتياجات الطعام" : "Food Needs"}
+            </Text>
+            <Text style={[styles.basketSub, rtl && styles.rtl]}>
+              {rtl
+                ? "اختر الفئات التي تحتاجها جمعيتك. البائعون سيرون طلباتك ويمكنهم التبرع بما يناسب."
+                : "Select what food categories your charity needs. Sellers will see these and can donate accordingly."}
+            </Text>
+
+            {basketLoading ? (
+              <ActivityIndicator color={Colors.primaryOrange} style={{ marginTop: 24 }} />
+            ) : (
+              <>
+                <View style={styles.basketChipsGrid}>
+                  {([
+                    { key: "MEALS",              icon: "🍱", labelEn: "Meals",            labelAr: "وجبات"       },
+                    { key: "BREAD_AND_PASTRIES", icon: "🥖", labelEn: "Bread & Pastries", labelAr: "خبز ومعجنات" },
+                    { key: "GROCERIES",          icon: "🛒", labelEn: "Groceries",        labelAr: "بقالة"       },
+                    { key: "MIXED",              icon: "📦", labelEn: "Mixed",            labelAr: "متنوع"       },
+                  ] as { key: BasketCategory; icon: string; labelEn: string; labelAr: string }[]).map((cat) => {
+                    const selected = basket.includes(cat.key);
+                    return (
+                      <TouchableOpacity
+                        key={cat.key}
+                        style={[styles.basketChip, selected && styles.basketChipSelected]}
+                        onPress={() => toggleBasketCategory(cat.key)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.basketChipIcon}>{cat.icon}</Text>
+                        <Text style={[styles.basketChipText, selected && styles.basketChipTextSelected]}>
+                          {rtl ? cat.labelAr : cat.labelEn}
+                        </Text>
+                        {selected && (
+                          <View style={styles.basketCheckBadge}>
+                            <Feather name="check" size={10} color={Colors.white} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {basketSaved && (
+                  <View style={styles.basketSuccessRow}>
+                    <Feather name="check-circle" size={15} color={Colors.greenMain} />
+                    <Text style={styles.basketSuccessText}>{rtl ? "تم الحفظ بنجاح!" : "Saved!"}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.basketSaveBtn, (basketSaving || basket.length === 0) && { opacity: 0.6 }]}
+                  onPress={handleSaveBasket}
+                  disabled={basketSaving || basket.length === 0}
+                  activeOpacity={0.85}
+                >
+                  {basketSaving
+                    ? <ActivityIndicator color={Colors.white} size="small" />
+                    : <Text style={styles.basketSaveBtnText}>
+                        {rtl ? `حفظ الاحتياجات (${basket.length})` : `Save Needs (${basket.length} selected)`}
+                      </Text>
+                  }
+                </TouchableOpacity>
+              </>
+            )}
+          </Animated.View>
+        </ScrollView>
+      )}
+
+      {/* ── Donations tabs (pending / history) ── */}
+      {activeTab !== "basket" && loading ? (
         <View style={styles.centeredState}>
           <ActivityIndicator size="large" color={Colors.primaryOrange} />
           <Text style={[styles.stateText, { textAlign: rtl ? "right" : "left" }]}>
             {rtl ? "جاري تحميل التبرعات…" : "Loading donations…"}
           </Text>
         </View>
-      ) : error ? (
+      ) : activeTab !== "basket" && fetchError ? (
         <View style={styles.centeredState}>
           <Feather name="wifi-off" size={42} color={Colors.grayMedium} />
           <Text style={[styles.stateText, { textAlign: rtl ? "right" : "left" }]}>
@@ -234,20 +334,9 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
             <Text style={styles.retryBtnText}>{rtl ? "حاول مجدداً" : "Retry"}</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={activeData}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <DonationIncomingCard
-              donation={item}
-              tab={activeTab}
-              isRated={ratedIds.has(item.id)}
-              onMarkPickedUp={handleMarkPickedUp}
-              onOpenProofModal={handleOpenProofModal}
-              onRateSeller={handleRateSeller}
-            />
-          )}
+      ) : activeTab !== "basket" ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -266,17 +355,11 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
                 {EMPTY_TEXT[activeTab]}
               </Text>
             </View>
-          }
-        />
-      )}
-
-      {/* Proof Upload Modal */}
-      <ProofUploadModal
-        visible={modalVisible}
-        donationId={selectedDonationId}
-        onClose={() => setModalVisible(false)}
-        onConfirm={confirmWithProof}
-      />
+          ) : (
+            filteredDonations.map(renderDonation)
+          )}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -397,11 +480,44 @@ const styles = StyleSheet.create({
   listContent: { paddingBottom: 40 },
   emptyState: { paddingTop: 80, alignItems: "center", gap: Spacing.sm },
   emptyEmoji: { fontSize: 52, marginBottom: 4 },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: Colors.grayDark,
-    textAlign: "center",
-    paddingHorizontal: Spacing.xl,
+  emptyTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark, textAlign: "center" },
+  emptySub: { fontSize: 14, color: Colors.grayMedium, lineHeight: 20, textAlign: "center" },
+
+  basketContent: { paddingHorizontal: Spacing.xl, paddingBottom: 40, paddingTop: Spacing.sm },
+  basketTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark, marginBottom: 6 },
+  basketSub: { fontSize: 13, color: Colors.grayMedium, lineHeight: 19, marginBottom: 20 },
+
+  basketChipsGrid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20,
   },
+  basketChip: {
+    width: "47%", backgroundColor: Colors.white, borderRadius: 16,
+    padding: 16, alignItems: "center", gap: 6,
+    borderWidth: 2, borderColor: Colors.grayLight,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  basketChipSelected: {
+    borderColor: Colors.primaryOrange, backgroundColor: Colors.orangeLight,
+  },
+  basketChipIcon: { fontSize: 28 },
+  basketChipText: { fontSize: 13, fontWeight: "700", color: Colors.grayMedium, textAlign: "center" },
+  basketChipTextSelected: { color: Colors.primaryOrange },
+  basketCheckBadge: {
+    position: "absolute", top: 8, right: 8,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: Colors.primaryOrange, alignItems: "center", justifyContent: "center",
+  },
+
+  basketSuccessRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.greenLight, borderRadius: 10, padding: 10, marginBottom: 12,
+  },
+  basketSuccessText: { fontSize: 13, fontWeight: "700", color: Colors.greenMain },
+
+  basketSaveBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 16, paddingVertical: 16,
+    alignItems: "center",
+  },
+  basketSaveBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
 });

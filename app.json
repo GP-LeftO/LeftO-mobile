@@ -27,7 +27,8 @@
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#DE985A"
       },
-      "package": "com.anonymous.lefto",
+      "package": "lefto.com",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -45,7 +46,15 @@
           "locationWhenInUsePermission": "LeftO needs your location to show nearby sellers."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#DE985A",
+          "sounds": []
+        }
+      ]
     ],
     "extra": {
       "eas": {

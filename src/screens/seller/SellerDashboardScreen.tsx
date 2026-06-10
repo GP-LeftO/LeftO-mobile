@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet, Text, View, Platform, TextInput, Image,
   TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
-  KeyboardAvoidingView, Modal, Share, Linking,
+  KeyboardAvoidingView, Modal, Share, Linking, Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -22,6 +22,8 @@ import type { SellerListing, SellerDonation } from "../../services/seller/seller
 import { getMyPerformance } from "../../services/seller/listingAI.service";
 import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { SellerOrder } from "../../hooks/seller/useSellerOrders";
+import { getCharityBasket } from "../../services/charity/charity.service";
+import type { BasketCategory } from "../../services/charity/charity.service";
 import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
 
@@ -63,7 +65,7 @@ interface SettingsForm {
   socialMedia: string;
 }
 
-type Tab = "overview" | "listings" | "orders" | "settings";
+type Tab = "overview" | "listings" | "orders" | "donations" | "settings";
 
 interface SellerDashboardScreenProps {
   onLogout?: () => void;
@@ -83,17 +85,17 @@ const BUSINESS_TYPE_LABELS_AR: Record<string, string> = {
   RESTAURANT: "مطعم", MARKET: "سوق", BAKERY: "مخبزة",
 };
 
-const ORDER_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string }> = {
-  RESERVED:  { labelEn: "Reserved",  labelAr: "محجوز",  color: Colors.primaryOrange },
-  COMPLETED: { labelEn: "Completed", labelAr: "مكتمل",  color: Colors.greenMain     },
-  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",   color: Colors.grayMedium    },
+const ORDER_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string; bg: string; ar: string; en: string }> = {
+  RESERVED:  { labelEn: "Reserved",  labelAr: "محجوز",  color: Colors.primaryOrange, bg: Colors.orangeLight, ar: "محجوز",         en: "Reserved"  },
+  COMPLETED: { labelEn: "Completed", labelAr: "مكتمل",  color: Colors.greenMain,     bg: Colors.greenLight,  ar: "مكتمل",         en: "Completed" },
+  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",   color: Colors.grayMedium,    bg: Colors.grayLight,   ar: "ملغى",          en: "Cancelled" },
 };
 
-const DONATION_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string }> = {
-  PENDING:   { labelEn: "Pending",   labelAr: "قادم",        color: Colors.primaryOrange },
-  PICKED_UP: { labelEn: "Picked Up", labelAr: "تم الاستلام",  color: "#7c3aed"            },
-  CONFIRMED: { labelEn: "Confirmed", labelAr: "مكتمل",        color: Colors.greenMain     },
-  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",         color: Colors.grayMedium    },
+const DONATION_STATUS_CONFIG: Record<string, { labelEn: string; labelAr: string; color: string; bg: string; ar: string; en: string }> = {
+  PENDING:   { labelEn: "Pending",   labelAr: "قادم",        color: Colors.primaryOrange, bg: Colors.orangeLight, ar: "قادم",         en: "Pending"   },
+  PICKED_UP: { labelEn: "Picked Up", labelAr: "تم الاستلام",  color: "#7c3aed",            bg: "#ede9fe",          ar: "تم الاستلام",  en: "Picked Up" },
+  CONFIRMED: { labelEn: "Confirmed", labelAr: "مكتمل",        color: Colors.greenMain,     bg: Colors.greenLight,  ar: "مكتمل",        en: "Confirmed" },
+  CANCELLED: { labelEn: "Cancelled", labelAr: "ملغى",         color: Colors.grayMedium,    bg: Colors.grayLight,   ar: "ملغى",         en: "Cancelled" },
 };
 
 function formatPickup(start?: string, end?: string): string {
@@ -190,9 +192,15 @@ export default function SellerDashboardScreen({
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [donationsError,   setDonationsError]   = useState("");
 
-  // ── Charities state (for donation flow) ──────────────────────────────────
-  const [charities,        setCharities]        = useState<{ id: string; name: string }[]>([]);
+  // ── Charities state (for donation flow + basket display) ─────────────────
+  const [charities,        setCharities]        = useState<{ id: string; name: string; region?: string; basket: BasketCategory[] }[]>([]);
   const [charitiesLoading, setCharitiesLoading] = useState(false);
+
+  // ── Donate-to-charity modal ───────────────────────────────────────────────
+  const [donateTarget,      setDonateTarget]      = useState<{ id: string; name: string } | null>(null);
+  const [donateListingId,   setDonateListingId]   = useState<string>("");
+  const [donateQty,         setDonateQty]         = useState("1");
+  const [donateSubmitting,  setDonateSubmitting]  = useState(false);
 
   // ── Karam state ───────────────────────────────────────────────────────────
   const [karamBalance,  setKaramBalance]  = useState<{ sponsored: number; claimed: number; available: number } | null>(null);
@@ -291,11 +299,25 @@ export default function SellerDashboardScreen({
     try {
       const { data } = await api.get("/api/charities");
       const payload = data?.data ?? data;
-      const arr = Array.isArray(payload) ? payload : payload?.charities ?? payload?.items ?? [];
-      setCharities(arr.map((c: { id: string; name?: string; orgName?: string; organizationName?: string }) => ({
-        id: c.id,
-        name: c.name ?? c.orgName ?? c.organizationName ?? "Charity",
-      })));
+      const arr: { id: string; name?: string; orgName?: string; organizationName?: string; region?: string }[] =
+        Array.isArray(payload) ? payload : payload?.charities ?? payload?.items ?? [];
+      const withBaskets = await Promise.allSettled(
+        arr.map(async c => {
+          let basket: BasketCategory[] = [];
+          try { basket = await getCharityBasket(c.id); } catch { /* skip */ }
+          return {
+            id: c.id,
+            name: c.name ?? c.orgName ?? c.organizationName ?? "Charity",
+            region: c.region,
+            basket,
+          };
+        })
+      );
+      setCharities(
+        withBaskets
+          .filter(r => r.status === "fulfilled")
+          .map(r => (r as PromiseFulfilledResult<{ id: string; name: string; region?: string; basket: BasketCategory[] }>).value)
+      );
     } catch {
       setCharities([]);
     } finally {
@@ -321,6 +343,7 @@ export default function SellerDashboardScreen({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab]);
   useEffect(() => { fetchDonations(); }, [fetchDonations]);
+  useEffect(() => { if (activeTab === "donations") fetchCharities(); }, [activeTab, fetchCharities]);
   useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey, activeTab, fetchListings]);
 
   // Pre-populate settings on first profile load
@@ -456,6 +479,36 @@ export default function SellerDashboardScreen({
 
   // ─── Settings actions ──────────────────────────────────────────────────────
 
+  const handleDonateSubmit = async () => {
+    if (!donateTarget || !donateListingId) return;
+    const qty = Math.max(1, parseInt(donateQty, 10) || 1);
+    const listing = listings.find(l => l.id === donateListingId);
+    if (!listing) return;
+    setDonateSubmitting(true);
+    try {
+      const { createSellerDonation } = await import("../../services/seller/donation.service");
+      await createSellerDonation({
+        listingId: donateListingId,
+        charityId: donateTarget.id,
+        quantity: qty,
+        pickupStart: listing.pickupStart ?? new Date().toISOString(),
+        pickupEnd:   listing.pickupEnd   ?? new Date(Date.now() + 3600000).toISOString(),
+      });
+      setDonateTarget(null);
+      setDonateListingId("");
+      setDonateQty("1");
+      await fetchDonations();
+      Alert.alert(
+        rtl ? "شكراً جزيلاً!" : "Thank you!",
+        rtl ? `تم إرسال تبرعك إلى ${donateTarget.name}` : `Donation sent to ${donateTarget.name}`
+      );
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر إتمام التبرع" : "Could not complete donation");
+    } finally {
+      setDonateSubmitting(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setSettingsLoading(true);
     setSettingsError("");
@@ -537,13 +590,14 @@ export default function SellerDashboardScreen({
     { key: "overview",  labelEn: "Overview",  labelAr: "عام",       icon: "grid"         },
     { key: "listings",  labelEn: "Listings",  labelAr: "القوائم",   icon: "package"      },
     { key: "orders",    labelEn: "Orders",    labelAr: "الطلبات",   icon: "shopping-bag" },
+    { key: "donations", labelEn: "Donate",    labelAr: "تبرع",      icon: "gift"         },
     { key: "settings",  labelEn: "Settings",  labelAr: "الإعدادات", icon: "settings"     },
   ];
 
   const confirmedDonationsCount = donations.filter(d => d.status === "CONFIRMED").length;
 
   const STATS = [
-    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCount ?? 0 },
+    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCountCount ?? 0 },
     { icon: "heart" as const,    color: Colors.greenMain,     label: rtl ? "إجمالي التبرعات"  : "Total Donations",     value: profile?.totalDonations ?? confirmedDonationsCount },
   ];
 
@@ -707,6 +761,52 @@ export default function SellerDashboardScreen({
                       soldOutLoading={soldOutLoading}
                       deleteLoading={deleteLoading}
                     />
+                    <View key={listing.id} style={styles.listingCard}>
+                      <View style={[styles.listingInner, rtl && styles.listingInnerRTL]}>
+                        <View style={styles.listingIconWrap}>
+                          <Feather name="package" size={18} color={Colors.primaryOrange} />
+                        </View>
+                        <View style={styles.listingBody}>
+                          <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>{listing.title}</Text>
+                          {listing.pickupStart && listing.pickupEnd && (
+                            <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
+                              <Feather name="clock" size={12} color={Colors.grayMedium} />
+                              <Text style={styles.listingMetaText}>{formatPickup(listing.pickupStart, listing.pickupEnd)}</Text>
+                            </View>
+                          )}
+                          <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
+                            <Feather name="layers" size={12} color={Colors.grayMedium} />
+                            <Text style={styles.listingMetaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.listingActions}>
+                          <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
+                          <TouchableOpacity style={styles.actionIconBtn} onPress={() => onEditListing?.(listing)} activeOpacity={0.8}>
+                            <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.soldOutBtn}
+                            onPress={() => handleMarkSoldOut(listing.id)}
+                            disabled={soldOutLoading === listing.id}
+                            activeOpacity={0.8}
+                          >
+                            {soldOutLoading === listing.id
+                              ? <ActivityIndicator size="small" color="#ef4444" />
+                              : <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.deleteIconBtn}
+                            onPress={() => handleDeleteListing(listing.id, listing.title)}
+                            disabled={deleteLoading === listing.id}
+                            activeOpacity={0.8}
+                          >
+                            {deleteLoading === listing.id
+                              ? <ActivityIndicator size="small" color="#ef4444" />
+                              : <Feather name="trash-2" size={14} color="#ef4444" />}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
                   ))
                 )}
               </Animated.View>
@@ -767,6 +867,274 @@ export default function SellerDashboardScreen({
               </Animated.View>
             </ScrollView>
           )}
+
+          {/* ══════════ ORDERS TAB ══════════ */}
+          {activeTab === "orders" && (
+            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+              {/* Status filter */}
+              <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
+                {(["RESERVED", "COMPLETED", "CANCELLED"] as ("RESERVED" | "COMPLETED" | "CANCELLED")[]).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
+                    onPress={() => setOrdersFilter(f)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
+                      {rtl
+                        ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
+                        : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"
+                      }
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {ordersLoading ? (
+                <View style={styles.centered}>
+                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
+                </View>
+              ) : ordersError ? (
+                <View style={styles.centered}>
+                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
+                  <Text style={[styles.stateText, rtl && styles.rtl]}>{ordersError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={() => fetchOrders()} activeOpacity={0.8}>
+                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredOrders.length === 0 ? (
+                <View style={styles.emptyPane}>
+                  <Text style={styles.emptyEmoji}>📋</Text>
+                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
+                    {rtl ? "لا توجد طلبات" : "No orders"}
+                  </Text>
+                </View>
+              ) : (
+                filteredOrders.map((order) => {
+                  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.RESERVED;
+                  const date = order.createdAt
+                    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
+                    : null;
+                  return (
+                    <View key={order.id} style={styles.orderCard}>
+                      <View style={[styles.orderCardInner, rtl && styles.orderCardInnerRTL]}>
+                        <View style={styles.orderIconWrap}>
+                          <Feather name="shopping-bag" size={16} color={Colors.primaryOrange} />
+                        </View>
+                        <View style={styles.orderBody}>
+                          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
+                            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+                          </Text>
+                          <Text style={[styles.orderSub, rtl && styles.rtl]}>
+                            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
+                            {order.quantity ? ` · ${rtl ? "الكمية" : "Qty"}: ${order.quantity}` : ""}
+                            {date ? ` · ${date}` : ""}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
+                        </View>
+                      </View>
+                      {order.totalPrice != null && (
+                        <Text style={[styles.orderPrice, rtl && styles.rtl]}>₪{order.totalPrice}</Text>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </Animated.View>
+          )}
+
+          {/* ══════════ DONATIONS TAB ══════════ */}
+          {activeTab === "donations" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
+              <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+
+                {/* ── Browse charity needs ── */}
+                <Text style={[styles.sectionHeader, rtl && styles.rtl]}>
+                  {rtl ? "احتياجات الجمعيات" : "Charity Needs"}
+                </Text>
+                {charitiesLoading ? (
+                  <ActivityIndicator color={Colors.primaryOrange} style={{ marginVertical: 12 }} />
+                ) : charities.length === 0 ? (
+                  <View style={styles.emptyPane}>
+                    <Text style={styles.emptyEmoji}>🤝</Text>
+                    <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد جمعيات" : "No charities found"}</Text>
+                  </View>
+                ) : (() => {
+                  const myCategories = new Set(listings.map(l => l.category).filter(Boolean));
+                  return charities.map(charity => {
+                    const hasBasket = charity.basket.length > 0;
+                    const isMatch = hasBasket && charity.basket.some(c => myCategories.has(c));
+                    const LABELS: Record<string, string> = {
+                      MEALS: rtl ? "وجبات" : "Meals",
+                      BREAD_AND_PASTRIES: rtl ? "خبز" : "Bread",
+                      GROCERIES: rtl ? "بقالة" : "Groceries",
+                      MIXED: rtl ? "متنوع" : "Mixed",
+                    };
+                    return (
+                      <View key={charity.id} style={[styles.charityCard, isMatch && styles.charityCardMatch]}>
+                        <View style={[styles.charityCardRow, rtl && { flexDirection: "row-reverse" as const }]}>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <View style={[styles.charityNameRow, rtl && { flexDirection: "row-reverse" }]}>
+                              <Text style={[styles.charityName, rtl && styles.rtl]} numberOfLines={1}>{charity.name}</Text>
+                              {isMatch && (
+                                <View style={styles.matchBadge}>
+                                  <Text style={styles.matchBadgeText}>{rtl ? "✓ يطابق" : "✓ Match"}</Text>
+                                </View>
+                              )}
+                            </View>
+                            {charity.region && (
+                              <Text style={[styles.charityRegion, rtl && styles.rtl]}>{charity.region}</Text>
+                            )}
+                            {hasBasket ? (
+                              <View style={[styles.charityChips, rtl && { flexDirection: "row-reverse" }]}>
+                                {charity.basket.map(cat => (
+                                  <View
+                                    key={cat}
+                                    style={[styles.charityChip, myCategories.has(cat) && styles.charityChipMatch]}
+                                  >
+                                    <Text style={[styles.charityChipText, myCategories.has(cat) && styles.charityChipTextMatch]}>
+                                      {LABELS[cat] ?? cat}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            ) : (
+                              <Text style={styles.charityNoBasket}>{rtl ? "لم تحدد احتياجاتها" : "No needs specified"}</Text>
+                            )}
+                          </View>
+                          <TouchableOpacity
+                            style={styles.donateToBtn}
+                            onPress={() => {
+                              setDonateTarget({ id: charity.id, name: charity.name });
+                              setDonateListingId(listings[0]?.id ?? "");
+                              setDonateQty("1");
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Feather name="gift" size={14} color={Colors.white} />
+                            <Text style={styles.donateToBtnText}>{rtl ? "تبرع" : "Donate"}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  });
+                })()}
+
+                {/* ── Past donations ── */}
+                {donations.length > 0 && (
+                  <>
+                    <Text style={[styles.sectionHeader, rtl && styles.rtl, { marginTop: 20 }]}>
+                      {rtl ? "تبرعاتي السابقة" : "My Donations"}
+                    </Text>
+                    {donations.map((don) => {
+                      const cfg = DONATION_STATUS_CONFIG[don.status] ?? DONATION_STATUS_CONFIG.PENDING;
+                      const charityName = don.charity?.orgName ?? don.charity?.name ?? (rtl ? "جمعية" : "Charity");
+                      const date = don.createdAt
+                        ? new Date(don.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
+                        : null;
+                      return (
+                        <View key={don.id} style={styles.donationCard}>
+                          <View style={[styles.donationInner, rtl && styles.donationInnerRTL]}>
+                            <View style={styles.donationIconWrap}>
+                              <Feather name="gift" size={16} color={Colors.greenMain} />
+                            </View>
+                            <View style={styles.donationBody}>
+                              <Text style={[styles.donationTitle, rtl && styles.rtl]} numberOfLines={1}>
+                                {don.listing?.title ?? (rtl ? "تبرع" : "Donation")}
+                              </Text>
+                              <Text style={[styles.donationSub, rtl && styles.rtl]}>
+                                {rtl ? `إلى: ${charityName}` : `To: ${charityName}`}
+                                {` · ${rtl ? "كمية" : "Qty"}: ${don.quantity}`}
+                                {date ? ` · ${date}` : ""}
+                              </Text>
+                            </View>
+                            <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+                              <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </Animated.View>
+            </ScrollView>
+          )}
+
+          {/* ── Donate-to-charity modal ── */}
+          <Modal
+            visible={!!donateTarget}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setDonateTarget(null)}
+          >
+            <View style={styles.modalOverlay}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => setDonateTarget(null)} activeOpacity={1} />
+              <View style={styles.modalSheet}>
+                <View style={[styles.modalHeader, rtl && styles.modalHeaderRTL]}>
+                  <View>
+                    <Text style={styles.modalTitle}>{rtl ? "تبرع بالفائض" : "Donate Surplus"}</Text>
+                    <Text style={styles.modalSub}>{rtl ? `إلى: ${donateTarget?.name}` : `To: ${donateTarget?.name}`}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setDonateTarget(null)} activeOpacity={0.8}>
+                    <Feather name="x" size={22} color={Colors.grayMedium} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalLabel}>{rtl ? "اختر القائمة" : "Select Listing"}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                  {listings.map(l => (
+                    <TouchableOpacity
+                      key={l.id}
+                      style={[styles.chip, donateListingId === l.id && styles.chipSelected]}
+                      onPress={() => setDonateListingId(l.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.chipText, donateListingId === l.id && styles.chipTextSelected]} numberOfLines={1}>
+                        {l.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <Text style={styles.modalLabel}>{rtl ? "الكمية" : "Quantity"}</Text>
+                <View style={[styles.donationInner, rtl && styles.donationInnerRTL, { alignItems: "center" }]}>
+                  <TouchableOpacity
+                    style={styles.donationQtyBtn}
+                    onPress={() => setDonateQty(q => String(Math.max(1, parseInt(q, 10) - 1)))}
+                  >
+                    <Feather name="minus" size={18} color={Colors.primaryOrange} />
+                  </TouchableOpacity>
+                  <Text style={styles.donationQtyText}>{donateQty}</Text>
+                  <TouchableOpacity
+                    style={styles.donationQtyBtn}
+                    onPress={() => setDonateQty(q => String(parseInt(q, 10) + 1))}
+                  >
+                    <Feather name="plus" size={18} color={Colors.primaryOrange} />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.donateConfirmBtn, (!donateListingId || donateSubmitting) && { opacity: 0.6 }]}
+                  onPress={handleDonateSubmit}
+                  disabled={!donateListingId || donateSubmitting}
+                  activeOpacity={0.85}
+                >
+                  {donateSubmitting
+                    ? <ActivityIndicator color={Colors.white} size="small" />
+                    : <>
+                        <Feather name="heart" size={16} color={Colors.white} />
+                        <Text style={styles.donateConfirmBtnText}>
+                          {rtl ? "تأكيد التبرع" : "Confirm Donation"}
+                        </Text>
+                      </>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
           {/* ══════════ SETTINGS TAB ══════════ */}
           {activeTab === "settings" && (
@@ -1598,6 +1966,17 @@ const styles = StyleSheet.create({
 
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: Spacing.xl },
   errorText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
+  stateText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
+
+  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.sm },
+  filterRowRTL: { flexDirection: "row-reverse" },
+  filterPill: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
+  filterPillActive: { backgroundColor: Colors.primaryOrange, borderColor: Colors.primaryOrange },
+  filterPillText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
+  filterPillTextActive: { color: Colors.white },
   retryBtn: { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 12 },
   retryBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
@@ -1700,11 +2079,32 @@ const styles = StyleSheet.create({
   orderCardInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
   orderCardInnerRTL: { flexDirection: "row-reverse" },
   orderStatusDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  orderIconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center",
+  },
   orderBody: { flex: 1, gap: 3 },
   orderTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
   orderMeta: { fontSize: 12, color: Colors.grayMedium, lineHeight: 16 },
+  orderSub: { fontSize: 12, color: Colors.grayMedium, lineHeight: 16 },
+  orderPrice: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   orderStatusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   orderStatusText: { fontSize: 11, fontWeight: "700" },
+
+  donationCard: {
+    backgroundColor: Colors.white, borderRadius: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    overflow: "hidden",
+  },
+  donationInner: { flexDirection: "row", alignItems: "center", padding: Spacing.md, gap: 12 },
+  donationInnerRTL: { flexDirection: "row-reverse" },
+  donationIconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: Colors.greenLight, alignItems: "center", justifyContent: "center",
+  },
+  donationBody: { flex: 1, gap: 3 },
+  donationTitle: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  donationSub: { fontSize: 12, color: Colors.grayMedium, lineHeight: 16 },
 
   loadMoreBtn: {
     alignItems: "center", paddingVertical: 14,
@@ -1743,6 +2143,24 @@ const styles = StyleSheet.create({
   // Status pill (shared)
   statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   statusPillText: { fontSize: 11, fontWeight: "700" },
+
+  bizTypeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  bizTypeRowRTL: { flexDirection: "row-reverse" },
+  bizTypeChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.grayLight,
+    backgroundColor: Colors.white,
+  },
+  bizTypeChipActive: { backgroundColor: Colors.orangeLight, borderColor: Colors.primaryOrange },
+  bizTypeChipText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
+  bizTypeChipTextActive: { color: Colors.primaryOrange },
+
+  settingsMsg: { borderRadius: 10, padding: 12 },
+  settingsMsgSuccess: { backgroundColor: Colors.greenLight },
+  settingsMsgError: { backgroundColor: "#fef2f2" },
+  settingsMsgText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
+
+
   stateText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
 
   karamToggleCard: {
@@ -1935,4 +2353,44 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginTop: 4,
   },
   donateConfirmBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
+
+  // Charity needs (donations tab)
+  sectionHeader: { fontSize: 13, fontWeight: "800", color: Colors.grayDark, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 },
+
+  charityCard: {
+    backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, marginBottom: 10,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  charityCardMatch: { borderColor: Colors.greenMain, backgroundColor: "#f0fdf4" },
+  charityCardRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  charityNameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  charityName: { fontSize: 14, fontWeight: "700", color: Colors.grayDark },
+  charityRegion: { fontSize: 12, color: Colors.grayMedium },
+  charityChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  charityChip: {
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+    backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.grayLight,
+  },
+  charityChipMatch: { backgroundColor: Colors.greenLight, borderColor: Colors.greenMain },
+  charityChipText: { fontSize: 11, fontWeight: "600", color: Colors.grayMedium },
+  charityChipTextMatch: { color: Colors.greenMain },
+  charityNoBasket: { fontSize: 11, color: Colors.grayMedium, fontStyle: "italic" },
+  matchBadge: {
+    backgroundColor: Colors.greenLight, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  matchBadgeText: { fontSize: 10, fontWeight: "700", color: Colors.greenMain },
+
+  donateToBtn: {
+    backgroundColor: Colors.greenMain, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "center",
+  },
+  donateToBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+
+  donationQtyBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.orangeLight, borderWidth: 1.5, borderColor: Colors.primaryOrange,
+    alignItems: "center", justifyContent: "center",
+  },
+  donationQtyText: { fontSize: 20, fontWeight: "800", color: Colors.grayDark, minWidth: 40, textAlign: "center" },
 });

@@ -9,6 +9,13 @@ export type NotificationType =
   | "SELLER_APPROVED"
   | "SELLER_REJECTED"
   | "CHARITY_APPROVED"
+  | "NEW_LISTING_FROM_FAVORITE"
+  | "LISTING_EXPIRING_SOON"
+  | "WASTE_PATTERN_ALERT"
+  | "DEAL_WINDOW_TIP"
+  | "ACCOUNT_BLOCKED"
+  | "LISTING_REPORTED"
+  | "LISTING_REMOVED"
   | "SYSTEM";
 
 export interface AppNotification {
