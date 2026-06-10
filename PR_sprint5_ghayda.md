@@ -330,9 +330,76 @@ Login as buyer → Profile tab → expand settings → tap **"إعدادات ا�
 
 ---
 
+---
+
+## Sprint 5 — Part 3 Features
+
+### Admin-1 — Seller of the Month fix
+**File:** `admin/src/pages/Dashboard.jsx`
+
+Login to admin web panel (`0598262751 / Admin123!`) → Dashboard.
+- "Seller of the Month" banner now shows the actual seller name, star rating, and formatted month (e.g. "June 2026")
+- Was previously showing `—` due to a data-unwrapping bug
+
+---
+
+### Admin-2 — Buyer of the Month card (new)
+**File:** `admin/src/pages/Dashboard.jsx`, `admin/src/i18n.js`
+
+Same Dashboard page as above.
+- A new blue **"Buyer of the Month"** card appears next to the seller card
+- Shows the buyer with the highest CO₂ saved (from `GET /api/stats/leaderboard`) with their name and kg CO₂
+- If both cards exist → side by side. If only one → full width.
+
+---
+
+### G-NEW — Listing Description field
+**Files:** `src/screens/seller/listings/ListingFormScreen.tsx`, `src/hooks/seller/useListingForm.ts`, `src/services/seller/seller.service.ts`
+
+Login as seller `0551234567 / Seller123!` → Dashboard → Listings → tap **+**.
+- A multi-line **Description** text area now appears below the Title field
+- The seller uses this to describe exactly what's inside the bag (e.g. "3 manaqeesh, leftover rice, piece of knafeh")
+- Description is submitted to the backend and loaded back when editing the listing
+- Field is optional — listing can still be submitted without it
+
+---
+
+### G-NEW — Charity "Needs" Tab
+**Files:** `src/screens/charity/CharityDashboardScreen.tsx`, `src/services/charity/charity.service.ts`
+
+Login as charity `0597777777 / Charity123!` → Charity Dashboard.
+- New **Needs** tab (basket icon) appears alongside Pending and History
+- 4 food category chips: 🍱 Meals, 🥖 Bread & Pastries, 🛒 Groceries, 📦 Mixed
+- Tap to select multiple categories (orange highlight + checkmark when selected)
+- Tap **"Save Needs"** → `PUT /api/charities/me/basket` → green success flash
+- Selections persist and reload when re-opening the tab
+
+---
+
+### G-NEW — Seller Donations Tab (Option C: all charities + match highlighting)
+**Files:** `src/screens/seller/SellerDashboardScreen.tsx`, `src/services/charity/charity.service.ts`
+
+Login as seller `0551234567 / Seller123!` → Dashboard → **Donations tab** (gift icon).
+
+**Browse Charity Needs section:**
+- All approved charities listed as cards with name, region, and their food category chips
+- If a charity's food category matches one of the seller's active listing categories → that chip turns **green** and a 🟢 **"Match"** badge appears on the card
+- Tap **"Donate"** on any charity → bottom sheet slides up with:
+  - Charity name at top
+  - Horizontal scroll of the seller's active listings (tap one to select)
+  - Quantity − / + stepper (min 1)
+  - **"Confirm Donation"** → `POST /api/donations` → success alert
+
+**My Donations section** (below charity cards):
+- History of past seller-initiated donations with status badges (Pending / Picked Up / Confirmed / Cancelled)
+
+---
+
 ## Coordination Needed from Tala (Part 2)
 
 | Item | What's needed |
 |------|---------------|
 | Karam Stripe | `<StripeProvider publishableKey="pk_test_...">` wrapping App root |
 | Seller Analytics | "تحليلات" button in SellerDashboardScreen → navigate to `SellerAnalyticsScreen` (pass `onBack` prop) |
+
+
