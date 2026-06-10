@@ -45,6 +45,7 @@ function hhmmToSmartIso(hhmm: string): string {
 
 export interface ListingFormState {
   title: string;
+  description: string;
   type: "MEAL_BAG" | "SPECIFIC_PARCEL";
   category: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice: string;
@@ -66,6 +67,7 @@ export function useListingForm(existing?: SellerListing) {
 
   const [form, setForm] = useState<ListingFormState>({
     title:          existing?.title ?? "",
+    description:    existing?.description ?? "",
     type:           existing?.type ?? "MEAL_BAG",
     category:       existing?.category ?? "MEALS",
     originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
@@ -120,6 +122,7 @@ export function useListingForm(existing?: SellerListing) {
     try {
       const payload: ListingFormData = {
         title:           form.title.trim(),
+        description:     form.description.trim() || undefined,
         type:            form.type,
         category:        form.category,
         originalPrice:   Number(form.originalPrice),

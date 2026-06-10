@@ -27,6 +27,7 @@ export const MOCK_SELLER: SellerDetail = {
 export interface SellerListing {
   id: string;
   title: string;
+  description?: string;
   type?: "MEAL_BAG" | "SPECIFIC_PARCEL";
   category?: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice?: number;
@@ -43,6 +44,7 @@ export interface SellerListing {
 
 export interface ListingFormData {
   title: string;
+  description?: string;
   type: "MEAL_BAG" | "SPECIFIC_PARCEL";
   category: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice: number;

@@ -5,13 +5,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { Colors, Spacing } from "../../../theme";
 import { isRTL } from "../../../i18n";
 import { useListingForm } from "../../../hooks/seller/useListingForm";
 import {
-  scoreListingTitle, getPriceSuggestion, suggestAllergens,
+  scoreListingTitle, getPriceSuggestion, suggestAllergens, analyzeListingImage,
 } from "../../../services/seller/listingAI.service";
-import type { TitleScoreResult, PriceSuggestionResult } from "../../../services/seller/listingAI.service";
+import type { TitleScoreResult, PriceSuggestionResult, ImageAnalysisResult } from "../../../services/seller/listingAI.service";
 import type { SellerListing } from "../../../services/seller/seller.service";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -57,6 +58,8 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   const [titleScoring,     setTitleScoring]     = useState(false);
   const [priceSugg,        setPriceSugg]        = useState<PriceSuggestionResult | null>(null);
   const [allergenDetecting, setAllergenDetecting] = useState(false);
+  const [imageAnalysis,    setImageAnalysis]    = useState<ImageAnalysisResult | null>(null);
+  const [imageAnalyzing,   setImageAnalyzing]   = useState(false);
 
   // ── AI handlers ───────────────────────────────────────────────────────────────
 
@@ -98,6 +101,30 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
       setAllergenDetecting(false);
     }
   }, [form.title, rtl, setField]);
+
+  const handleAnalyzeImage = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(rtl ? "إذن مطلوب" : "Permission Required", rtl ? "يرجى السماح بالوصول إلى الصور" : "Please allow access to your photo library");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      allowsEditing: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+    setImageAnalyzing(true);
+    setImageAnalysis(null);
+    try {
+      const analysis = await analyzeListingImage(result.assets[0].uri);
+      setImageAnalysis(analysis);
+    } catch {
+      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحليل الصورة" : "Could not analyze image");
+    } finally {
+      setImageAnalyzing(false);
+    }
+  }, [rtl]);
 
   // Trigger price suggestion whenever category or original price changes
   React.useEffect(() => {
@@ -197,6 +224,25 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
               )}
             </View>
           )}
+        </View>
+
+        {/* ── Description ── */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
+            {rtl ? "الوصف" : "Description"}
+            <Text style={styles.optional}> {rtl ? "(اختياري)" : "(optional)"}</Text>
+          </Text>
+          <TextInput
+            style={[styles.input, styles.textArea, rtl && styles.textRight]}
+            placeholder={rtl ? "وصف مختصر للمحتويات..." : "Brief description of the contents..."}
+            placeholderTextColor={Colors.grayMedium}
+            multiline
+            numberOfLines={3}
+            value={form.description}
+            onChangeText={v => setField("description", v)}
+            textAlign={rtl ? "right" : "left"}
+            textAlignVertical="top"
+          />
         </View>
 
         {/* ── Type ── */}
@@ -422,7 +468,7 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           </TouchableOpacity>
         </View>
 
-        {/* ── Photo URL ── */}
+        {/* ── Photo URL + AI Analyze ── */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
             {rtl ? "رابط الصورة" : "Photo URL"}
@@ -438,6 +484,75 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
             onChangeText={v => setField("photoUrl", v)}
             textAlign={rtl ? "right" : "left"}
           />
+
+          {/* AI analyze image button */}
+          <TouchableOpacity
+            style={[styles.aiAnalyzeBtn, imageAnalyzing && styles.aiAnalyzeBtnDisabled]}
+            onPress={handleAnalyzeImage}
+            disabled={imageAnalyzing}
+            activeOpacity={0.8}
+          >
+            {imageAnalyzing ? (
+              <ActivityIndicator size="small" color={Colors.primaryOrange} />
+            ) : (
+              <Feather name="camera" size={14} color={Colors.primaryOrange} />
+            )}
+            <Text style={styles.aiAnalyzeBtnText}>
+              {imageAnalyzing
+                ? (rtl ? "جارٍ تحليل الصورة..." : "Analyzing image...")
+                : (rtl ? "✨ تحليل صورة بالذكاء الاصطناعي" : "✨ AI: Analyze Food Photo")}
+            </Text>
+          </TouchableOpacity>
+
+          {/* AI analysis result card */}
+          {imageAnalysis && !imageAnalyzing && (
+            <View style={styles.aiAnalysisCard}>
+              <Text style={[styles.aiAnalysisTitle, rtl && styles.textRight]}>
+                {rtl ? "نتائج التحليل" : "Analysis Results"}
+                {imageAnalysis.confidence ? ` · ${imageAnalysis.confidence}` : ""}
+              </Text>
+
+              {imageAnalysis.suggestedTitle && (
+                <TouchableOpacity
+                  style={styles.aiAnalysisRow}
+                  onPress={() => { setField("title", imageAnalysis.suggestedTitle!); setTitleScore(null); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "العنوان المقترح" : "Suggested Title"}</Text>
+                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]} numberOfLines={2}>{imageAnalysis.suggestedTitle}</Text>
+                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
+                </TouchableOpacity>
+              )}
+
+              {imageAnalysis.description && (
+                <TouchableOpacity
+                  style={styles.aiAnalysisRow}
+                  onPress={() => setField("description", imageAnalysis.description!)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "الوصف المقترح" : "Suggested Description"}</Text>
+                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]} numberOfLines={3}>{imageAnalysis.description}</Text>
+                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
+                </TouchableOpacity>
+              )}
+
+              {imageAnalysis.suggestedAllergens && imageAnalysis.suggestedAllergens.length > 0 && (
+                <TouchableOpacity
+                  style={styles.aiAnalysisRow}
+                  onPress={() => setField("allergenNote", imageAnalysis.suggestedAllergens!.join("، "))}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.aiAnalysisLabel, rtl && styles.textRight]}>{rtl ? "مسببات الحساسية" : "Allergens"}</Text>
+                  <Text style={[styles.aiAnalysisValue, rtl && styles.textRight]}>{imageAnalysis.suggestedAllergens.join(" · ")}</Text>
+                  <Text style={styles.aiApplyText}>{rtl ? "تطبيق ←" : "Apply →"}</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity onPress={() => setImageAnalysis(null)} style={{ alignSelf: "flex-end", marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: Colors.grayMedium }}>{rtl ? "إغلاق" : "Dismiss"}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* ── Submit error ── */}
@@ -689,4 +804,27 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingVertical: 10,
   },
   allergenBtnText: { fontSize: 13, color: Colors.primaryOrange, fontWeight: "600" },
+
+  textArea: { minHeight: 80, paddingTop: 12, textAlignVertical: "top" },
+
+  aiAnalyzeBtn: {
+    marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, borderWidth: 1.5, borderColor: Colors.primaryOrange, borderStyle: "dashed",
+    borderRadius: 10, paddingVertical: 10, backgroundColor: Colors.orangeLight,
+  },
+  aiAnalyzeBtnDisabled: { opacity: 0.5 },
+  aiAnalyzeBtnText: { fontSize: 13, color: Colors.primaryOrange, fontWeight: "600" },
+
+  aiAnalysisCard: {
+    marginTop: 10, backgroundColor: "#F0FDF4", borderRadius: 12,
+    borderWidth: 1, borderColor: "#BBF7D0", padding: 12, gap: 6,
+  },
+  aiAnalysisTitle: { fontSize: 12, fontWeight: "700", color: Colors.greenMain, marginBottom: 4 },
+  aiAnalysisRow: {
+    backgroundColor: Colors.white, borderRadius: 8, padding: 10,
+    borderWidth: 1, borderColor: "#D1FAE5",
+  },
+  aiAnalysisLabel: { fontSize: 10, fontWeight: "700", color: Colors.grayMedium, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 },
+  aiAnalysisValue: { fontSize: 13, color: Colors.grayDark, fontWeight: "500" },
+  aiApplyText: { fontSize: 11, color: Colors.primaryOrange, fontWeight: "700", marginTop: 4 },
 });
