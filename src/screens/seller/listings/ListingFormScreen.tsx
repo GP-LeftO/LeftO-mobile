@@ -124,7 +124,7 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
       await submit();
       onComplete();
     } catch {
-      // submitError is set inside the hook
+      // submitError is already set inside the hook
     }
   };
 
@@ -456,6 +456,62 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           </View>
         </View>
 
+        {/* ── Expiry Date (SPECIFIC_PARCEL only) ── */}
+        {form.type === "SPECIFIC_PARCEL" && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
+              {rtl ? "تاريخ الصلاحية" : "Expiry Date"} <Text style={styles.required}>*</Text>
+            </Text>
+            <DatePickerInput
+              value={form.expiryDate}
+              onChange={v => setField("expiryDate", v)}
+              hasError={!!errors.expiryDate}
+            />
+            {errors.expiryDate && <Text style={styles.errorText}>{errors.expiryDate}</Text>}
+          </View>
+        )}
+
+        {/* ── Price Decay Toggle ── */}
+        <View style={styles.section}>
+          <View style={[styles.switchRow, rtl && styles.rowRTL]}>
+            <View style={styles.switchLabelWrap}>
+              <Text style={[styles.sectionLabel, rtl && styles.textRight, { marginBottom: 2 }]}>
+                {rtl ? "السعر المتناقص تلقائياً" : "Auto-Decaying Price"}
+              </Text>
+              <Text style={[styles.switchSubtext, rtl && styles.textRight]}>
+                {rtl
+                  ? "ينخفض السعر تلقائياً كلما اقترب وقت الاستلام"
+                  : "Price drops automatically as pickup time approaches"}
+              </Text>
+            </View>
+            <Switch
+              value={form.isPriceDecaying}
+              onValueChange={v => setField("isPriceDecaying", v)}
+              trackColor={{ false: Colors.grayLight, true: Colors.primaryOrange + "80" }}
+              thumbColor={form.isPriceDecaying ? Colors.primaryOrange : "#f4f3f4"}
+            />
+          </View>
+        </View>
+
+        {/* ── Floor Price (only when isPriceDecaying) ── */}
+        {form.isPriceDecaying && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
+              {rtl ? "الحد الأدنى للسعر (₪)" : "Floor Price (₪)"} <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.input, errors.floorPrice && styles.inputError, rtl && styles.textRight]}
+              placeholder="0.00"
+              placeholderTextColor={Colors.grayMedium}
+              keyboardType="decimal-pad"
+              value={form.floorPrice}
+              onChangeText={v => setField("floorPrice", v)}
+              textAlign={rtl ? "right" : "left"}
+            />
+            {errors.floorPrice && <Text style={styles.errorText}>{errors.floorPrice}</Text>}
+          </View>
+        )}
+
         {/* ── Allergen Note ── */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
@@ -464,7 +520,7 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           </Text>
           <TextInput
             style={[styles.input, styles.inputMultiline, rtl && styles.textRight]}
-            placeholder={rtl ? "مثال: يحتوي على غلوتين والحبوب..." : "e.g. Contains gluten, nuts..."}
+            placeholder={rtl ? "مثال: يحتوي على غلوتين والمكسرات..." : "e.g. Contains gluten, nuts..."}
             placeholderTextColor={Colors.grayMedium}
             multiline
             numberOfLines={3}
@@ -486,6 +542,25 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
                 </Text>
             }
           </TouchableOpacity>
+        </View>
+
+        {/* ── Description ── */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
+            {rtl ? "وصف" : "Description"}
+            <Text style={styles.optional}> {rtl ? "(اختياري)" : "(optional)"}</Text>
+          </Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, rtl && styles.textRight]}
+            placeholder={rtl ? "صِف محتوى الطرد أو أي تفاصيل إضافية..." : "Describe the bag contents or any extra details..."}
+            placeholderTextColor={Colors.grayMedium}
+            multiline
+            numberOfLines={4}
+            value={form.description}
+            onChangeText={v => setField("description", v)}
+            textAlign={rtl ? "right" : "left"}
+            textAlignVertical="top"
+          />
         </View>
 
         {/* ── Photo URL + AI Analyze ── */}
@@ -609,6 +684,93 @@ function TimeStepperInput({ value, onChange, hasError }: { value: string; onChan
     </View>
   );
 }
+
+// ─── Date picker ─────────────────────────────────────────────────────────────
+
+function parseDateStr(raw: string): { d: number; mo: number; y: number } {
+  if (!raw) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return { d: tomorrow.getDate(), mo: tomorrow.getMonth() + 1, y: tomorrow.getFullYear() };
+  }
+  const parts = raw.split("-").map(Number);
+  return { d: parts[2] || 1, mo: parts[1] || 1, y: parts[0] || new Date().getFullYear() };
+}
+
+function formatDateStr(d: number, mo: number, y: number): string {
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function daysInMonth(mo: number, y: number): number {
+  return new Date(y, mo, 0).getDate();
+}
+
+function DatePickerInput({ value, onChange, hasError }: { value: string; onChange: (v: string) => void; hasError: boolean }) {
+  const { d, mo, y } = parseDateStr(value || "");
+
+  const update = (newD: number, newMo: number, newY: number) => {
+    const maxD = daysInMonth(newMo, newY);
+    onChange(formatDateStr(Math.min(newD, maxD), newMo, newY));
+  };
+
+  const adjustD  = (delta: number) => { const maxD = daysInMonth(mo, y); update(((d - 1 + delta + maxD) % maxD) + 1, mo, y); };
+  const adjustMo = (delta: number) => { const newMo = ((mo - 1 + delta + 12) % 12) + 1; update(d, newMo, y); };
+  const adjustY  = (delta: number) => update(d, mo, y + delta);
+
+  const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+  return (
+    <View style={[dateStyles.wrap, hasError && dateStyles.wrapError]}>
+      {/* Day */}
+      <View style={dateStyles.unit}>
+        <TouchableOpacity onPress={() => adjustD(1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▲</Text>
+        </TouchableOpacity>
+        <Text style={dateStyles.digit}>{String(d).padStart(2, "0")}</Text>
+        <TouchableOpacity onPress={() => adjustD(-1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▼</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={dateStyles.sep}>/</Text>
+      {/* Month */}
+      <View style={dateStyles.unit}>
+        <TouchableOpacity onPress={() => adjustMo(1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▲</Text>
+        </TouchableOpacity>
+        <Text style={dateStyles.monthText}>{MONTHS_AR[mo - 1]}</Text>
+        <TouchableOpacity onPress={() => adjustMo(-1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▼</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={dateStyles.sep}>/</Text>
+      {/* Year */}
+      <View style={dateStyles.unit}>
+        <TouchableOpacity onPress={() => adjustY(1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▲</Text>
+        </TouchableOpacity>
+        <Text style={dateStyles.digit}>{y}</Text>
+        <TouchableOpacity onPress={() => adjustY(-1)} style={dateStyles.arrow} activeOpacity={0.7}>
+          <Text style={dateStyles.arrowIcon}>▼</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const dateStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+    borderRadius: 14, paddingVertical: 4, paddingHorizontal: 12, gap: 4, alignSelf: "flex-start",
+  },
+  wrapError: { borderColor: "#ef4444" },
+  unit: { alignItems: "center", gap: 2 },
+  arrow: { padding: 4 },
+  arrowIcon: { fontSize: 10, color: Colors.primaryOrange, fontWeight: "700" },
+  digit: { fontSize: 20, fontWeight: "700", color: Colors.grayDark, minWidth: 36, textAlign: "center" },
+  monthText: { fontSize: 14, fontWeight: "700", color: Colors.grayDark, minWidth: 70, textAlign: "center" },
+  sep: { fontSize: 20, fontWeight: "700", color: Colors.grayDark, marginBottom: 2 },
+});
 
 const timeStyles = StyleSheet.create({
   wrap: {
@@ -779,4 +941,12 @@ const styles = StyleSheet.create({
   decaySub:   { fontSize: 11, color: Colors.grayMedium, marginTop: 2 },
   floorPriceWrap: { marginTop: 10, gap: 4 },
 
+
+  switchRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: Colors.white, borderRadius: 14, padding: Spacing.md,
+    borderWidth: 1.5, borderColor: Colors.grayLight,
+  },
+  switchLabelWrap: { flex: 1, marginRight: Spacing.md },
+  switchSubtext: { fontSize: 12, color: Colors.grayMedium, marginTop: 2 },
 });

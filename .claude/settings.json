@@ -28,7 +28,8 @@
       "Bash(xargs grep -l \"donation\")",
       "Bash(grep -r \"api/donations\" \"c:\\\\Users\\\\GIGABYTE\\\\Desktop\\\\Projects\\\\LeftO\\\\GP-LeftO\\\\lefto-backend\" 2>/dev/null || echo \"No /api/donations routes found\")",
       "Read(//c/Users/GIGABYTE/Desktop/Projects/LeftO/GP-LeftO/lefto-backend/**)",
-      "Bash(cd \"c:\\\\Users\\\\GIGABYTE\\\\Desktop\\\\Projects\\\\LeftO\\\\GP-LeftO\\\\lefto-backend\" && ls -la src/ 2>/dev/null | head -20)"
+      "Bash(cd \"c:\\\\Users\\\\GIGABYTE\\\\Desktop\\\\Projects\\\\LeftO\\\\GP-LeftO\\\\lefto-backend\" && ls -la src/ 2>/dev/null | head -20)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\GIGABYTE\\\\Desktop\\\\Projects\\\\LeftO\\\\GP-LeftO\\\\lefto-backend\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch \"node_modules\" -and $_.FullName -notmatch \"node_modules\" } | Select-Object FullName | Format-List)"
     ],
     "additionalDirectories": [
       "c:\\Users\\GIGABYTE\\.claude\\projects\\c--Users-GIGABYTE-Desktop-Projects-LeftO-LeftO-mobile\\memory"

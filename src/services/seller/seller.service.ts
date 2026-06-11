@@ -36,10 +36,13 @@ export interface SellerListing {
   quantity: number;
   pickupStart?: string;
   pickupEnd?: string;
+  expiryDate?: string | null;
   freshnessBadge?: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote?: string;
+  description?: string;
   photoUrl?: string;
   status?: string;
+  qrCodeUrl?: string;
   isPriceDecaying?: boolean;
   floorPrice?: number | null;
 }
@@ -56,9 +59,11 @@ export interface ListingFormData {
   pickupEnd: string;
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote?: string;
+  description?: string;
   photoUrl?: string;
+  expiryDate?: string;
   isPriceDecaying?: boolean;
-  floorPrice?: number | null;
+  floorPrice?: number;
 }
 
 // ─── Seller registration ──────────────────────────────────────────────────────
@@ -69,6 +74,7 @@ export interface RegisterSellerParams {
   registrationNumber?: string;
   location: { latitude: number; longitude: number; address?: string };
   description?: string;
+  registrationNumber: string;
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
   documentUrls?: string[];
 }
@@ -127,20 +133,13 @@ export const getSellerOrders = (params?: { status?: string; page?: number; limit
 
 // ─── Seller profile update ────────────────────────────────────────────────────
 
+// Matches actual PATCH /api/sellers/me schema (flat fields, not nested)
 export interface UpdateSellerParams {
+  businessName?: string;
   description?: string;
-  businessType?: "RESTAURANT" | "BAKERY" | "MARKET" | "GROCERY";
-  contactInfo?: {
-    phone?: string;
-    website?: string;
-    socialMedia?: string;
-  };
-  location?: {
-    address?: string;
-    latitude?: number;
-    longitude?: number;
-  };
-  operatingHours?: string;
+  phone?: string;
+  website?: string;
+  socialMedia?: string;
   logoUrl?: string;
 }
 

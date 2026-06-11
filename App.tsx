@@ -147,6 +147,10 @@ function AppContent() {
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
   const goBack = ()           => setStepHistory(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
 
+  // Prevents the startup-session-restore effect from firing during fresh registration.
+  // Set true before register() is called; cleared on success, error, or logout.
+  const isRegistrationInProgressRef = useRef(false);
+
   // ── Restore language + check existing auth session on startup ──────────────
   useEffect(() => {
     (async () => {
@@ -156,10 +160,14 @@ function AppContent() {
     })();
   }, []);
 
-  // When auth initializes and user is already logged in → skip to their home
+  // When auth initializes and user is already logged in → skip to their home.
+  // Guarded by isRegistrationInProgressRef: during fresh registration, register()
+  // flips ctx.isAuthenticated which would otherwise trigger this effect and push
+  // "under-review" before the seller has completed the multi-step form.
   useEffect(() => {
     if (ctx.isInitializing || !langRestored) return;
     if (ctx.isAuthenticated && ctx.user) {
+      if (isRegistrationInProgressRef.current) return;
       const route = resolveHomeRoute(ctx.user.role, ctx.sellerStatus, ctx.charityStatus);
       goTo(route);
     }
@@ -241,6 +249,7 @@ function AppContent() {
     setBasicInfo(info);
     setIsRegistering(true);
     setRegisterError("");
+    isRegistrationInProgressRef.current = true;
     try {
       const apiRole = (selectedRole as string).toUpperCase() as "BUYER" | "SELLER" | "CHARITY";
       await register({
@@ -254,15 +263,18 @@ function AppContent() {
       setIsRegistering(false);
       goTo("role-specific");
     } catch (err: unknown) {
+      isRegistrationInProgressRef.current = false;
       const axiosErr = err as { response?: { data?: { message?: string }; status?: number } };
       const status   = axiosErr.response?.status;
       const msg      = axiosErr.response?.data?.message;
       if (status === 409) {
+        isRegistrationInProgressRef.current = true;
         try {
           await login(phone, info.password);
           setIsRegistering(false);
           goTo("role-specific");
         } catch {
+          isRegistrationInProgressRef.current = false;
           setIsRegistering(false);
           setRegisterError(rtl
             ? "رقم الهاتف مسجّل مسبقاً بكلمة مرور مختلفة، يرجى تسجيل الدخول"
@@ -276,6 +288,7 @@ function AppContent() {
   };
 
   const handleLogout = () => {
+    isRegistrationInProgressRef.current = false;
     setStepHistory(["language-selection"]);
     setSelectedRole(null);
     setPhone("");
@@ -440,15 +453,15 @@ function AppContent() {
       {step === "role-specific" &&
         screen(
           <RoleSpecificInfoScreen
-            key={language}
+            key={`${selectedRole ?? "none"}-${language}`}
             role={selectedRole}
             phone={phone}
             name={basicInfo.name}
             email={basicInfo.email}
             password={basicInfo.password}
             onBack={goBack}
-            onComplete={() => goTo("buyer-home")}
-            onPending={() => goTo("under-review")}
+            onComplete={() => { isRegistrationInProgressRef.current = false; goTo("buyer-home"); }}
+            onPending={() => { isRegistrationInProgressRef.current = false; goTo("under-review"); }}
           />
         )
       }
@@ -626,7 +639,7 @@ function AppContent() {
       }
 
       {step === "under-review" &&
-        screen(<PendingScreen role={selectedRole ?? ctx.user?.role?.toLowerCase() ?? "seller"} onLogout={handleLogout} onGoToSignIn={() => goTo("sign-in")} />)
+        screen(<PendingScreen role={selectedRole ?? ctx.user?.role?.toLowerCase() ?? "seller"} onLogout={handleLogout} onGoToSignIn={() => goTo("sign-in")} onApproved={() => goTo("seller-dashboard")} />)
       }
 
       {step === "rejected" &&
