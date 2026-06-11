@@ -13,7 +13,7 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, ActivityIndicator, Share, Linking,
-  Modal, TextInput, Alert,
+  Modal, TextInput, Alert, Image,
 } from "react-native";
 import LeafletMap from "../../components/shared/LeafletMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ import { reportListing, type ReportReason } from "../../services/buyer/report.se
 import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { FreshnessBadge, ListingType } from "../../types";
 import type { CheckoutParams } from "../../types/order.types";
+import { getStripeHook } from "../../services/shared/stripe.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,9 +117,10 @@ export default function StoreDetailsScreen({
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
   const { reviews, loading: reviewsLoading, loadingMore, hasMore, loadMore } = useSellerReviews(sellerId);
 
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { initPaymentSheet, presentPaymentSheet } = getStripeHook();
   const { balance: karamBalance, loading: karamLoading, sponsoring, loadBalance, sponsor } = useKaram();
 
+  const [heroImageError, setHeroImageError] = useState(false);
   const [performance,    setPerformance]    = useState<Omit<PerformanceResult, 'stats'> | null>(null);
   const [karamDone,      setKaramDone]      = useState(false);
   const [reportOpen,     setReportOpen]     = useState(false);
@@ -308,9 +310,18 @@ export default function StoreDetailsScreen({
       >
         {/* ── Hero ── */}
         <View style={[styles.hero, { backgroundColor: freshColors.hero }]}>
-          <View style={styles.heroIcon}>
-            <Feather name="shopping-bag" size={52} color={freshColors.text} />
-          </View>
+          {(!listing.photoUrl || heroImageError) ? (
+            <View style={styles.heroIcon}>
+              <Feather name="shopping-bag" size={52} color={freshColors.text} />
+            </View>
+          ) : (
+            <Image
+              source={{ uri: listing.photoUrl }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+              onError={() => setHeroImageError(true)}
+            />
+          )}
 
           {/* Type pill */}
           <View style={[styles.typePill, { top: topPadding + 14 }]}>

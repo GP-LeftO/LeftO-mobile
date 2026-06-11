@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../../theme";
 import { t, isRTL } from "../../../i18n";
+import { useAuthContext } from "../../../context/AuthContext";
 import { useCheckout } from "../../../hooks/buyer/reserve/useCheckout";
 import type { CheckoutParams, Order } from "../../../types/order.types";
 
@@ -14,6 +15,7 @@ interface CheckoutScreenProps {
   params: CheckoutParams;
   onBack: () => void;
   onReserved: (order: Order) => void;
+  onOpenChatbot?: () => void;
 }
 
 function formatTime(iso: string): string {
@@ -42,6 +44,7 @@ export default function CheckoutScreen({
   params,
   onBack,
   onReserved,
+  onOpenChatbot,
 }: CheckoutScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
@@ -49,6 +52,7 @@ export default function CheckoutScreen({
   const rtl        = isRTL();
   const tr         = t().checkout;
 
+  const { isBlocked } = useAuthContext();
   const { quantity, loading, error, increaseQty, decreaseQty, submitReservation } = useCheckout(params.availableQuantity);
 
   const total        = (params.discountedPrice * quantity).toFixed(2);
@@ -66,6 +70,46 @@ export default function CheckoutScreen({
       // error handled by hook
     }
   };
+
+  // ── Blocked account gate ─────────────────────────────────────────────────────
+  if (isBlocked) {
+    return (
+      <View style={[styles.container, styles.blockedContainer, { paddingTop: topPadding }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
+          <Feather name={rtl ? "arrow-right" : "arrow-left"} size={20} color={Colors.grayDark} />
+        </TouchableOpacity>
+
+        <View style={styles.blockedContent}>
+          <View style={styles.blockedIconWrap}>
+            <Feather name="slash" size={40} color="#EF4444" />
+          </View>
+          <Text style={[styles.blockedTitle, { textAlign: rtl ? "right" : "left" }]}>
+            حسابك موقوف مؤقتاً
+          </Text>
+          <Text style={[styles.blockedBody, { textAlign: rtl ? "right" : "left" }]}>
+            لا يمكنك إتمام الحجز في هذا الوقت. يرجى التواصل مع فريق الدعم لمزيد من المعلومات.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.blockedSupportBtn}
+            onPress={onOpenChatbot}
+            activeOpacity={0.85}
+          >
+            <Feather name="message-circle" size={18} color={Colors.white} />
+            <Text style={styles.blockedSupportText}>تواصل مع الدعم</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.blockedBackBtn}
+            onPress={onBack}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.blockedBackText}>رجوع</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -333,4 +377,55 @@ const styles = StyleSheet.create({
   },
   donateBtnText: { fontSize: 14, fontWeight: "700", color: Colors.greenMain },
   btnDisabled: { opacity: 0.6 },
+
+  // Blocked account state
+  blockedContainer: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.md },
+  blockedContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    paddingBottom: 60,
+  },
+  blockedIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  blockedTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: Colors.grayDark,
+    textAlign: "center",
+  },
+  blockedBody: {
+    fontSize: 15,
+    color: Colors.grayMedium,
+    lineHeight: 22,
+    textAlign: "center",
+    paddingHorizontal: Spacing.sm,
+  },
+  blockedSupportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.primaryOrange,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.xl,
+    marginTop: Spacing.sm,
+    width: "100%",
+  },
+  blockedSupportText: { fontSize: 15, fontWeight: "700", color: Colors.white },
+  blockedBackBtn: {
+    alignItems: "center",
+    paddingVertical: 12,
+    width: "100%",
+  },
+  blockedBackText: { fontSize: 14, fontWeight: "600", color: Colors.grayMedium },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView, Alert, Switch, Switch,
+  StyleSheet, Platform, ActivityIndicator, KeyboardAvoidingView, Alert, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";

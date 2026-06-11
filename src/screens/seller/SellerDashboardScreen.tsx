@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet, Text, View, Platform, TextInput, Image,
   TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
-  KeyboardAvoidingView, Modal, Share, Linking, Modal,
+  KeyboardAvoidingView, Modal, Share, Linking, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -13,10 +13,9 @@ import { useAuth } from "../../hooks/auth/useAuth";
 import { useAuthContext } from "../../context/AuthContext";
 import api from "../../services/shared/api";
 import {
-  deleteListing, updateKaramParticipation, sponsorKaramMealAsSeller,
-  claimKaramMeal, getMySellerDonations,
+  deleteListing, getMySellerDonations,
 } from "../../services/seller/seller.service";
-import { fetchSellerKaramBalance } from "../../services/shared/community.service";
+import { useKaram } from "../../hooks/seller/useKaram";
 import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
 import type { SellerListing, SellerDonation } from "../../services/seller/seller.service";
 import { getMyPerformance } from "../../services/seller/listingAI.service";
@@ -202,12 +201,6 @@ export default function SellerDashboardScreen({
   const [donateQty,         setDonateQty]         = useState("1");
   const [donateSubmitting,  setDonateSubmitting]  = useState(false);
 
-  // ── Karam state ───────────────────────────────────────────────────────────
-  const [karamBalance,  setKaramBalance]  = useState<{ sponsored: number; claimed: number; available: number } | null>(null);
-  const [settingsKaram, setSettingsKaram] = useState(false);
-  const [karamToggling, setKaramToggling] = useState(false);
-  const [karamActing,   setKaramActing]   = useState<"sponsor" | "claim" | null>(null);
-
   // ── Orders filter state ───────────────────────────────────────────────────
   const [ordersFilter, setOrdersFilter] = useState<string>("");
 
@@ -223,6 +216,19 @@ export default function SellerDashboardScreen({
   const filteredOrders = ordersFilter
     ? orders.filter((o) => o.status === ordersFilter)
     : orders;
+
+  // ── Toast helper (stable ref so it can be passed to hooks) ────────────────
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
+  // ── Karam hook ────────────────────────────────────────────────────────────
+  const karam = useKaram({
+    sellerId: profile?.id ?? '',
+    initialParticipates: profile?.participatesInKaram ?? false,
+    onToast: showToast,
+  });
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
@@ -247,15 +253,6 @@ export default function SellerDashboardScreen({
       setRefreshing(false);
     }
   }, [rtl]);
-
-  const fetchKaramBalance = useCallback(async (sellerId: string) => {
-    try {
-      const bal = await fetchSellerKaramBalance(sellerId);
-      setKaramBalance(bal as unknown as { sponsored: number; claimed: number; available: number });
-    } catch {
-      // Karam balance is non-critical, silently fail
-    }
-  }, []);
 
   const fetchListings = useCallback(async () => {
     const sellerId = profile?.id ?? user?.id;
@@ -332,19 +329,18 @@ export default function SellerDashboardScreen({
     getMyPerformance().then(setPerformance).catch(() => {});
   }, [fetchProfile]);
 
-  useEffect(() => {
-    if (profile?.participatesInKaram && profile?.id) {
-      fetchKaramBalance(profile.id);
-    }
-  }, [profile?.id, profile?.participatesInKaram, fetchKaramBalance]);
-
   useEffect(() => { if (activeTab === "listings") fetchListings(); }, [activeTab, fetchListings]);
   // fetchOrders omitted from deps intentionally — fetchOrders is stable (no page dep)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeTab === "orders") fetchOrders(true); }, [activeTab]);
   useEffect(() => { fetchDonations(); }, [fetchDonations]);
   useEffect(() => { if (activeTab === "donations") fetchCharities(); }, [activeTab, fetchCharities]);
-  useEffect(() => { if (refreshKey && activeTab === "listings") fetchListings(); }, [refreshKey, activeTab, fetchListings]);
+  useEffect(() => {
+    if (!refreshKey) return;
+    setActiveTab("listings");
+    fetchListings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey, fetchListings]);
 
   // Pre-populate settings on first profile load
   useEffect(() => {
@@ -356,7 +352,6 @@ export default function SellerDashboardScreen({
         website:      profile.website ?? profile.contactInfo?.website ?? "",
         socialMedia:  profile.socialMedia ?? profile.contactInfo?.socialMedia ?? "",
       });
-      setSettingsKaram(profile.participatesInKaram ?? false);
       const lat = profile.latitude ?? profile.location?.latitude ?? 32.2211;
       const lng = profile.longitude ?? profile.location?.longitude ?? 35.2544;
       setEditLatitude(lat);
@@ -373,55 +368,7 @@ export default function SellerDashboardScreen({
     onLogout?.();
   };
 
-  const handleKaramToggle = async (value: boolean) => {
-    setSettingsKaram(value);
-    setKaramToggling(true);
-    try {
-      await updateKaramParticipation(value);
-      setProfile((prev) => prev ? { ...prev, participatesInKaram: value } : prev);
-      if (value && profile?.id) fetchKaramBalance(profile.id);
-    } catch {
-      setSettingsKaram(!value); // revert on error
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحديث برنامج كرم" : "Could not update Karam setting");
-    } finally {
-      setKaramToggling(false);
-    }
-  };
-
-  const handleSponsorKaram = async () => {
-    setKaramActing("sponsor");
-    try {
-      const updated = await sponsorKaramMealAsSeller();
-      setKaramBalance(updated);
-    } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تمويل وجبة" : "Could not sponsor a meal");
-    } finally {
-      setKaramActing(null);
-    }
-  };
-
-  const handleClaimKaram = async () => {
-    setKaramActing("claim");
-    try {
-      const updated = await claimKaramMeal();
-      setKaramBalance(updated);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      Alert.alert(
-        rtl ? "تنبيه" : "Note",
-        msg ?? (rtl ? "لا توجد وجبات متاحة اليوم" : "No sponsored meals available today")
-      );
-    } finally {
-      setKaramActing(null);
-    }
-  };
-
   // ─── Listing actions ───────────────────────────────────────────────────────
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2500);
-  };
 
   const handleMarkSoldOut = (listingId: string) => {
     Alert.alert(
@@ -597,7 +544,7 @@ export default function SellerDashboardScreen({
   const confirmedDonationsCount = donations.filter(d => d.status === "CONFIRMED").length;
 
   const STATS = [
-    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCountCount ?? 0 },
+    { icon: "package" as const,  color: Colors.primaryOrange, label: rtl ? "الإعلانات النشطة" : "Active Listings",    value: profile?.activeListingsCount ?? 0 },
     { icon: "heart" as const,    color: Colors.greenMain,     label: rtl ? "إجمالي التبرعات"  : "Total Donations",     value: profile?.totalDonations ?? confirmedDonationsCount },
   ];
 
@@ -705,6 +652,76 @@ export default function SellerDashboardScreen({
                   <PerformanceCard perf={performance} rtl={rtl} />
                 )}
 
+                {/* Karam balance card — only when seller participates */}
+                {karam.participatesInKaram && (
+                  <View style={styles.karamCard}>
+                    <View style={[styles.karamHeader, rtl && styles.karamHeaderRTL]}>
+                      <View style={styles.karamIconWrap}>
+                        <Text style={{ fontSize: 16 }}>🤝</Text>
+                      </View>
+                      <Text style={styles.karamTitle}>برنامج كرم</Text>
+                      <View style={{ flex: 1 }} />
+                      <View style={styles.karamActivePill}>
+                        <Text style={styles.karamActivePillText}>نشط</Text>
+                      </View>
+                    </View>
+
+                    <Text style={[styles.karamDayLabel, rtl && styles.rtl]}>اليوم</Text>
+
+                    <View style={[styles.karamStats, rtl && styles.karamStatsRTL]}>
+                      <View style={styles.karamStat}>
+                        <Text style={styles.karamStatValue}>
+                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.sponsored ?? 0)}
+                        </Text>
+                        <Text style={styles.karamStatLabel}>ممولة</Text>
+                      </View>
+                      <View style={styles.karamStatDivider} />
+                      <View style={styles.karamStat}>
+                        <Text style={styles.karamStatValue}>
+                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.claimed ?? 0)}
+                        </Text>
+                        <Text style={styles.karamStatLabel}>مُستلمة</Text>
+                      </View>
+                      <View style={styles.karamStatDivider} />
+                      <View style={styles.karamStat}>
+                        <Text style={styles.karamStatValue}>
+                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.available ?? 0)}
+                        </Text>
+                        <Text style={styles.karamStatLabel}>متاحة</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.karamActions, rtl && styles.karamActionsRTL]}>
+                      <TouchableOpacity
+                        style={[styles.karamBtn, styles.karamBtnSponsor, karam.actionLoading && { opacity: 0.6 }]}
+                        onPress={karam.sponsor}
+                        disabled={karam.actionLoading}
+                        activeOpacity={0.85}
+                      >
+                        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                          <Feather name="heart" size={14} color={Colors.white} />
+                          <Text style={styles.karamBtnText}>مول وجبة</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.karamBtn, styles.karamBtnClaim,
+                          (karam.balance?.available === 0 || karam.actionLoading) && { opacity: 0.4 },
+                        ]}
+                        onPress={karam.claim}
+                        disabled={karam.balance?.available === 0 || karam.actionLoading}
+                        activeOpacity={0.85}
+                      >
+                        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                          <Feather name="check-circle" size={14} color={Colors.greenMain} />
+                          <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>وجبة مُستلمة</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
                 {profile?.description && (
                   <View style={styles.infoCard}>
                     <Text style={[styles.infoCardTitle, rtl && styles.rtl]}>{rtl ? "عن المتجر" : "About"}</Text>
@@ -761,59 +778,13 @@ export default function SellerDashboardScreen({
                       soldOutLoading={soldOutLoading}
                       deleteLoading={deleteLoading}
                     />
-                    <View key={listing.id} style={styles.listingCard}>
-                      <View style={[styles.listingInner, rtl && styles.listingInnerRTL]}>
-                        <View style={styles.listingIconWrap}>
-                          <Feather name="package" size={18} color={Colors.primaryOrange} />
-                        </View>
-                        <View style={styles.listingBody}>
-                          <Text style={[styles.listingTitle, rtl && styles.rtl]} numberOfLines={1}>{listing.title}</Text>
-                          {listing.pickupStart && listing.pickupEnd && (
-                            <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                              <Feather name="clock" size={12} color={Colors.grayMedium} />
-                              <Text style={styles.listingMetaText}>{formatPickup(listing.pickupStart, listing.pickupEnd)}</Text>
-                            </View>
-                          )}
-                          <View style={[styles.listingMeta, rtl && styles.listingMetaRTL]}>
-                            <Feather name="layers" size={12} color={Colors.grayMedium} />
-                            <Text style={styles.listingMetaText}>{rtl ? `المتبقي: ${listing.quantity}` : `Qty: ${listing.quantity}`}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.listingActions}>
-                          <Text style={styles.listingPrice}>₪{listing.discountedPrice ?? listing.price ?? "—"}</Text>
-                          <TouchableOpacity style={styles.actionIconBtn} onPress={() => onEditListing?.(listing)} activeOpacity={0.8}>
-                            <Feather name="edit-2" size={14} color={Colors.primaryOrange} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.soldOutBtn}
-                            onPress={() => handleMarkSoldOut(listing.id)}
-                            disabled={soldOutLoading === listing.id}
-                            activeOpacity={0.8}
-                          >
-                            {soldOutLoading === listing.id
-                              ? <ActivityIndicator size="small" color="#ef4444" />
-                              : <Text style={styles.soldOutBtnText}>{rtl ? "نفد" : "Sold Out"}</Text>}
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.deleteIconBtn}
-                            onPress={() => handleDeleteListing(listing.id, listing.title)}
-                            disabled={deleteLoading === listing.id}
-                            activeOpacity={0.8}
-                          >
-                            {deleteLoading === listing.id
-                              ? <ActivityIndicator size="small" color="#ef4444" />
-                              : <Feather name="trash-2" size={14} color="#ef4444" />}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
                   ))
                 )}
               </Animated.View>
             </ScrollView>
           )}
 
-          {/* ── ORDERS TAB ── */}
+          {/* ══════════ ORDERS TAB ══════════ */}
           {activeTab === "orders" && (
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -827,29 +798,48 @@ export default function SellerDashboardScreen({
               }
             >
               <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-                {ordersLoading && orders.length === 0 ? (
+                {/* Status filter chips */}
+                <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
+                  {(["RESERVED", "COMPLETED", "CANCELLED"] as const).map((f) => (
+                    <TouchableOpacity
+                      key={f}
+                      style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
+                      onPress={() => setOrdersFilter(ordersFilter === f ? "" : f)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
+                        {rtl
+                          ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
+                          : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {ordersLoading && filteredOrders.length === 0 ? (
                   <View style={styles.centered}>
                     <ActivityIndicator color={Colors.primaryOrange} size="large" />
                   </View>
                 ) : ordersError ? (
                   <View style={styles.centered}>
                     <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
-                    <Text style={[styles.errorText, rtl && styles.rtl]}>{ordersError}</Text>
+                    <Text style={[styles.stateText, rtl && styles.rtl]}>{ordersError}</Text>
                     <TouchableOpacity style={styles.retryBtn} onPress={() => fetchOrders(true)} activeOpacity={0.8}>
                       <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
                     </TouchableOpacity>
                   </View>
-                ) : orders.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                   <View style={styles.emptyPane}>
-                    <Text style={styles.emptyEmoji}>🛍️</Text>
-                    <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? "لا توجد طلبات" : "No orders yet"}</Text>
-                    <Text style={[styles.emptySub, rtl && styles.rtl]}>
-                      {rtl ? "ستظهر هنا طلبات المشترين" : "Buyer reservations will appear here"}
+                    <Text style={styles.emptyEmoji}>📋</Text>
+                    <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
+                      {rtl ? "لا توجد طلبات" : "No orders"}
                     </Text>
                   </View>
                 ) : (
                   <>
-                    {orders.map((order) => <SellerOrderCard key={order.id} order={order} rtl={rtl} />)}
+                    {filteredOrders.map((order) => (
+                      <SellerOrderCard key={order.id} order={order} rtl={rtl} />
+                    ))}
                     {ordersHasMore && (
                       <TouchableOpacity
                         style={styles.loadMoreBtn}
@@ -866,83 +856,6 @@ export default function SellerDashboardScreen({
                 )}
               </Animated.View>
             </ScrollView>
-          )}
-
-          {/* ══════════ ORDERS TAB ══════════ */}
-          {activeTab === "orders" && (
-            <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-              {/* Status filter */}
-              <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
-                {(["RESERVED", "COMPLETED", "CANCELLED"] as ("RESERVED" | "COMPLETED" | "CANCELLED")[]).map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
-                    onPress={() => setOrdersFilter(f)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
-                      {rtl
-                        ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
-                        : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"
-                      }
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {ordersLoading ? (
-                <View style={styles.centered}>
-                  <ActivityIndicator color={Colors.primaryOrange} size="large" />
-                </View>
-              ) : ordersError ? (
-                <View style={styles.centered}>
-                  <Feather name="wifi-off" size={36} color={Colors.grayMedium} />
-                  <Text style={[styles.stateText, rtl && styles.rtl]}>{ordersError}</Text>
-                  <TouchableOpacity style={styles.retryBtn} onPress={() => fetchOrders()} activeOpacity={0.8}>
-                    <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : filteredOrders.length === 0 ? (
-                <View style={styles.emptyPane}>
-                  <Text style={styles.emptyEmoji}>📋</Text>
-                  <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
-                    {rtl ? "لا توجد طلبات" : "No orders"}
-                  </Text>
-                </View>
-              ) : (
-                filteredOrders.map((order) => {
-                  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.RESERVED;
-                  const date = order.createdAt
-                    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
-                    : null;
-                  return (
-                    <View key={order.id} style={styles.orderCard}>
-                      <View style={[styles.orderCardInner, rtl && styles.orderCardInnerRTL]}>
-                        <View style={styles.orderIconWrap}>
-                          <Feather name="shopping-bag" size={16} color={Colors.primaryOrange} />
-                        </View>
-                        <View style={styles.orderBody}>
-                          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
-                            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
-                          </Text>
-                          <Text style={[styles.orderSub, rtl && styles.rtl]}>
-                            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
-                            {order.quantity ? ` · ${rtl ? "الكمية" : "Qty"}: ${order.quantity}` : ""}
-                            {date ? ` · ${date}` : ""}
-                          </Text>
-                        </View>
-                        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
-                          <Text style={[styles.statusPillText, { color: cfg.color }]}>{rtl ? cfg.ar : cfg.en}</Text>
-                        </View>
-                      </View>
-                      {order.totalPrice != null && (
-                        <Text style={[styles.orderPrice, rtl && styles.rtl]}>₪{order.totalPrice}</Text>
-                      )}
-                    </View>
-                  );
-                })
-              )}
-            </Animated.View>
           )}
 
           {/* ══════════ DONATIONS TAB ══════════ */}
@@ -1282,6 +1195,32 @@ export default function SellerDashboardScreen({
                     )}
                   </View>
 
+                  {/* ── Karam program toggle ── */}
+                  <Text style={[styles.karamSectionHeader, rtl && styles.rtl]}>
+                    برنامج كرم
+                  </Text>
+                  <View style={styles.karamSettingsCard}>
+                    <View style={[styles.karamToggleRow, rtl && styles.karamToggleRowRTL]}>
+                      <View style={styles.karamToggleInfo}>
+                        <Text style={[styles.karamToggleTitle, rtl && styles.rtl]}>أشارك في برنامج كرم</Text>
+                        <Text style={[styles.karamToggleSub, rtl && styles.rtl]}>
+                          يتيح للمشترين تمويل وجبات لمن يحتاج
+                        </Text>
+                      </View>
+                      {karam.actionLoading
+                        ? <ActivityIndicator size="small" color={Colors.greenMain} />
+                        : (
+                          <Switch
+                            value={karam.participatesInKaram}
+                            onValueChange={karam.toggleParticipation}
+                            trackColor={{ true: Colors.greenMain, false: Colors.grayMedium }}
+                            thumbColor={Colors.white}
+                          />
+                        )
+                      }
+                    </View>
+                  </View>
+
                   <TouchableOpacity
                     style={[styles.saveBtn, settingsLoading && styles.saveBtnDisabled]}
                     onPress={handleSaveSettings}
@@ -1291,6 +1230,18 @@ export default function SellerDashboardScreen({
                     {settingsLoading
                       ? <ActivityIndicator color={Colors.white} size="small" />
                       : <Text style={styles.saveBtnText}>{rtl ? "حفظ التغييرات" : "Save Changes"}</Text>}
+                  </TouchableOpacity>
+
+                  {/* ── Switch to Buyer Mode ── */}
+                  <TouchableOpacity
+                    style={[styles.switchToBuyerBtn, { flexDirection: rtl ? "row-reverse" : "row" }]}
+                    onPress={switchToBuyerMode}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="shopping-bag" size={18} color={Colors.primaryOrange} />
+                    <Text style={styles.switchToBuyerText}>
+                      {rtl ? "تصفح كمشتري 🛍️" : "Browse as Buyer 🛍️"}
+                    </Text>
                   </TouchableOpacity>
 
                 </Animated.View>
@@ -1328,32 +1279,85 @@ export default function SellerDashboardScreen({
 
 function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
   const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
+
+  const pickupWindow = order.pickupStart && order.pickupEnd
+    ? formatPickup(order.pickupStart, order.pickupEnd)
+    : null;
+
+  let countdown: string | null = null;
+  if (order.status === "RESERVED" && order.expiresAt) {
+    const minsLeft = Math.round((new Date(order.expiresAt).getTime() - Date.now()) / 60000);
+    if (minsLeft > 0) countdown = `ينتهي خلال ${minsLeft} دقيقة`;
+  }
+
   return (
-    <View style={styles.orderCard}>
-      <View style={[styles.orderCardInner, rtl && styles.orderCardInnerRTL]}>
-        <View style={[styles.orderStatusDot, { backgroundColor: cfg.color }]} />
-        <View style={styles.orderBody}>
-          <Text style={[styles.orderTitle, rtl && styles.rtl]} numberOfLines={1}>
-            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
-          </Text>
-          <Text style={[styles.orderMeta, rtl && styles.rtl]}>
-            {order.buyer?.name ?? (rtl ? "مشترٍ" : "Buyer")}
-            {" · "}
-            {rtl ? `الكمية: ${order.quantity}` : `Qty: ${order.quantity}`}
-          </Text>
-          <Text style={[styles.orderMeta, rtl && styles.rtl]}>
-            {formatDate(order.createdAt)}
-          </Text>
-        </View>
-        <View style={[styles.orderStatusBadge, { backgroundColor: cfg.color + "18" }]}>
-          <Text style={[styles.orderStatusText, { color: cfg.color }]}>
+    <View style={ocStyles.card}>
+      {/* Row 1: title + status badge */}
+      <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
+          {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+        </Text>
+        <View style={[ocStyles.badge, { backgroundColor: cfg.bg }]}>
+          <Text style={[ocStyles.badgeText, { color: cfg.color }]}>
             {rtl ? cfg.labelAr : cfg.labelEn}
           </Text>
         </View>
       </View>
+
+      {/* Row 2: buyer name + qty × price + pickup */}
+      <View style={[ocStyles.row2, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Feather name="user" size={12} color="#6B7280" />
+          <Text style={[ocStyles.metaText, { textAlign: rtl ? "right" : "left" }]}>
+            {order.buyer?.name ?? "مجهول الهوية"}
+          </Text>
+        </View>
+        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Feather name="shopping-bag" size={12} color="#6B7280" />
+          <Text style={ocStyles.metaText}>
+            ×{order.quantity}{order.totalPrice != null ? ` — ${order.totalPrice} ₪` : ""}
+          </Text>
+        </View>
+        {pickupWindow && (
+          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <Feather name="clock" size={12} color="#6B7280" />
+            <Text style={ocStyles.metaText}>{pickupWindow}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Row 3: countdown (RESERVED only) */}
+      {countdown && (
+        <Text style={[ocStyles.countdown, { textAlign: rtl ? "right" : "left" }]}>
+          {countdown}
+        </Text>
+      )}
     </View>
   );
 }
+
+const ocStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  row1: { justifyContent: "space-between", alignItems: "center" },
+  title: { flex: 1, fontSize: 15, fontWeight: "700", color: "#404040", marginEnd: 8 },
+  badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  badgeText: { fontSize: 12, fontWeight: "600" },
+  row2: { marginTop: 8, alignItems: "center", flexWrap: "wrap", gap: 12 },
+  metaItem: { alignItems: "center", gap: 4 },
+  metaText: { fontSize: 13, color: "#6B7280" },
+  countdown: { marginTop: 8, fontSize: 12, color: "#EF4444" },
+});
 
 // ─── SellerListingCard ────────────────────────────────────────────────────────
 
@@ -1993,30 +1997,45 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: "800", color: Colors.grayDark },
   statLabel: { fontSize: 11, color: Colors.grayMedium, lineHeight: 14 },
 
-  // Karam card
+  // Karam card (overview tab)
   karamCard: {
-    backgroundColor: "#f0fdf4", borderRadius: 18, padding: Spacing.md, gap: Spacing.sm,
-    borderWidth: 1.5, borderColor: Colors.greenLight,
+    backgroundColor: Colors.greenLight, borderRadius: 12, padding: Spacing.md, gap: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.greenMain,
+    marginBottom: 4,
   },
   karamHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   karamHeaderRTL: { flexDirection: "row-reverse" },
   karamIconWrap: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.greenLight,
+    width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.white + "80",
     alignItems: "center", justifyContent: "center",
   },
   karamTitle: { fontSize: 15, fontWeight: "800", color: Colors.greenMain },
+  karamActivePill: {
+    backgroundColor: Colors.greenMain, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3,
+  },
+  karamActivePillText: { fontSize: 11, fontWeight: "700", color: Colors.white },
+  karamDayLabel: { fontSize: 12, fontWeight: "600", color: Colors.grayMedium },
   karamStats: { flexDirection: "row", alignItems: "center" },
   karamStatsRTL: { flexDirection: "row-reverse" },
   karamStat: { flex: 1, alignItems: "center", gap: 2 },
   karamStatValue: { fontSize: 22, fontWeight: "800", color: Colors.grayDark },
   karamStatLabel: { fontSize: 11, color: Colors.grayMedium },
-  karamStatDivider: { width: 1, height: 32, backgroundColor: Colors.greenLight },
+  karamStatDivider: { width: 1, height: 32, backgroundColor: Colors.greenMain + "40" },
   karamActions: { flexDirection: "row", gap: 10 },
   karamActionsRTL: { flexDirection: "row-reverse" },
-  karamBtn: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
+  karamBtn: { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
   karamBtnSponsor: { backgroundColor: Colors.greenMain },
-  karamBtnClaim: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.greenMain },
+  karamBtnClaim: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.greenMain },
   karamBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+
+  // Karam settings section (settings tab)
+  karamSectionHeader: {
+    fontSize: 13, color: Colors.grayMedium, fontWeight: "600", marginBottom: 4,
+  },
+  karamSettingsCard: {
+    backgroundColor: Colors.white, borderRadius: 10, padding: 14,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
 
   infoCard: {
     backgroundColor: Colors.white, borderRadius: 18, padding: Spacing.lg, gap: 6,
@@ -2140,6 +2159,19 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontWeight: "800", color: Colors.white },
 
+  switchToBuyerBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: Colors.orangeLight,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryOrange,
+    paddingVertical: 14,
+    marginTop: Spacing.sm,
+  },
+  switchToBuyerText: { fontSize: 15, fontWeight: "700", color: Colors.primaryOrange },
+
   // Status pill (shared)
   statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   statusPillText: { fontSize: 11, fontWeight: "700" },
@@ -2160,13 +2192,6 @@ const styles = StyleSheet.create({
   settingsMsgError: { backgroundColor: "#fef2f2" },
   settingsMsgText: { fontSize: 13, fontWeight: "600", color: Colors.grayDark },
 
-
-  stateText: { fontSize: 15, color: Colors.grayMedium, textAlign: "center" },
-
-  karamToggleCard: {
-    backgroundColor: "#f0fdf4", borderRadius: 16, padding: Spacing.md,
-    borderWidth: 1.5, borderColor: Colors.greenLight,
-  },
   karamToggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   karamToggleRowRTL: { flexDirection: "row-reverse" },
   karamToggleInfo: { flex: 1, gap: 2 },

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
-import * as Notifications from "expo-notifications";
 import {
-  registerForPushNotifications,
+  setupNotificationHandler,
+  getFcmToken,
   savePushToken,
   clearPushToken,
+  addNotificationResponseListener,
+  isExpoGo,
 } from "./src/services/shared/pushNotifications.service";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -185,44 +187,45 @@ function AppContent() {
   }, [ctx.viewMode]);
 
   // ── Push notifications: register on login, clear on logout ───────────────────
-  const notifListenerRef = useRef<Notifications.Subscription | null>(null);
+  // All calls go through pushNotifications.service.ts which guards Expo Go.
+  const notifUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    void setupNotificationHandler();
+  }, []);
+
+  useEffect(() => {
+    if (isExpoGo) return;
+
     if (!ctx.isAuthenticated) {
-      clearPushToken();
-      notifListenerRef.current?.remove();
-      notifListenerRef.current = null;
+      void clearPushToken();
+      notifUnsubRef.current?.();
+      notifUnsubRef.current = null;
       return;
     }
-    (async () => {
-      const token = await registerForPushNotifications();
+
+    void (async () => {
+      const token = await getFcmToken();
       if (token) await savePushToken(token);
+
+      const unsub = await addNotificationResponseListener((response) => {
+        const res = response as { notification: { request: { content: { data: Record<string, unknown> } } } };
+        const type = res?.notification?.request?.content?.data?.type as string | undefined;
+
+        if (!ctx.isAuthenticated) return;
+
+        if (type === "SELLER_APPROVED")       goTo("seller-dashboard");
+        else if (type === "SELLER_REJECTED")  goTo("rejected");
+        else if (type === "CHARITY_APPROVED") goTo("charity-dashboard");
+        else if (type === "ACCOUNT_BLOCKED")  goTo("buyer-home");
+        else                                  goTo("notifications");
+      });
+      notifUnsubRef.current = unsub;
     })();
 
-    // Handle tap on a push notification (app backgrounded or killed)
-    notifListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      const type = data?.type as string | undefined;
-
-      if (!ctx.isAuthenticated) return;
-
-      if (type === "SELLER_APPROVED") {
-        goTo("seller-dashboard");
-      } else if (type === "SELLER_REJECTED") {
-        goTo("rejected");
-      } else if (type === "CHARITY_APPROVED") {
-        goTo("charity-dashboard");
-      } else if (type === "ACCOUNT_BLOCKED") {
-        goTo("buyer-home");
-      } else {
-        // All other types → show the in-app notifications screen
-        goTo("notifications");
-      }
-    });
-
     return () => {
-      notifListenerRef.current?.remove();
-      notifListenerRef.current = null;
+      notifUnsubRef.current?.();
+      notifUnsubRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.isAuthenticated]);
@@ -665,6 +668,7 @@ function AppContent() {
               setConfirmedOrder(order);
               goTo("impact-celebration");
             }}
+            onOpenChatbot={() => goTo("chatbot")}
           />
         )
       }

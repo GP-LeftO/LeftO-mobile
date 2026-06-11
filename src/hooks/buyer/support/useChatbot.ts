@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 import { useAuthContext } from '../../../context/AuthContext';
 import * as chatbotService from '../../../services/buyer/support/chatbotService';
+import { avRequestPermissions, avStartRecording, avStopRecording } from '../../../services/shared/av.service';
+import { isExpoGo } from '../../../services/shared/pushNotifications.service';
 import type { ChatMessage } from '../../../types/chatbot';
 
 export const CHIPS = [
@@ -21,15 +22,15 @@ const ERROR_TEXT = 'عذراً، حدث خطأ. حاول مرة ثانية 🙏'
 
 export function useChatbot() {
   const { accessToken } = useAuthContext();
-  const [messages,        setMessages]        = useState<ChatMessage[]>([]);
-  const [inputText,       setInputText]       = useState('');
-  const [isLoading,       setIsLoading]       = useState(false);
-  const [chipsVisible,    setChipsVisible]    = useState(true);
-  const [isRecording,     setIsRecording]     = useState(false);
+  const [messages,         setMessages]         = useState<ChatMessage[]>([]);
+  const [inputText,        setInputText]        = useState('');
+  const [isLoading,        setIsLoading]        = useState(false);
+  const [chipsVisible,     setChipsVisible]     = useState(true);
+  const [isRecording,      setIsRecording]      = useState(false);
   const [hasReceivedReply, setHasReceivedReply] = useState(false);
-  const [ratingSheetOpen, setRatingSheetOpen] = useState(false);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const [ratingSheetOpen,  setRatingSheetOpen]  = useState(false);
+  const [ratingSubmitted,  setRatingSubmitted]  = useState(false);
+  const recordingRef = useRef<unknown>(null);
 
   const submitRating = useCallback(async (stars: number) => {
     try {
@@ -92,16 +93,18 @@ export function useChatbot() {
   );
 
   const startRecording = useCallback(async () => {
+    if (isExpoGo) {
+      Alert.alert('', 'التسجيل الصوتي غير متاح في هذه البيئة');
+      return;
+    }
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await avRequestPermissions();
       if (!granted) {
         Alert.alert('', 'يرجى السماح بالوصول إلى الميكروفون');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
+      const recording = await avStartRecording();
+      if (!recording) return;
       recordingRef.current = recording;
       setIsRecording(true);
     } catch {
@@ -113,9 +116,7 @@ export function useChatbot() {
     if (!recordingRef.current) return;
     setIsRecording(false);
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recordingRef.current.getURI();
+      const uri = await avStopRecording(recordingRef.current);
       recordingRef.current = null;
       if (!uri) return;
 
