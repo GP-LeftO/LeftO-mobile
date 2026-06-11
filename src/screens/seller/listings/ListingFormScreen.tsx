@@ -13,6 +13,7 @@ import {
 } from "../../../services/seller/listingAI.service";
 import type { TitleScoreResult, PriceSuggestionResult } from "../../../services/seller/listingAI.service";
 import type { SellerListing } from "../../../services/seller/seller.service";
+import ListingPhotoPicker from "../../../components/seller/ListingPhotoPicker";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,10 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
   const botPadding = Platform.OS === "web" ? 24 : insets.bottom;
   const rtl        = isRTL();
 
-  const { form, errors, loading, submitError, isEdit, setField, submit } = useListingForm(existing);
+  const {
+    form, errors, loading, submitError, isEdit, setField, submit,
+    photoUri, photoUploading, handlePhotoSelected, handlePhotoRemoved,
+  } = useListingForm(existing);
 
   // ── AI state ─────────────────────────────────────────────────────────────────
   const [titleScore,       setTitleScore]       = useState<TitleScoreResult | null>(null);
@@ -563,23 +567,18 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           />
         </View>
 
-        {/* ── Photo URL + AI Analyze ── */}
+        {/* ── Photo ── */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, rtl && styles.textRight]}>
-            {rtl ? "رابط الصورة" : "Photo URL"}
+            {rtl ? "صورة الإدراج" : "Listing Photo"}
             <Text style={styles.optional}> {rtl ? "(اختياري)" : "(optional)"}</Text>
           </Text>
-          <TextInput
-            style={[styles.input, rtl && styles.textRight]}
-            placeholder="https://..."
-            placeholderTextColor={Colors.grayMedium}
-            autoCapitalize="none"
-            keyboardType="url"
-            value={form.photoUrl}
-            onChangeText={v => setField("photoUrl", v)}
-            textAlign={rtl ? "right" : "left"}
+          <ListingPhotoPicker
+            photoUri={photoUri}
+            onPhotoSelected={handlePhotoSelected}
+            onPhotoRemoved={handlePhotoRemoved}
+            uploading={photoUploading}
           />
-
         </View>
 
         {/* ── Submit error ── */}
@@ -595,13 +594,17 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
       {/* ── Submit button ── */}
       <View style={[styles.footer, { paddingBottom: botPadding + 12 }]}>
         <TouchableOpacity
-          style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (loading || photoUploading) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || photoUploading}
           activeOpacity={0.85}
         >
           {loading ? (
             <ActivityIndicator color={Colors.white} size="small" />
+          ) : photoUploading ? (
+            <Text style={styles.submitBtnText}>
+              {rtl ? "جارٍ رفع الصورة..." : "Uploading photo..."}
+            </Text>
           ) : (
             <Text style={styles.submitBtnText}>
               {rtl

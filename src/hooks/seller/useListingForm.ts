@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { createListing, updateListing } from "../../services/seller/seller.service";
 import type { SellerListing, ListingFormData } from "../../services/seller/seller.service";
+import { uploadDocument } from "../../services/shared/document.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,7 +56,6 @@ function isoToDateStr(iso: string | null | undefined): string {
 
 export interface ListingFormState {
   title: string;
-  description: string;
   type: "MEAL_BAG" | "SPECIFIC_PARCEL";
   category: "MEALS" | "BREAD_AND_PASTRIES" | "GROCERIES" | "MIXED";
   originalPrice: string;
@@ -63,7 +63,7 @@ export interface ListingFormState {
   quantity: string;
   pickupStart: string;
   pickupEnd: string;
-  expiryDate: string;       // "YYYY-MM-DD" or "" — only required for SPECIFIC_PARCEL
+  expiryDate: string;
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote: string;
   description: string;
@@ -80,22 +80,28 @@ export function useListingForm(existing?: SellerListing) {
   const isEdit = Boolean(existing?.id);
 
   const [form, setForm] = useState<ListingFormState>({
-    title:          existing?.title ?? "",
-    type:           existing?.type ?? "MEAL_BAG",
-    category:       existing?.category ?? "MEALS",
-    originalPrice:  (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
-    discountedPrice: (existing?.discountedPrice)?.toString() ?? "",
-    quantity:       existing?.quantity?.toString() ?? "",
-    pickupStart:    existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
-    pickupEnd:      existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
-    freshnessBadge: existing?.freshnessBadge ?? "eat_today",
-    allergenNote:   existing?.allergenNote ?? "",
-    photoUrl:       existing?.photoUrl ?? "",
+    title:           existing?.title                                  ?? "",
+    type:            existing?.type                                   ?? "MEAL_BAG",
+    category:        existing?.category                               ?? "MEALS",
+    originalPrice:   (existing?.originalPrice ?? existing?.price)?.toString() ?? "",
+    discountedPrice: existing?.discountedPrice?.toString()            ?? "",
+    quantity:        existing?.quantity?.toString()                   ?? "",
+    pickupStart:     existing?.pickupStart ? isoToHHMM(existing.pickupStart) : "",
+    pickupEnd:       existing?.pickupEnd   ? isoToHHMM(existing.pickupEnd)   : "",
+    expiryDate:      isoToDateStr(existing?.expiryDate),
+    freshnessBadge:  existing?.freshnessBadge                         ?? "eat_today",
+    allergenNote:    existing?.allergenNote                           ?? "",
+    description:     existing?.description                            ?? "",
+    photoUrl:        existing?.photoUrl                               ?? "",
+    isPriceDecaying: existing?.isPriceDecaying                        ?? false,
+    floorPrice:      existing?.floorPrice?.toString()                 ?? "",
   });
 
-  const [errors,      setErrors]      = useState<FormErrors>({});
-  const [loading,     setLoading]     = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const [errors,         setErrors]         = useState<FormErrors>({});
+  const [loading,        setLoading]        = useState(false);
+  const [submitError,    setSubmitError]    = useState("");
+  const [photoUri,       setPhotoUri]       = useState<string | null>(existing?.photoUrl ?? null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const setField = <K extends keyof ListingFormState>(key: K, value: ListingFormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -154,7 +160,6 @@ export function useListingForm(existing?: SellerListing) {
     try {
       const payload: ListingFormData = {
         title:           form.title.trim(),
-        description:     form.description.trim() || undefined,
         type:            form.type,
         category:        form.category,
         originalPrice:   Number(form.originalPrice),
@@ -163,9 +168,17 @@ export function useListingForm(existing?: SellerListing) {
         pickupStart:     hhmmToSmartIso(normalizeTime(form.pickupStart)),
         pickupEnd:       hhmmToSmartIso(normalizeTime(form.pickupEnd)),
         freshnessBadge:  form.freshnessBadge,
-        allergenNote:    form.allergenNote.trim() || undefined,
-        photoUrl:        form.photoUrl.trim() || undefined,
+        allergenNote:    form.allergenNote.trim()  || undefined,
+        description:     form.description.trim()   || undefined,
+        photoUrl:        form.photoUrl.trim()       || undefined,
+        isPriceDecaying: form.isPriceDecaying       || undefined,
+        floorPrice:      form.isPriceDecaying && form.floorPrice
+                           ? Number(form.floorPrice) : undefined,
+        expiryDate:      form.type === "SPECIFIC_PARCEL" && form.expiryDate
+                           ? new Date(form.expiryDate).toISOString() : undefined,
       };
+
+      let result: SellerListing;
       if (isEdit && existing?.id) {
         result = await updateListing(existing.id, payload);
       } else {
@@ -181,5 +194,28 @@ export function useListingForm(existing?: SellerListing) {
     }
   };
 
-  return { form, errors, loading, submitError, isEdit, setField, submit };
+  const handlePhotoSelected = useCallback(async (uri: string) => {
+    setPhotoUri(uri);
+    setPhotoUploading(true);
+    try {
+      const remoteUrl = await uploadDocument(uri, "trade_license");
+      setField("photoUrl", remoteUrl);
+    } catch {
+      setPhotoUri(null);
+      setField("photoUrl", "");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [setField]);
+
+  const handlePhotoRemoved = useCallback(() => {
+    setPhotoUri(null);
+    setField("photoUrl", "");
+  }, [setField]);
+
+  return {
+    form, errors, loading, submitError, isEdit,
+    setField, submit,
+    photoUri, photoUploading, handlePhotoSelected, handlePhotoRemoved,
+  };
 }

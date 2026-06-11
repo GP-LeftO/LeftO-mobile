@@ -60,6 +60,19 @@ export default function RoleSpecificInfoScreen({
 
   const { uploadDocument, registerSeller } = useSeller();
 
+  // ── Seller multi-step state
+  const [sellerStep,        setSellerStep]        = useState(1);
+  const [tradeName,         setTradeName]         = useState('');
+  const [tradeUploading,    setTradeUploading]    = useState(false);
+  const [tradeUploadError,  setTradeUploadError]  = useState('');
+  const [tradeDocUrl,       setTradeDocUrl]       = useState<string | null>(null);
+  const [healthName,        setHealthName]        = useState('');
+  const [healthUploading,   setHealthUploading]   = useState(false);
+  const [healthUploadError, setHealthUploadError] = useState('');
+  const [healthDocUrl,      setHealthDocUrl]      = useState<string | null>(null);
+  const [contactPhone,      setContactPhone]      = useState('');
+  const [contactWebsite,    setContactWebsite]    = useState('');
+
   // ── location state
   const [pickedLocation,     setPickedLocation]     = useState<PickedLocation | null>(null);
   const [showMap,            setShowMap]            = useState(false);

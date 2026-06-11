@@ -7,6 +7,9 @@ export interface SellerOrder {
   quantity: number;
   totalPrice?: number;
   createdAt: string;
+  expiresAt?: string;
+  pickupStart?: string;
+  pickupEnd?: string;
   listing?: { id: string; title: string };
   buyer?: { id: string; name?: string };
 }

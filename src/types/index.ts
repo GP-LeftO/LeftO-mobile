@@ -76,6 +76,7 @@ export interface Listing {
   allergenNote?: string;
   estimatedWeightG?: number;
   estimatedCo2SavedG?: number;
+  photoUrl?: string | null;
   qrCodeUrl?: string;
   distanceKm?: number;
   rescueScore?: number;

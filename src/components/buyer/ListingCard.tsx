@@ -9,7 +9,8 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet, Dimensions, Image,
+  type GestureResponderEvent,
 } from "react-native";
 
 const CARD_WIDTH = (Dimensions.get("window").width - 48) / 2;
@@ -17,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
 import { t } from "../../i18n";
 import { useFavoritesContext } from "../../context/shared/FavoritesContext";
+import { useAuthContext } from "../../context/AuthContext";
 import type { Listing, FreshnessBadge, ListingType, RescueBadge } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -117,7 +119,11 @@ export default function ListingCard({
   userAllergyPreferences = [],
 }: ListingCardProps) {
   const { isFavorited, addFavorite, removeFavorite } = useFavoritesContext();
-  const isHearted = isFavorited(listing.seller.id);
+  const { user } = useAuthContext();
+  const isBuyer     = user?.role === "BUYER";
+  const isHearted   = isBuyer && isFavorited(listing.id);
+  const [imageError, setImageError] = useState(false);
+  const showPlaceholder = !listing.photoUrl || !listing.photoUrl.trim() || imageError;
 
   const tr = t().home;
   const isSoldOut = listing.status === "SOLD_OUT";
@@ -155,9 +161,18 @@ export default function ListingCard({
       activeOpacity={isSoldOut ? 0.6 : 0.85}
       onPress={() => onPress({ listingId: listing.id, sellerId: listing.seller.id })}
     >
-      {/* ── Image placeholder area ── */}
+      {/* ── Image area ── */}
       <View style={styles.cardImage}>
-        <Feather name="shopping-bag" size={32} color={Colors.primaryOrange} />
+        {showPlaceholder ? (
+          <Feather name="shopping-bag" size={32} color={Colors.primaryOrange} />
+        ) : (
+          <Image
+            source={{ uri: listing.photoUrl! }}
+            style={styles.cardPhoto}
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+          />
+        )}
 
         {/* Type pill */}
         <View style={styles.typePill}>
@@ -200,22 +215,25 @@ export default function ListingCard({
             {showAllergenWarning && (
               <Feather name="alert-triangle" size={16} color="#f59e0b" />
             )}
-            <TouchableOpacity
-              onPress={() => {
-                if (isHearted) {
-                  removeFavorite(listing.seller.id);
-                } else {
-                  addFavorite(listing.seller.id);
-                }
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather
-                name="heart"
-                size={18}
-                color={isHearted ? "#ef4444" : Colors.grayLight}
-              />
-            </TouchableOpacity>
+            {isBuyer && (
+              <TouchableOpacity
+                onPress={(e: GestureResponderEvent) => {
+                  e.stopPropagation();
+                  if (isHearted) {
+                    removeFavorite(listing.id);
+                  } else {
+                    addFavorite(listing.id);
+                  }
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Feather
+                  name="heart"
+                  size={18}
+                  color={isHearted ? "#ef4444" : Colors.grayLight}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -223,6 +241,13 @@ export default function ListingCard({
         <Text style={[styles.title, rtl && styles.textRight]} numberOfLines={2}>
           {listing.title}
         </Text>
+
+        {/* Karam badge */}
+        {listing.seller.participatesInKaram && (
+          <View style={[styles.karamBadge, rtl && styles.karamBadgeRTL]}>
+            <Text style={styles.karamBadgeText}>🤲 كرم</Text>
+          </View>
+        )}
 
         {/* Pickup window */}
         {pickupWindow && (
@@ -332,6 +357,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.orangeLight,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  cardPhoto: {
+    ...StyleSheet.absoluteFillObject,
   },
 
   typePill: {
@@ -450,5 +479,23 @@ const styles = StyleSheet.create({
   skeletonLine: {
     backgroundColor: Colors.grayLight,
     borderRadius: 6,
+  },
+
+  karamBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#D1FAE5",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.greenMain,
+  },
+  karamBadgeRTL: {
+    alignSelf: "flex-end",
+  },
+  karamBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.greenMain,
   },
 });

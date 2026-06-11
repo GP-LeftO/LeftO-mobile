@@ -441,6 +441,85 @@ All listing management is handled by a single `ListingFormScreen` that operates 
 | DELETE | `/api/listings/:id` | `handleDeleteListing` in SellerDashboardScreen |
 | PATCH | `/api/listings/:id/sold-out` | `handleMarkSoldOut` in SellerDashboardScreen |
 
+#### Seller — Karam Program
+
+The **Karam (كرم) program** is a community pay-it-forward feature. Sellers who opt in sponsor meals from their own pool each day, and buyers can claim a sponsored meal from any participating seller. The seller-side UI lives inside `SellerDashboardScreen`.
+
+**Architecture (MVVM):**
+
+| File | Role |
+|------|------|
+| `src/services/seller/karam.service.ts` | Raw Axios calls: `getKaramBalance`, `toggleParticipation`, `sponsorMeal`, `claimMeal` |
+| `src/hooks/seller/useKaram.ts` | All Karam state, optimistic updates, toast notifications — returned as `{ balance, participatesInKaram, loading, actionLoading, sponsor, claim, toggleParticipation }` |
+| `src/screens/seller/SellerDashboardScreen.tsx` | Renders Karam card (overview tab) and Karam toggle (settings tab) from hook output |
+
+**Karam balance card (overview tab):**
+- Visible only when `karam.participatesInKaram === true`
+- Shows today's sponsored / claimed / available counts with `---` placeholders while loading
+- **"مول وجبة"** (filled green button): optimistic `sponsored + 1, available + 1`, calls `POST /api/sellers/me/karam/sponsor`, shows success toast on confirm
+- **"وجبة مُستلمة"** (green outline button): optimistic `claimed + 1, available − 1`, calls `POST /api/sellers/me/karam/claim`, disabled when `available === 0`, shows `"لا توجد وجبات متاحة اليوم"` on 400
+- Both buttons disabled while `actionLoading` is true; RTL-aware layout
+
+**Karam toggle (settings tab):**
+- Placed under a `"برنامج كرم"` section header, before the Save button
+- `Switch` driven by `karam.participatesInKaram`; while toggling shows `ActivityIndicator` in place of the switch to prevent double-taps
+- Calls `PATCH /api/sellers/me/karam` with `{ participatesInKaram: boolean }`, then re-fetches balance if newly enabled
+
+**API endpoints:**
+
+| Method | Endpoint | Hook |
+|--------|----------|------|
+| GET | `/api/sellers/:id/karam` | `karam.service.getKaramBalance` |
+| PATCH | `/api/sellers/me/karam` | `karam.service.toggleParticipation` |
+| POST | `/api/sellers/me/karam/sponsor` | `karam.service.sponsorMeal` |
+| POST | `/api/sellers/me/karam/claim` | `karam.service.claimMeal` |
+
+---
+
+#### Charity Dashboard — Donations + Basket (`CharityDashboardScreen.tsx`)
+
+Full rewrite that fixes all TypeScript errors from the previous broken implementation.
+
+| File | Role |
+|------|------|
+| `src/services/charity/charity.service.ts` | Raw Axios calls: `getMyDonations`, `markPickedUp`, `confirmDonation`, `uploadProof`, `rateSellerAfterDonation`, `getMyBasket`, `setMyBasket` |
+| `src/hooks/charity/useCharityDonations.ts` | All donation state, optimistic updates, pagination, proof upload pipeline |
+| `src/components/charity/DonationIncomingCard.tsx` | Donation card with status badge, pickup info, inline seller rating form |
+| `src/components/charity/ProofUploadModal.tsx` | Bottom-sheet modal for proof photo selection (expo-image-picker) + confirm |
+| `src/screens/charity/CharityDashboardScreen.tsx` | Full screen: header, impact counter, 4-tab layout, pull-to-refresh |
+
+**4-tab layout:**
+- **القادمة (incoming)** → `status === PENDING` — "تم الاستلام" CTA calls `PATCH /api/donations/:id/pickup`
+- **مستلمة (pickedUp)** → `status === PICKED_UP` — "رفع إثبات التوزيع" opens `ProofUploadModal`; confirms via `PATCH /api/donations/:id/confirm` with optional photo URL
+- **مكتملة (completed)** → `status === CONFIRMED` — inline seller rating form (overall / quality / pickup); submits to `POST /api/reviews/charity`
+- **احتياجاتي (basket)** → food need categories the charity publishes for sellers to see; saved via `PUT /api/charities/me/basket`
+
+**Impact counter banner:** shows count of `CONFIRMED` donations in a green banner at the top.
+
+---
+
+#### Seller — Switch to Buyer Mode (Settings Tab)
+
+Sellers can browse the app as a buyer without logging out. A **"تصفح كمشتري 🛍️"** button in the Settings tab calls `switchToBuyerMode()` from `AuthContext`.
+
+- `AuthContext.switchToBuyerMode()` sets `viewMode = "buyer"`
+- `App.tsx` detects `viewMode === "buyer" && step === "seller-dashboard"` and pushes `"buyer-home"`
+- `BuyerTabNavigator` shows a banner indicating the seller is in buyer-browse mode
+- Seller navigates back to their dashboard via `switchToSellerMode()` in the banner
+
+---
+
+#### Checkout — Blocked Account Gate (`CheckoutScreen.tsx`)
+
+If the authenticated user has `isBlocked === true`, `CheckoutScreen` renders a full-page blocked state instead of the normal reservation flow.
+
+- `AuthUser.isBlocked` is populated from the login/session API response and stored in `AuthContext`
+- Blocked UI: Feather `"slash"` icon, title "حسابك موقوف مؤقتاً", descriptive body text
+- **"تواصل مع الدعم"** button → navigates to `ChatbotScreen` via `onOpenChatbot` prop
+- **"رجوع"** button → calls `onBack()`
+
+---
+
 #### Seller Registration — 5-Step Flow (`RoleSpecificInfoScreen.tsx`)
 
 A fully stepped form with a custom 5-dot progress indicator. Buyer and charity paths in the same screen are completely unchanged.

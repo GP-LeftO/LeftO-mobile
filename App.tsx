@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, ActivityIndicator, Platform } from "react-native";
-import * as Notifications from "expo-notifications";
+import { View, StyleSheet, ActivityIndicator } from "react-native";
 import {
-  registerForPushNotifications,
+  setupNotificationHandler,
+  getFcmToken,
   savePushToken,
   clearPushToken,
+  addNotificationResponseListener,
+  isExpoGo,
 } from "./src/services/shared/pushNotifications.service";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -47,6 +49,8 @@ import SellerDonationsHistoryScreen from "./src/screens/seller/donations/SellerD
 import AdminRedirectScreen        from "./src/screens/admin/AdminRedirectScreen";
 import AdminDashboardScreen       from "./src/screens/admin/AdminDashboardScreen";
 import AdminUserDetailScreen      from "./src/screens/admin/AdminUserDetailScreen";
+import KaramCheckoutScreen        from "./src/screens/buyer/karam/KaramCheckoutScreen";
+import KaramSuccessScreen         from "./src/screens/buyer/karam/KaramSuccessScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -56,6 +60,7 @@ import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./s
 import type { CheckoutParams, Order } from "./src/types/order.types";
 import type { NearMeCoords } from "./src/types/nearMe";
 import type { SellerListing } from "./src/services/seller/seller.service";
+import type { KaramPressParams } from "./src/screens/buyer/StoreDetailsScreen";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -96,7 +101,9 @@ type AppStep =
   | "seller-donations-history"
   | "admin-dashboard"
   | "admin-user-detail"
-  | "seller-upgrade";
+  | "seller-upgrade"
+  | "karam-checkout"
+  | "karam-success";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -142,6 +149,7 @@ function AppContent() {
   const [qrScanParams,      setQrScanParams]      = useState<{ orderId: string; orderTitle?: string } | null>(null);
   const [openDonationsTab,  setOpenDonationsTab]  = useState(false);
   const [adminUserId,       setAdminUserId]       = useState<string | null>(null);
+  const [karamParams,       setKaramParams]       = useState<KaramPressParams | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -185,44 +193,45 @@ function AppContent() {
   }, [ctx.viewMode]);
 
   // ── Push notifications: register on login, clear on logout ───────────────────
-  const notifListenerRef = useRef<Notifications.Subscription | null>(null);
+  // All calls go through pushNotifications.service.ts which guards Expo Go.
+  const notifUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    void setupNotificationHandler();
+  }, []);
+
+  useEffect(() => {
+    if (isExpoGo) return;
+
     if (!ctx.isAuthenticated) {
-      clearPushToken();
-      notifListenerRef.current?.remove();
-      notifListenerRef.current = null;
+      void clearPushToken();
+      notifUnsubRef.current?.();
+      notifUnsubRef.current = null;
       return;
     }
-    (async () => {
-      const token = await registerForPushNotifications();
+
+    void (async () => {
+      const token = await getFcmToken();
       if (token) await savePushToken(token);
+
+      const unsub = await addNotificationResponseListener((response) => {
+        const res = response as { notification: { request: { content: { data: Record<string, unknown> } } } };
+        const type = res?.notification?.request?.content?.data?.type as string | undefined;
+
+        if (!ctx.isAuthenticated) return;
+
+        if (type === "SELLER_APPROVED")       goTo("seller-dashboard");
+        else if (type === "SELLER_REJECTED")  goTo("rejected");
+        else if (type === "CHARITY_APPROVED") goTo("charity-dashboard");
+        else if (type === "ACCOUNT_BLOCKED")  goTo("buyer-home");
+        else                                  goTo("notifications");
+      });
+      notifUnsubRef.current = unsub;
     })();
 
-    // Handle tap on a push notification (app backgrounded or killed)
-    notifListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      const type = data?.type as string | undefined;
-
-      if (!ctx.isAuthenticated) return;
-
-      if (type === "SELLER_APPROVED") {
-        goTo("seller-dashboard");
-      } else if (type === "SELLER_REJECTED") {
-        goTo("rejected");
-      } else if (type === "CHARITY_APPROVED") {
-        goTo("charity-dashboard");
-      } else if (type === "ACCOUNT_BLOCKED") {
-        goTo("buyer-home");
-      } else {
-        // All other types → show the in-app notifications screen
-        goTo("notifications");
-      }
-    });
-
     return () => {
-      notifListenerRef.current?.remove();
-      notifListenerRef.current = null;
+      notifUnsubRef.current?.();
+      notifUnsubRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.isAuthenticated]);
@@ -315,6 +324,11 @@ function AppContent() {
   const handleOpenNearMe = (coords: NearMeCoords) => {
     setNearMeCoords(coords);
     goTo("near-me");
+  };
+
+  const handleOpenKaram = (params: KaramPressParams) => {
+    setKaramParams(params);
+    goTo("karam-checkout");
   };
 
   // ── Wait until both auth + language are ready before showing splash ─────────
@@ -653,6 +667,28 @@ function AppContent() {
             sellerId={storeParams.sellerId}
             onBack={goBack}
             onCheckout={handleOpenCheckout}
+            onKaramPress={handleOpenKaram}
+          />
+        )
+      }
+
+      {step === "karam-checkout" && karamParams &&
+        screen(
+          <KaramCheckoutScreen
+            sellerId={karamParams.sellerId}
+            listingId={karamParams.listingId}
+            sellerName={karamParams.sellerName}
+            onBack={goBack}
+            onSuccess={() => goTo("karam-success")}
+          />
+        )
+      }
+
+      {step === "karam-success" && karamParams &&
+        screen(
+          <KaramSuccessScreen
+            sellerName={karamParams.sellerName}
+            onDone={() => setStepHistory(prev => prev.slice(0, prev.findIndex(s => s === "karam-checkout")))}
           />
         )
       }
@@ -666,6 +702,7 @@ function AppContent() {
               setConfirmedOrder(order);
               goTo("impact-celebration");
             }}
+            onOpenChatbot={() => goTo("chatbot")}
           />
         )
       }

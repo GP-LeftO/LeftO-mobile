@@ -7,29 +7,24 @@ import React, {
   useState,
 } from "react";
 
-import {
-  fetchFavorites,
-  addFavorite as apiAddFavorite,
-  deleteFavorite as apiDeleteFavorite,
-} from "../../services/buyer/favorites.service";
+import { useAuthContext } from "../AuthContext";
+import { favoritesService, type FavoriteListing } from "../../services/buyer/favorites.service";
 import { t } from "../../i18n";
-
-import type { FavoriteSeller } from "../../features/favorites/types/favorites.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FavoritesContextValue {
-  /** Set of sellerIds — O(1) lookup, single source of truth for heart state. */
-  favoritedSellerIds: Set<string>;
-  /** Full seller objects for the Favorites screen. */
-  favorites: FavoriteSeller[];
+  /** Set of listingIds — O(1) lookup, single source of truth for heart state. */
+  favoritedListingIds: Set<string>;
+  /** Full favorite objects for the Favorites screen. */
+  favorites: FavoriteListing[];
   isLoading: boolean;
-  /** Non-null when there is a toast to display (error or success). */
+  /** Non-null when there is a toast to display. */
   toastMessage: string | null;
-  addFavorite: (sellerId: string) => Promise<void>;
-  removeFavorite: (sellerId: string) => Promise<void>;
+  addFavorite: (listingId: string) => Promise<void>;
+  removeFavorite: (listingId: string) => Promise<void>;
   /** O(1) lookup used by every ListingCard. */
-  isFavorited: (sellerId: string) => boolean;
+  isFavorited: (listingId: string) => boolean;
   refetch: () => Promise<void>;
 }
 
@@ -42,15 +37,18 @@ const TOAST_MS = 2500;
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
-  const [favorites, setFavorites]                   = useState<FavoriteSeller[]>([]);
-  const [favoritedSellerIds, setFavoritedSellerIds] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading]                   = useState(true);
-  const [toastMessage, setToastMessage]             = useState<string | null>(null);
+  const { user } = useAuthContext();
+  const isBuyer = user?.role === "BUYER";
 
-  const favoritesRef         = useRef<FavoriteSeller[]>([]);
-  favoritesRef.current       = favorites;
-  const favIdsRef            = useRef<Set<string>>(favoritedSellerIds);
-  favIdsRef.current          = favoritedSellerIds;
+  const [favorites, setFavorites]                     = useState<FavoriteListing[]>([]);
+  const [favoritedListingIds, setFavoritedListingIds] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading]                     = useState(false);
+  const [toastMessage, setToastMessage]               = useState<string | null>(null);
+
+  const favoritesRef   = useRef<FavoriteListing[]>([]);
+  favoritesRef.current = favorites;
+  const favIdsRef      = useRef<Set<string>>(favoritedListingIds);
+  favIdsRef.current    = favoritedListingIds;
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -61,17 +59,18 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadFavorites = useCallback(async () => {
+    if (!isBuyer) return;
     setIsLoading(true);
     try {
-      const sellers = await fetchFavorites();
-      setFavorites(sellers);
-      setFavoritedSellerIds(new Set(sellers.map((s) => s.id)));
+      const data = await favoritesService.getMyFavorites();
+      setFavorites(data);
+      setFavoritedListingIds(new Set(data.map((f) => f.listingId)));
     } catch {
-      // silently fail on load; cards just start unfavorited
+      // silently fail; heart icons start unfavorited
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isBuyer]);
 
   useEffect(() => {
     loadFavorites();
@@ -81,49 +80,50 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   }, [loadFavorites]);
 
   const isFavorited = useCallback(
-    (sellerId: string) => favIdsRef.current.has(sellerId),
+    (listingId: string) => favIdsRef.current.has(listingId),
     [],
   );
 
-  const addFavorite = useCallback(async (sellerId: string) => {
+  const addFavorite = useCallback(async (listingId: string) => {
     const snapshotIds  = new Set(favIdsRef.current);
     const snapshotList = [...favoritesRef.current];
 
-    setFavoritedSellerIds((prev) => new Set(prev).add(sellerId));
+    setFavoritedListingIds((prev) => new Set(prev).add(listingId));
 
     try {
-      await apiAddFavorite(sellerId);
+      await favoritesService.addFavorite(listingId);
+      showToast(t().favorites.addedToast);
       await loadFavorites();
     } catch {
-      setFavoritedSellerIds(snapshotIds);
+      setFavoritedListingIds(snapshotIds);
       setFavorites(snapshotList);
       showToast(t().favorites.errorToast);
     }
   }, [loadFavorites, showToast]);
 
-  const removeFavorite = useCallback(async (sellerId: string) => {
+  const removeFavorite = useCallback(async (listingId: string) => {
     const snapshotIds  = new Set(favIdsRef.current);
     const snapshotList = [...favoritesRef.current];
 
-    setFavoritedSellerIds((prev) => {
+    setFavoritedListingIds((prev) => {
       const next = new Set(prev);
-      next.delete(sellerId);
+      next.delete(listingId);
       return next;
     });
-    setFavorites((prev) => prev.filter((s) => s.id !== sellerId));
+    setFavorites((prev) => prev.filter((f) => f.listingId !== listingId));
 
     try {
-      await apiDeleteFavorite(sellerId);
+      await favoritesService.removeFavorite(listingId);
       showToast(t().favorites.removedToast);
     } catch {
-      setFavoritedSellerIds(snapshotIds);
+      setFavoritedListingIds(snapshotIds);
       setFavorites(snapshotList);
       showToast(t().favorites.errorToast);
     }
   }, [showToast]);
 
   const value: FavoritesContextValue = {
-    favoritedSellerIds,
+    favoritedListingIds,
     favorites,
     isLoading,
     toastMessage,

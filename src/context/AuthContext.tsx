@@ -18,6 +18,8 @@ export interface AuthUser {
   moneySaved?: number;
   donationCount?: number;
   bagCount?: number;
+  isBlocked?: boolean;
+  cancellationCount?: number;
 }
 
 interface AuthContextValue {
@@ -29,6 +31,7 @@ interface AuthContextValue {
   hasSeller: boolean;
   isAuthenticated: boolean;
   isInitializing: boolean;
+  isBlocked: boolean;
   viewMode: "seller" | "buyer";
   switchToBuyerMode: () => void;
   switchToSellerMode: () => void;
@@ -160,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasSeller,
         isAuthenticated: !!user && !!accessToken,
         isInitializing,
+        isBlocked: user?.isBlocked ?? false,
         viewMode,
         switchToBuyerMode:  () => setViewMode("buyer"),
         switchToSellerMode: () => setViewMode("seller"),

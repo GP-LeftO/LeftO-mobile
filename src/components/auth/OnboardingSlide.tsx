@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   imageWrapper: {
     alignItems: "center",
