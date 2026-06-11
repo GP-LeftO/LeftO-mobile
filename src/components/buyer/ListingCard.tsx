@@ -242,6 +242,13 @@ export default function ListingCard({
           {listing.title}
         </Text>
 
+        {/* Karam badge */}
+        {listing.seller.participatesInKaram && (
+          <View style={[styles.karamBadge, rtl && styles.karamBadgeRTL]}>
+            <Text style={styles.karamBadgeText}>🤲 كرم</Text>
+          </View>
+        )}
+
         {/* Pickup window */}
         {pickupWindow && (
           <View style={[styles.row, rtl && styles.rowReverse, { gap: 4 }]}>
@@ -472,5 +479,23 @@ const styles = StyleSheet.create({
   skeletonLine: {
     backgroundColor: Colors.grayLight,
     borderRadius: 6,
+  },
+
+  karamBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#D1FAE5",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.greenMain,
+  },
+  karamBadgeRTL: {
+    alignSelf: "flex-end",
+  },
+  karamBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.greenMain,
   },
 });

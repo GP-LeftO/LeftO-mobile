@@ -671,21 +671,21 @@ export default function SellerDashboardScreen({
                     <View style={[styles.karamStats, rtl && styles.karamStatsRTL]}>
                       <View style={styles.karamStat}>
                         <Text style={styles.karamStatValue}>
-                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.sponsored ?? 0)}
+                          {karam.loading ? '—' : String(karam.balance.sponsored)}
                         </Text>
                         <Text style={styles.karamStatLabel}>ممولة</Text>
                       </View>
                       <View style={styles.karamStatDivider} />
                       <View style={styles.karamStat}>
                         <Text style={styles.karamStatValue}>
-                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.claimed ?? 0)}
+                          {karam.loading ? '—' : String(karam.balance.claimed)}
                         </Text>
                         <Text style={styles.karamStatLabel}>مُستلمة</Text>
                       </View>
                       <View style={styles.karamStatDivider} />
                       <View style={styles.karamStat}>
                         <Text style={styles.karamStatValue}>
-                          {karam.loading && !karam.balance ? '—' : String(karam.balance?.available ?? 0)}
+                          {karam.loading ? '—' : String(karam.balance.available)}
                         </Text>
                         <Text style={styles.karamStatLabel}>متاحة</Text>
                       </View>
@@ -693,30 +693,40 @@ export default function SellerDashboardScreen({
 
                     <View style={[styles.karamActions, rtl && styles.karamActionsRTL]}>
                       <TouchableOpacity
-                        style={[styles.karamBtn, styles.karamBtnSponsor, karam.actionLoading && { opacity: 0.6 }]}
+                        style={[styles.karamBtn, styles.karamBtnSponsor, karam.sponsorLoading && { opacity: 0.6 }]}
                         onPress={karam.sponsor}
-                        disabled={karam.actionLoading}
+                        disabled={karam.sponsorLoading}
                         activeOpacity={0.85}
                       >
-                        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
-                          <Feather name="heart" size={14} color={Colors.white} />
-                          <Text style={styles.karamBtnText}>مول وجبة</Text>
-                        </View>
+                        {karam.sponsorLoading
+                          ? <ActivityIndicator size="small" color={Colors.white} />
+                          : (
+                            <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                              <Feather name="heart" size={14} color={Colors.white} />
+                              <Text style={styles.karamBtnText}>مول وجبة</Text>
+                            </View>
+                          )
+                        }
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         style={[
                           styles.karamBtn, styles.karamBtnClaim,
-                          (karam.balance?.available === 0 || karam.actionLoading) && { opacity: 0.4 },
+                          (karam.balance.available === 0 || karam.claimLoading) && { opacity: 0.4 },
                         ]}
                         onPress={karam.claim}
-                        disabled={karam.balance?.available === 0 || karam.actionLoading}
+                        disabled={karam.balance.available === 0 || karam.claimLoading}
                         activeOpacity={0.85}
                       >
-                        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
-                          <Feather name="check-circle" size={14} color={Colors.greenMain} />
-                          <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>وجبة مُستلمة</Text>
-                        </View>
+                        {karam.claimLoading
+                          ? <ActivityIndicator size="small" color={Colors.greenMain} />
+                          : (
+                            <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                              <Feather name="check-circle" size={14} color={Colors.greenMain} />
+                              <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>وجبة مُستلمة</Text>
+                            </View>
+                          )
+                        }
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1212,8 +1222,8 @@ export default function SellerDashboardScreen({
                         : (
                           <Switch
                             value={karam.participatesInKaram}
-                            onValueChange={karam.toggleParticipation}
-                            trackColor={{ true: Colors.greenMain, false: Colors.grayMedium }}
+                            onValueChange={(val) => karam.toggleParticipation(val).catch(() => showToast('حدث خطأ، حاول مرة أخرى'))}
+                            trackColor={{ false: Colors.grayMedium, true: Colors.greenMain }}
                             thumbColor={Colors.white}
                           />
                         )
@@ -2418,4 +2428,5 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   donationQtyText: { fontSize: 20, fontWeight: "800", color: Colors.grayDark, minWidth: 40, textAlign: "center" },
+
 });

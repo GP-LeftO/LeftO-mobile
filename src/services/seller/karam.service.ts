@@ -15,11 +15,17 @@ export interface KaramBalance {
 export const getKaramBalance = (sellerId: string): Promise<KaramBalance> =>
   api.get(`/api/sellers/${sellerId}/karam`).then((r) => r.data?.data ?? r.data);
 
-export const toggleParticipation = (participatesInKaram: boolean): Promise<KaramBalance> =>
-  api.patch('/api/sellers/me/karam', { participatesInKaram }).then((r) => r.data?.data ?? r.data);
+export const toggleParticipation = (enable: boolean): Promise<KaramBalance> =>
+  api.patch('/api/sellers/me/karam', { participatesInKaram: enable }).then((r) => r.data?.data ?? r.data);
 
-export const sponsorMeal = (): Promise<unknown> =>
-  api.post('/api/sellers/me/karam/sponsor').then((r) => r.data?.data ?? r.data);
+export const sponsorMeal = async (): Promise<KaramTodayBalance> => {
+  const r = await api.post('/api/sellers/me/karam/sponsor');
+  const d = r.data?.data ?? r.data;
+  return { sponsored: d?.sponsored ?? 0, claimed: d?.claimed ?? 0, available: d?.available ?? 0 };
+};
 
-export const claimMeal = (): Promise<unknown> =>
-  api.post('/api/sellers/me/karam/claim').then((r) => r.data?.data ?? r.data);
+export const claimMeal = async (): Promise<KaramTodayBalance> => {
+  const r = await api.post('/api/sellers/me/karam/claim');
+  const d = r.data?.data ?? r.data;
+  return { sponsored: d?.sponsored ?? 0, claimed: d?.claimed ?? 0, available: d?.available ?? 0 };
+};

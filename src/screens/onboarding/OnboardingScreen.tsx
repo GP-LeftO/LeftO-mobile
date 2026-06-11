@@ -83,6 +83,7 @@ export default function OnboardingScreen({ onComplete, navigation }: OnboardingS
         onScroll={handleScroll}
         scrollEventThrottle={16}
         keyExtractor={(_, i) => String(i)}
+        style={styles.flatList}
         renderItem={({ item, index }) => (
           <OnboardingSlide
             title={translations.onboarding[index].title}
@@ -114,6 +115,7 @@ export default function OnboardingScreen({ onComplete, navigation }: OnboardingS
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  flatList: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

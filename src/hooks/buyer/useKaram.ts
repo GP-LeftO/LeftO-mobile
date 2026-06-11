@@ -10,7 +10,7 @@ interface UseKaramReturn {
   sponsoring: boolean;
   error:      string | null;
   loadBalance: (sellerId: string) => Promise<void>;
-  sponsor:     (sellerId: string) => Promise<KaramSponsorResult | null>;
+  sponsor:     (sellerId: string, listingId?: string) => Promise<KaramSponsorResult | null>;
 }
 
 export function useKaram(): UseKaramReturn {
@@ -23,8 +23,8 @@ export function useKaram(): UseKaramReturn {
     setLoading(true);
     setError(null);
     try {
-      const res = await getKaramBalance(sellerId);
-      setBalance(res.data.data);
+      const bal = await getKaramBalance(sellerId);
+      setBalance(bal);
     } catch {
       setError('load_failed');
     } finally {
@@ -32,10 +32,10 @@ export function useKaram(): UseKaramReturn {
     }
   }, []);
 
-  const sponsor = useCallback(async (sellerId: string): Promise<KaramSponsorResult | null> => {
+  const sponsor = useCallback(async (sellerId: string, listingId?: string): Promise<KaramSponsorResult | null> => {
     setSponsoring(true);
     try {
-      const res = await sponsorMeal(sellerId);
+      const res = await sponsorMeal(sellerId, listingId);
       return res.data.data;
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;

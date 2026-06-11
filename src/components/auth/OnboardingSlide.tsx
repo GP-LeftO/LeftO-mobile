@@ -65,9 +65,11 @@ export default function OnboardingSlide({ title, subtitle, image, scrollX, index
 const styles = StyleSheet.create({
   slide: {
     width: SCREEN_WIDTH,
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   imageWrapper: {
     alignItems: "center",

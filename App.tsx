@@ -49,6 +49,8 @@ import SellerDonationsHistoryScreen from "./src/screens/seller/donations/SellerD
 import AdminRedirectScreen        from "./src/screens/admin/AdminRedirectScreen";
 import AdminDashboardScreen       from "./src/screens/admin/AdminDashboardScreen";
 import AdminUserDetailScreen      from "./src/screens/admin/AdminUserDetailScreen";
+import KaramCheckoutScreen        from "./src/screens/buyer/karam/KaramCheckoutScreen";
+import KaramSuccessScreen         from "./src/screens/buyer/karam/KaramSuccessScreen";
 
 import { setLanguageAsync, restoreLanguage, isRTL } from "./src/i18n";
 import type { Language } from "./src/i18n";
@@ -58,6 +60,7 @@ import type { StoreDetailsParams, AllergyOption, CharityInfoFormData } from "./s
 import type { CheckoutParams, Order } from "./src/types/order.types";
 import type { NearMeCoords } from "./src/types/nearMe";
 import type { SellerListing } from "./src/services/seller/seller.service";
+import type { KaramPressParams } from "./src/screens/buyer/StoreDetailsScreen";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
 
@@ -98,7 +101,9 @@ type AppStep =
   | "seller-donations-history"
   | "admin-dashboard"
   | "admin-user-detail"
-  | "seller-upgrade";
+  | "seller-upgrade"
+  | "karam-checkout"
+  | "karam-success";
 
 interface BasicInfo { name: string; email: string; password: string }
 
@@ -144,6 +149,7 @@ function AppContent() {
   const [qrScanParams,      setQrScanParams]      = useState<{ orderId: string; orderTitle?: string } | null>(null);
   const [openDonationsTab,  setOpenDonationsTab]  = useState(false);
   const [adminUserId,       setAdminUserId]       = useState<string | null>(null);
+  const [karamParams,       setKaramParams]       = useState<KaramPressParams | null>(null);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -318,6 +324,11 @@ function AppContent() {
   const handleOpenNearMe = (coords: NearMeCoords) => {
     setNearMeCoords(coords);
     goTo("near-me");
+  };
+
+  const handleOpenKaram = (params: KaramPressParams) => {
+    setKaramParams(params);
+    goTo("karam-checkout");
   };
 
   // ── Wait until both auth + language are ready before showing splash ─────────
@@ -655,6 +666,28 @@ function AppContent() {
             sellerId={storeParams.sellerId}
             onBack={goBack}
             onCheckout={handleOpenCheckout}
+            onKaramPress={handleOpenKaram}
+          />
+        )
+      }
+
+      {step === "karam-checkout" && karamParams &&
+        screen(
+          <KaramCheckoutScreen
+            sellerId={karamParams.sellerId}
+            listingId={karamParams.listingId}
+            sellerName={karamParams.sellerName}
+            onBack={goBack}
+            onSuccess={() => goTo("karam-success")}
+          />
+        )
+      }
+
+      {step === "karam-success" && karamParams &&
+        screen(
+          <KaramSuccessScreen
+            sellerName={karamParams.sellerName}
+            onDone={() => setStepHistory(prev => prev.slice(0, prev.findIndex(s => s === "karam-checkout")))}
           />
         )
       }

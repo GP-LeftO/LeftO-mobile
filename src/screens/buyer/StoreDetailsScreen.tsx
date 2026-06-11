@@ -29,15 +29,21 @@ import { reportListing, type ReportReason } from "../../services/buyer/report.se
 import type { PerformanceResult } from "../../services/seller/listingAI.service";
 import type { FreshnessBadge, ListingType } from "../../types";
 import type { CheckoutParams } from "../../types/order.types";
-import { getStripeHook } from "../../services/shared/stripe.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface StoreDetailsScreenProps {
-  listingId:  string;
+export interface KaramPressParams {
   sellerId:   string;
-  onBack:     () => void;
-  onCheckout: (params: CheckoutParams) => void;
+  listingId:  string;
+  sellerName: string;
+}
+
+interface StoreDetailsScreenProps {
+  listingId:    string;
+  sellerId:     string;
+  onBack:       () => void;
+  onCheckout:   (params: CheckoutParams) => void;
+  onKaramPress?: (params: KaramPressParams) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -107,6 +113,7 @@ export default function StoreDetailsScreen({
   sellerId,
   onBack,
   onCheckout,
+  onKaramPress,
 }: StoreDetailsScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
@@ -117,12 +124,10 @@ export default function StoreDetailsScreen({
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
   const { reviews, loading: reviewsLoading, loadingMore, hasMore, loadMore } = useSellerReviews(sellerId);
 
-  const { initPaymentSheet, presentPaymentSheet } = getStripeHook();
-  const { balance: karamBalance, loading: karamLoading, sponsoring, loadBalance, sponsor } = useKaram();
+  const { balance: karamBalance, loading: karamLoading, loadBalance } = useKaram();
 
   const [heroImageError, setHeroImageError] = useState(false);
   const [performance,    setPerformance]    = useState<Omit<PerformanceResult, 'stats'> | null>(null);
-  const [karamDone,      setKaramDone]      = useState(false);
   const [reportOpen,     setReportOpen]     = useState(false);
   const [reportReason,   setReportReason]   = useState<ReportReason | null>(null);
   const [reportDetails,  setReportDetails]  = useState("");
@@ -234,40 +239,6 @@ export default function StoreDetailsScreen({
       ? `maps:0,0?q=${sellerLat},${sellerLng}`
       : `geo:${sellerLat},${sellerLng}?q=${sellerLat},${sellerLng}`;
     Linking.openURL(url).catch(() => {});
-  };
-
-  const handleSponsorKaram = async () => {
-    const result = await sponsor(sellerId);
-    if (!result) return;
-
-    const { error: initError } = await initPaymentSheet({
-      paymentIntentClientSecret: result.clientSecret,
-      merchantDisplayName: `LeftO — كرم | ${result.sellerName}`,
-    });
-    if (initError) {
-      Alert.alert(rtl ? "خطأ" : "Error", initError.message);
-      return;
-    }
-
-    const { error: payError } = await presentPaymentSheet();
-    if (payError) {
-      if (payError.code !== "Canceled") {
-        Alert.alert(
-          rtl ? "فشلت عملية الدفع" : "Payment failed",
-          rtl ? "حاول مجدداً" : "Please try again"
-        );
-      }
-      return;
-    }
-
-    setKaramDone(true);
-    Alert.alert(
-      rtl ? "شكراً! 💚" : "Thank you! 💚",
-      rtl
-        ? "دعمت وجبة مجانية لشخص محتاج — جزاك الله خيراً"
-        : "You funded a free meal for someone in need"
-    );
-    setTimeout(() => loadBalance(sellerId), 2000);
   };
 
   const buildCheckoutParams = (): CheckoutParams => ({
@@ -423,9 +394,11 @@ export default function StoreDetailsScreen({
             <KaramCard
               balance={karamBalance}
               loading={karamLoading}
-              sponsoring={sponsoring}
-              done={karamDone}
-              onSponsor={handleSponsorKaram}
+              onSponsor={() => onKaramPress?.({
+                sellerId,
+                listingId,
+                sellerName: seller?.businessName ?? listing.seller?.businessName ?? '',
+              })}
               rtl={rtl}
             />
           )}
@@ -683,13 +656,11 @@ function PublicPerformanceCard({ perf, rtl }: { perf: Omit<PerformanceResult, 's
 interface KaramCardProps {
   balance:   { sponsored: number; claimed: number; available: number } | null;
   loading:   boolean;
-  sponsoring: boolean;
-  done:      boolean;
   onSponsor: () => void;
   rtl:       boolean;
 }
 
-function KaramCard({ balance, loading, sponsoring, done, onSponsor, rtl }: KaramCardProps) {
+function KaramCard({ balance, loading, onSponsor, rtl }: KaramCardProps) {
   return (
     <View style={karamStyles.card}>
       <View style={[karamStyles.headerRow, rtl && { flexDirection: "row-reverse" }]}>
@@ -731,28 +702,15 @@ function KaramCard({ balance, loading, sponsoring, done, onSponsor, rtl }: Karam
         </View>
       ) : null}
 
-      {done ? (
-        <View style={karamStyles.doneRow}>
-          <Text style={karamStyles.doneText}>
-            {rtl ? "✅ شكراً! دعمت وجبة مجانية 💚" : "✅ Thank you! You funded a free meal 💚"}
-          </Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={[karamStyles.btn, sponsoring && { opacity: 0.6 }]}
-          onPress={onSponsor}
-          disabled={sponsoring}
-          activeOpacity={0.85}
-        >
-          {sponsoring ? (
-            <ActivityIndicator size="small" color={Colors.white} />
-          ) : (
-            <Text style={karamStyles.btnText}>
-              {rtl ? "تبرع بوجبة 💚" : "Sponsor a meal 💚"}
-            </Text>
-          )}
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={karamStyles.btn}
+        onPress={onSponsor}
+        activeOpacity={0.85}
+      >
+        <Text style={karamStyles.btnText}>
+          {rtl ? "تبرع بوجبة 💚" : "Sponsor a meal 💚"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -788,13 +746,6 @@ const karamStyles = StyleSheet.create({
     alignItems: "center",
   },
   btnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
-  doneRow: {
-    backgroundColor: "rgba(255,255,255,0.7)",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  doneText: { fontSize: 14, fontWeight: "700", color: Colors.greenMain },
 });
 
 const reportStyles = StyleSheet.create({
