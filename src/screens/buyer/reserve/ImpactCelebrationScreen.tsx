@@ -23,7 +23,7 @@ interface ImpactCelebrationScreenProps {
 // ─── Badge icon map (subset — same logic as BadgeGrid) ───────────────────────
 
 const BADGE_META: Record<string, { icon: string; color: string; bg: string; labelEn: string; labelAr: string }> = {
-  first_purchase:  { icon: "shopping-bag", color: "#f97316", bg: "#fff7ed", labelEn: "First Bag",       labelAr: "أول كيس"       },
+  first_purchase:  { icon: "shopping-bag", color: "#f97316", bg: "#fff7ed", labelEn: "First Bag",       labelAr: "أول حقيبة"       },
   eco_hero:        { icon: "wind",         color: "#10b981", bg: "#ecfdf5", labelEn: "Eco Hero",         labelAr: "بطل البيئة"     },
   first_donation:  { icon: "heart",        color: "#ec4899", bg: "#fdf2f8", labelEn: "Kind Heart",       labelAr: "قلب طيب"       },
   loyal_customer:  { icon: "star",         color: "#8b5cf6", bg: "#f5f3ff", labelEn: "Loyal Saver",      labelAr: "مدخر وفيّ"     },

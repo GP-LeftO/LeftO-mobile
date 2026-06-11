@@ -568,7 +568,7 @@ function EmptyState({ tab, rtl }: { tab: TabKey; rtl: boolean }) {
       icon: "shopping-bag",
       titleEn: "No active orders",           titleAr: "لا توجد طلبات نشطة",
       subEn:   "Browse stores and reserve a bag to get started",
-      subAr:   "تصفح المتاجر واحجز كيساً للبدء",
+      subAr:   "تصفح المتاجر واحجز حقيبة للبدء",
     },
     completed: {
       icon: "check-circle",

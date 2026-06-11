@@ -347,6 +347,7 @@ function AppContent() {
   );
 
   return (
+    <View style={styles.root}>
     <View style={styles.container}>
 
       {step === "splash" &&
@@ -760,10 +761,12 @@ function AppContent() {
       }
 
     </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.background },
   container: { flex: 1, backgroundColor: Colors.background },
   screen: { flex: 1, position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
 });

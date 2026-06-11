@@ -21,7 +21,7 @@ const STANDARD_BADGES: BadgeDef[] = [
   {
     key: "first_purchase",
     labelEn: "First Bag",
-    labelAr: "أول كيس",
+    labelAr: "أول حقيبة",
     icon: "shopping-bag",
     color: "#f97316",
     bg: "#fff7ed",

@@ -26,7 +26,7 @@ interface ListingFormScreenProps {
 // ─── Option sets ─────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { value: "MEAL_BAG",        labelEn: "Surprise Bag",     labelAr: "كيس مفاجأة"    },
+  { value: "MEAL_BAG",        labelEn: "Surprise Bag",     labelAr: "حقيبة مفاجأة"    },
   { value: "SPECIFIC_PARCEL", labelEn: "Specific Parcel",  labelAr: "طرد محدد"      },
 ] as const;
 
@@ -163,7 +163,7 @@ export default function ListingFormScreen({ existing, onBack, onComplete }: List
           <View style={[styles.titleRow, rtl && { flexDirection: "row-reverse" }]}>
             <TextInput
               style={[styles.input, styles.titleInput, errors.title && styles.inputError, rtl && styles.textRight]}
-              placeholder={rtl ? "مثال: كيس مفاجأة المساء" : "e.g. Evening Surprise Bag"}
+              placeholder={rtl ? "مثال: حقيبة مفاجأة المساء" : "e.g. Evening Surprise Bag"}
               placeholderTextColor={Colors.grayMedium}
               value={form.title}
               onChangeText={v => { setField("title", v); setTitleScore(null); }}

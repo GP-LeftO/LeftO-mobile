@@ -48,6 +48,13 @@
       ],
       "expo-asset",
       [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.lefto.com",
+          "enableGooglePay": true
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/logo.png",
