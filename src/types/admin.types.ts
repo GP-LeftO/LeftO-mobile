@@ -44,6 +44,9 @@ export interface AdminUserListItem {
   email: string | null;
   role: "BUYER" | "SELLER" | "CHARITY" | "ADMIN";
   createdAt: string;
+  isBlocked?: boolean;
+  cancellationCount?: number;
+  deletedAt?: string | null;
 }
 
 export interface AdminUserDetail {
@@ -76,4 +79,30 @@ export interface AdminUsersPagination {
   limit: number;
   total: number;
   totalPages: number;
+}
+
+export interface AdminStats {
+  users: { total: number; buyers: number; sellers: number; charities: number };
+  listings: { active: number; soldOut: number; expired: number };
+  orders: { total: number; completed: number; cancelled: number };
+  donations: { total: number; confirmed: number };
+  impact: { totalCo2SavedKg: number; totalItemsSaved: number };
+}
+
+export interface AdminChartPoint {
+  month: string;
+  completedOrders: number;
+  listingsCreated: number;
+  newUsers: number;
+}
+
+export interface BestRatedData {
+  bestSeller: { id: string; businessName: string; rating: number; address: string } | null;
+  bestCharity: { id: string; orgName: string; region: string; _count: { donations: number } } | null;
+}
+
+export interface AdminUserFilters {
+  search?: string;
+  role?: "BUYER" | "SELLER" | "CHARITY" | "ADMIN" | "";
+  isBlocked?: boolean | undefined;
 }

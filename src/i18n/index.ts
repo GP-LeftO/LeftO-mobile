@@ -1,5 +1,6 @@
-import { I18nManager } from "react-native";
+import { I18nManager, DevSettings } from "react-native";
 import * as Localization from "expo-localization";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import en from "./en.json";
@@ -65,5 +66,18 @@ function applyRTL(lang: Language): void {
   if (I18nManager.isRTL !== shouldBeRTL) {
     I18nManager.allowRTL(shouldBeRTL);
     I18nManager.forceRTL(shouldBeRTL);
+  }
+}
+
+// Switching language at runtime requires a full app reload: the UI is not
+// reactive to `currentLanguage`, and I18nManager.forceRTL only takes effect
+// after a restart. Persist the choice, then reload the JS bundle.
+export async function changeLanguageAndReload(lang: Language): Promise<void> {
+  if (lang === currentLanguage) return;
+  await setLanguageAsync(lang);
+  try {
+    await Updates.reloadAsync();
+  } catch {
+    DevSettings.reload();
   }
 }
