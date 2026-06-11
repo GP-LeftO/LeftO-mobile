@@ -18,7 +18,7 @@ import {
 import LeafletMap from "../../components/shared/LeafletMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useStripe } from "@stripe/stripe-react-native";
+import { useKaramCheckout } from "../../services/payments/karamPayment";
 import { Colors, Spacing } from "../../theme";
 import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
@@ -117,7 +117,7 @@ export default function StoreDetailsScreen({
   const { listing, seller, loading, error, refetch } = useStoreDetails(listingId, sellerId);
   const { reviews, loading: reviewsLoading, loadingMore, hasMore, loadMore } = useSellerReviews(sellerId);
 
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { pay: payKaram } = useKaramCheckout();
   const { balance: karamBalance, loading: karamLoading, sponsoring, loadBalance, sponsor } = useKaram();
 
   const [performance,    setPerformance]    = useState<Omit<PerformanceResult, 'stats'> | null>(null);
@@ -239,18 +239,11 @@ export default function StoreDetailsScreen({
     const result = await sponsor(sellerId);
     if (!result) return;
 
-    const { error: initError } = await initPaymentSheet({
-      paymentIntentClientSecret: result.clientSecret,
+    const payResult = await payKaram(result.clientSecret, {
       merchantDisplayName: `LeftO — كرم | ${result.sellerName}`,
     });
-    if (initError) {
-      Alert.alert(rtl ? "خطأ" : "Error", initError.message);
-      return;
-    }
-
-    const { error: payError } = await presentPaymentSheet();
-    if (payError) {
-      if (payError.code !== "Canceled") {
+    if (!payResult.ok) {
+      if (!payResult.canceled) {
         Alert.alert(
           rtl ? "فشلت عملية الدفع" : "Payment failed",
           rtl ? "حاول مجدداً" : "Please try again"
