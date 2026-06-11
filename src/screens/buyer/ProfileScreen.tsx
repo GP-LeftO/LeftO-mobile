@@ -19,7 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
-import { t, isRTL, setLanguageAsync } from "../../i18n";
+import { t, isRTL, getLanguage, changeLanguageAndReload } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useProfile, ProfileTab } from "../../hooks/buyer/profile/useProfile";
 import { useNotificationSettings } from "../../hooks/buyer/useNotificationSettings";
@@ -627,28 +627,44 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
               {rtl ? "اللغة" : "Language"}
             </Text>
             <View style={{ flexDirection: "row", gap: 6 }}>
-              {(["ar", "en"] as const).map(lang => (
+              {(["ar", "en"] as const).map(lang => {
+                const active = getLanguage() === lang;
+                return (
                 <TouchableOpacity
                   key={lang}
-                  onPress={() => setLanguageAsync(lang)}
+                  disabled={active}
+                  onPress={() => {
+                    Alert.alert(
+                      rtl ? "تغيير اللغة" : "Change language",
+                      rtl
+                        ? "سيتم إعادة تشغيل التطبيق لتطبيق اللغة الجديدة."
+                        : "The app will restart to apply the new language.",
+                      [
+                        { text: rtl ? "إلغاء" : "Cancel", style: "cancel" },
+                        {
+                          text: rtl ? "متابعة" : "Continue",
+                          onPress: () => { changeLanguageAndReload(lang); },
+                        },
+                      ]
+                    );
+                  }}
                   style={{
                     paddingHorizontal: 14, paddingVertical: 5,
                     borderRadius: 20,
-                    backgroundColor: (rtl ? lang === "ar" : lang === "en")
-                      ? Colors.primaryOrange : Colors.background,
+                    backgroundColor: active ? Colors.primaryOrange : Colors.background,
                     borderWidth: 1.5,
-                    borderColor: (rtl ? lang === "ar" : lang === "en")
-                      ? Colors.primaryOrange : Colors.grayLight,
+                    borderColor: active ? Colors.primaryOrange : Colors.grayLight,
                   }}
                 >
                   <Text style={{
                     fontSize: 12, fontWeight: "700",
-                    color: (rtl ? lang === "ar" : lang === "en") ? "#fff" : Colors.grayMedium,
+                    color: active ? "#fff" : Colors.grayMedium,
                   }}>
                     {lang === "ar" ? "ع" : "EN"}
                   </Text>
                 </TouchableOpacity>
-              ))}
+                );
+              })}
             </View>
           </View>
         </View>
