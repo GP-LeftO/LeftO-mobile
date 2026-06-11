@@ -201,8 +201,8 @@ export default function SellerDashboardScreen({
   const [donateQty,         setDonateQty]         = useState("1");
   const [donateSubmitting,  setDonateSubmitting]  = useState(false);
 
-  // ── Orders filter state ───────────────────────────────────────────────────
-  const [ordersFilter, setOrdersFilter] = useState<string>("");
+  // ── Orders tab state (Active = RESERVED | Cancelled) ──────────────────────
+  const [ordersTab, setOrdersTab] = useState<'active' | 'cancelled'>('active');
 
   // ── AI Performance state ──────────────────────────────────────────────────
   const [performance, setPerformance] = useState<PerformanceResult | null>(null);
@@ -213,9 +213,9 @@ export default function SellerDashboardScreen({
     error: ordersError, hasMore: ordersHasMore, fetchOrders,
   } = useSellerOrders();
 
-  const filteredOrders = ordersFilter
-    ? orders.filter((o) => o.status === ordersFilter)
-    : orders;
+  const activeOrders    = orders.filter((o) => o.status === 'RESERVED');
+  const cancelledOrders = orders.filter((o) => o.status === 'CANCELLED');
+  const displayOrders   = ordersTab === 'active' ? activeOrders : cancelledOrders;
 
   // ── Toast helper (stable ref so it can be passed to hooks) ────────────────
   const showToast = useCallback((msg: string) => {
@@ -808,25 +808,29 @@ export default function SellerDashboardScreen({
               }
             >
               <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
-                {/* Status filter chips */}
-                <View style={[styles.filterRow, rtl && styles.filterRowRTL]}>
-                  {(["RESERVED", "COMPLETED", "CANCELLED"] as const).map((f) => (
-                    <TouchableOpacity
-                      key={f}
-                      style={[styles.filterPill, ordersFilter === f && styles.filterPillActive]}
-                      onPress={() => setOrdersFilter(ordersFilter === f ? "" : f)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.filterPillText, ordersFilter === f && styles.filterPillTextActive]}>
-                        {rtl
-                          ? f === "RESERVED" ? "نشطة" : f === "COMPLETED" ? "مكتملة" : "ملغاة"
-                          : f === "RESERVED" ? "Active" : f === "COMPLETED" ? "Completed" : "Cancelled"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                {/* Active / Cancelled tab selector */}
+                <View style={[styles.orderTabRow, rtl && styles.filterRowRTL]}>
+                  <TouchableOpacity
+                    style={[styles.orderTab, ordersTab === 'active' && styles.orderTabActive]}
+                    onPress={() => setOrdersTab('active')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.orderTabText, ordersTab === 'active' && styles.orderTabTextActive]}>
+                      {rtl ? `النشطة (${activeOrders.length})` : `Active (${activeOrders.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.orderTab, ordersTab === 'cancelled' && styles.orderTabActive]}
+                    onPress={() => setOrdersTab('cancelled')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.orderTabText, ordersTab === 'cancelled' && styles.orderTabTextActive]}>
+                      {rtl ? `الملغاة (${cancelledOrders.length})` : `Cancelled (${cancelledOrders.length})`}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {ordersLoading && filteredOrders.length === 0 ? (
+                {ordersLoading && displayOrders.length === 0 ? (
                   <View style={styles.centered}>
                     <ActivityIndicator color={Colors.primaryOrange} size="large" />
                   </View>
@@ -838,19 +842,21 @@ export default function SellerDashboardScreen({
                       <Text style={styles.retryBtnText}>{rtl ? "إعادة المحاولة" : "Retry"}</Text>
                     </TouchableOpacity>
                   </View>
-                ) : filteredOrders.length === 0 ? (
+                ) : displayOrders.length === 0 ? (
                   <View style={styles.emptyPane}>
                     <Text style={styles.emptyEmoji}>📋</Text>
                     <Text style={[styles.emptyTitle, rtl && styles.rtl]}>
-                      {rtl ? "لا توجد طلبات" : "No orders"}
+                      {rtl
+                        ? (ordersTab === 'active' ? 'لا توجد طلبات نشطة' : 'لا توجد طلبات ملغاة')
+                        : (ordersTab === 'active' ? 'No active orders' : 'No cancelled orders')}
                     </Text>
                   </View>
                 ) : (
                   <>
-                    {filteredOrders.map((order) => (
+                    {displayOrders.map((order) => (
                       <SellerOrderCard key={order.id} order={order} rtl={rtl} />
                     ))}
-                    {ordersHasMore && (
+                    {ordersHasMore && ordersTab === 'active' && (
                       <TouchableOpacity
                         style={styles.loadMoreBtn}
                         onPress={() => fetchOrders(false)}
@@ -1288,61 +1294,126 @@ export default function SellerDashboardScreen({
 // ─── SellerOrderCard ──────────────────────────────────────────────────────────
 
 function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
-  const cfg = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
+  const cfg        = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
+  const [countdown,  setCountdown]  = useState<string | null>(null);
+  const [qrVisible,  setQrVisible]  = useState(false);
+
+  const isReserved  = order.status === 'RESERVED';
+  const qrCodeUrl   = order.listing?.qrCodeUrl;
 
   const pickupWindow = order.pickupStart && order.pickupEnd
     ? formatPickup(order.pickupStart, order.pickupEnd)
     : null;
 
-  let countdown: string | null = null;
-  if (order.status === "RESERVED" && order.expiresAt) {
-    const minsLeft = Math.round((new Date(order.expiresAt).getTime() - Date.now()) / 60000);
-    if (minsLeft > 0) countdown = `ينتهي خلال ${minsLeft} دقيقة`;
-  }
+  // Live countdown (ticks every second while order is RESERVED)
+  useEffect(() => {
+    if (!isReserved) return;
+    const expiresAt = order.expiresAt ?? order.pickupEnd;
+    if (!expiresAt) return;
+    const tick = () => {
+      const diff = new Date(expiresAt).getTime() - Date.now();
+      if (diff <= 0) { setCountdown(null); return; }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1_000);
+      setCountdown(
+        h > 0
+          ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+          : `${m}:${String(s).padStart(2, '0')}`
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1_000);
+    return () => clearInterval(id);
+  }, [isReserved, order.expiresAt, order.pickupEnd]);
 
   return (
-    <View style={ocStyles.card}>
-      {/* Row 1: title + status badge */}
-      <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-        <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
-          {order.listing?.title ?? (rtl ? "طلب" : "Order")}
-        </Text>
-        <View style={[ocStyles.badge, { backgroundColor: cfg.bg }]}>
-          <Text style={[ocStyles.badgeText, { color: cfg.color }]}>
-            {rtl ? cfg.labelAr : cfg.labelEn}
+    <>
+      <View style={ocStyles.card}>
+        {/* Row 1: title + status badge */}
+        <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
+            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
           </Text>
-        </View>
-      </View>
-
-      {/* Row 2: buyer name + qty × price + pickup */}
-      <View style={[ocStyles.row2, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <Feather name="user" size={12} color="#6B7280" />
-          <Text style={[ocStyles.metaText, { textAlign: rtl ? "right" : "left" }]}>
-            {order.buyer?.name ?? "مجهول الهوية"}
-          </Text>
-        </View>
-        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <Feather name="shopping-bag" size={12} color="#6B7280" />
-          <Text style={ocStyles.metaText}>
-            ×{order.quantity}{order.totalPrice != null ? ` — ${order.totalPrice} ₪` : ""}
-          </Text>
-        </View>
-        {pickupWindow && (
-          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-            <Feather name="clock" size={12} color="#6B7280" />
-            <Text style={ocStyles.metaText}>{pickupWindow}</Text>
+          <View style={[ocStyles.badge, { backgroundColor: cfg.bg }]}>
+            <Text style={[ocStyles.badgeText, { color: cfg.color }]}>
+              {rtl ? cfg.labelAr : cfg.labelEn}
+            </Text>
           </View>
+        </View>
+
+        {/* Row 2: buyer name + qty × price + pickup */}
+        <View style={[ocStyles.row2, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <Feather name="user" size={12} color="#6B7280" />
+            <Text style={[ocStyles.metaText, { textAlign: rtl ? "right" : "left" }]}>
+              {order.buyer?.name ?? "مجهول الهوية"}
+            </Text>
+          </View>
+          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <Feather name="shopping-bag" size={12} color="#6B7280" />
+            <Text style={ocStyles.metaText}>
+              ×{order.quantity}{order.totalPrice != null ? ` — ${order.totalPrice} ₪` : ""}
+            </Text>
+          </View>
+          {pickupWindow && (
+            <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+              <Feather name="clock" size={12} color="#6B7280" />
+              <Text style={ocStyles.metaText}>{pickupWindow}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Live countdown (RESERVED only) */}
+        {countdown && (
+          <Text style={[ocStyles.countdown, { textAlign: rtl ? "right" : "left" }]}>
+            ⏱ {rtl ? `ينتهي خلال: ${countdown}` : `Expires in: ${countdown}`}
+          </Text>
+        )}
+
+        {/* Show QR button (RESERVED + has qrCodeUrl) */}
+        {isReserved && qrCodeUrl && (
+          <TouchableOpacity
+            style={ocStyles.showQrBtn}
+            onPress={() => setQrVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Feather name="maximize" size={14} color={Colors.white} />
+            <Text style={ocStyles.showQrBtnText}>{rtl ? "عرض رمز QR" : "Show QR Code"}</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* Row 3: countdown (RESERVED only) */}
-      {countdown && (
-        <Text style={[ocStyles.countdown, { textAlign: rtl ? "right" : "left" }]}>
-          {countdown}
-        </Text>
-      )}
-    </View>
+      {/* QR Code Modal */}
+      <Modal
+        visible={qrVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrVisible(false)}
+      >
+        <View style={ocStyles.qrOverlay}>
+          <View style={ocStyles.qrSheet}>
+            <Text style={ocStyles.qrTitle}>{rtl ? "رمز QR للطلب" : "Order QR Code"}</Text>
+            <Text style={ocStyles.qrSub} numberOfLines={1}>{order.buyer?.name ?? ""}</Text>
+            <Image
+              source={{ uri: qrCodeUrl! }}
+              style={ocStyles.qrImage}
+              resizeMode="contain"
+            />
+            <Text style={[ocStyles.qrHint, rtl && { textAlign: "right" as const }]}>
+              {rtl ? "اعرض هذا الرمز للمشتري للتحقق من طلبه" : "Show this to the buyer to verify their order"}
+            </Text>
+            <TouchableOpacity
+              style={ocStyles.qrCloseBtn}
+              onPress={() => setQrVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={ocStyles.qrCloseBtnText}>{rtl ? "إغلاق" : "Close"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -1366,7 +1437,29 @@ const ocStyles = StyleSheet.create({
   row2: { marginTop: 8, alignItems: "center", flexWrap: "wrap", gap: 12 },
   metaItem: { alignItems: "center", gap: 4 },
   metaText: { fontSize: 13, color: "#6B7280" },
-  countdown: { marginTop: 8, fontSize: 12, color: "#EF4444" },
+  countdown: { marginTop: 8, fontSize: 12, color: "#EF4444", fontWeight: "600" },
+
+  showQrBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.primaryOrange, borderRadius: 10,
+    paddingVertical: 9, marginTop: 10,
+  },
+  showQrBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+
+  qrOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
+  qrSheet: {
+    backgroundColor: Colors.white, borderRadius: 24, padding: 24,
+    width: "86%", alignItems: "center", gap: 12,
+  },
+  qrTitle:    { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
+  qrSub:      { fontSize: 13, color: Colors.grayMedium, maxWidth: 220 },
+  qrImage:    { width: 250, height: 250, borderRadius: 12 },
+  qrHint:     { fontSize: 13, color: Colors.grayMedium, textAlign: "center", lineHeight: 19 },
+  qrCloseBtn: {
+    backgroundColor: Colors.primaryOrange, borderRadius: 14,
+    paddingHorizontal: 40, paddingVertical: 13, marginTop: 4,
+  },
+  qrCloseBtnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
 });
 
 // ─── SellerListingCard ────────────────────────────────────────────────────────
@@ -1991,6 +2084,19 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: Colors.primaryOrange, borderColor: Colors.primaryOrange },
   filterPillText: { fontSize: 13, fontWeight: "600", color: Colors.grayMedium },
   filterPillTextActive: { color: Colors.white },
+
+  orderTabRow: {
+    flexDirection: "row", gap: 8,
+    paddingHorizontal: Spacing.xl, paddingBottom: Spacing.sm,
+  },
+  orderTab: {
+    flex: 1, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,
+    alignItems: "center",
+  },
+  orderTabActive: { backgroundColor: Colors.primaryOrange, borderColor: Colors.primaryOrange },
+  orderTabText: { fontSize: 13, fontWeight: "700", color: Colors.grayMedium },
+  orderTabTextActive: { color: Colors.white },
   retryBtn: { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 12 },
   retryBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 

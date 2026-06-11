@@ -10,7 +10,7 @@ export interface SellerOrder {
   expiresAt?: string;
   pickupStart?: string;
   pickupEnd?: string;
-  listing?: { id: string; title: string };
+  listing?: { id: string; title: string; qrCodeUrl?: string };
   buyer?: { id: string; name?: string };
 }
 

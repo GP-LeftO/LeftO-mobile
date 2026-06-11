@@ -39,11 +39,12 @@ export interface KaramPressParams {
 }
 
 interface StoreDetailsScreenProps {
-  listingId:    string;
-  sellerId:     string;
-  onBack:       () => void;
-  onCheckout:   (params: CheckoutParams) => void;
-  onKaramPress?: (params: KaramPressParams) => void;
+  listingId:      string;
+  sellerId:       string;
+  onBack:         () => void;
+  onCheckout:     (params: CheckoutParams) => void;
+  onKaramPress?:  (params: KaramPressParams) => void;
+  karamRefreshKey?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ export default function StoreDetailsScreen({
   onBack,
   onCheckout,
   onKaramPress,
+  karamRefreshKey,
 }: StoreDetailsScreenProps) {
   const insets     = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 44 : insets.top;
@@ -145,6 +147,12 @@ export default function StoreDetailsScreen({
       loadBalance(sellerId);
     }
   }, [sellerId, seller, loadBalance]);
+
+  // Refetch Karam balance after a successful sponsorship
+  useEffect(() => {
+    if (karamRefreshKey && sellerId) loadBalance(sellerId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [karamRefreshKey]);
 
   // ── Error ────────────────────────────────────────────────────────────────────
   if (error) {
