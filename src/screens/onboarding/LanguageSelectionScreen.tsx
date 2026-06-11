@@ -13,9 +13,9 @@ interface LanguageSelectionScreenProps {
   navigation?: any;
 }
 
-const LANGUAGES: { code: Language; label: string; native: string; flag: string }[] = [
-  { code: "en", label: "English", native: "English", flag: "🇬🇧" },
-  { code: "ar", label: "Arabic", native: "العربية", flag: "🇵🇸" },
+const LANGUAGES: { code: Language; label: string; native: string }[] = [
+  { code: "en", label: "English", native: "English" },
+  { code: "ar", label: "Arabic", native: "العربية" },
 ];
 
 export default function LanguageSelectionScreen({ onComplete, navigation }: LanguageSelectionScreenProps) {
@@ -55,7 +55,6 @@ export default function LanguageSelectionScreen({ onComplete, navigation }: Lang
               onPress={() => setSelected(lang.code)}
               activeOpacity={0.8}
             >
-              <Text style={styles.flag}>{lang.flag}</Text>
               <View style={styles.cardText}>
                 <Text style={[styles.langLabel, selected === lang.code && styles.langLabelSelected]}>
                   {lang.native}
@@ -117,11 +116,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
   },
   cardSelected: { borderColor: Colors.primaryOrange, backgroundColor: Colors.orangeLight },
-  flag: { fontSize: 40 },
   cardText: { flex: 1, gap: 2 },
-  langLabel: { fontSize: 22, fontWeight: "700", color: Colors.grayDark },
+  langLabel: { fontSize: 22, fontWeight: "700", color: Colors.grayDark, textAlign: "left" },
   langLabelSelected: { color: Colors.orangeDark },
-  langSub: { fontSize: 14, color: Colors.grayMedium },
+  langSub: { fontSize: 14, color: Colors.grayMedium, textAlign: "left" },
   radio: {
     width: 24, height: 24, borderRadius: 12,
     borderWidth: 2, borderColor: Colors.grayMedium,

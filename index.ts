@@ -1,5 +1,7 @@
 import { registerRootComponent } from 'expo';
 
+// Must run before App so screen modules read the clamped window width on web.
+import './src/web/dimensionsClamp';
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

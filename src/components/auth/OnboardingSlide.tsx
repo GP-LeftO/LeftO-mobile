@@ -18,7 +18,8 @@ import { Colors, Spacing } from "../../theme/index";
 import { isRTL } from "../../i18n/index";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const IMAGE_SIZE = SCREEN_WIDTH * 0.72;
+// Cap the image so tall frames (web) never push the subtitle under the bottom sheet.
+const IMAGE_SIZE = Math.min(SCREEN_WIDTH * 0.66, 300);
 
 interface OnboardingSlideProps {
   title: string;
@@ -65,14 +66,16 @@ export default function OnboardingSlide({ title, subtitle, image, scrollX, index
 const styles = StyleSheet.create({
   slide: {
     width: SCREEN_WIDTH,
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
   },
   imageWrapper: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   card: {
     width: IMAGE_SIZE,

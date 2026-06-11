@@ -715,23 +715,8 @@ function AppContent() {
   );
 }
 
-// On web, constrain the app to a centered phone-width frame on large screens;
-// on native both wrappers are just flex:1 and have no visual effect.
-const webRoot = Platform.OS === "web"
-  ? { alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: "#E5E7EB" }
-  : null;
-const webFrame = Platform.OS === "web"
-  ? {
-      width: "100%" as const,
-      maxWidth: 480,
-      alignSelf: "center" as const,
-      overflow: "hidden" as const,
-      ...( { boxShadow: "0 0 40px rgba(0,0,0,0.12)" } as object ),
-    }
-  : null;
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background, ...(webRoot as object) },
-  container: { flex: 1, backgroundColor: Colors.background, ...(webFrame as object) },
+  root: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background },
   screen: { flex: 1, position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
 });

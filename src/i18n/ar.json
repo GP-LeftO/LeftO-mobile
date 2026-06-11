@@ -63,7 +63,7 @@
     "nothingAvailable": "لا يوجد شيء متاح الآن",
     "left": "متبقي",
     "almostGone": "على وشك النفاد!",
-    "surpriseBag": "كيس مفاجأة",
+    "surpriseBag": "حقيبة مفاجأة",
     "specificParcel": "طرد محدد",
     "soldOut": "نفد المخزون",
     "allergenWarning": "يحتوي على مسببات حساسية",
@@ -115,7 +115,7 @@
     "itemsLeft": "{count} متبقي",
     "pickupWindow": "الاستلام {start} – {end}",
     "distanceKm": "على بُعد {dist} كم",
-    "surpriseBag": "كيس مفاجأة",
+    "surpriseBag": "حقيبة مفاجأة",
     "specificParcel": "طرد محدد",
     "soldOut": "نفد المخزون",
     "recenter": "موقعي",
@@ -143,7 +143,7 @@
     "eatSoon": "كُل قريباً",
     "lastChance": "فرصة أخيرة",
     "mapPlaceholder": "عرض الخريطة قريباً",
-    "surpriseBag": "كيس مفاجأة",
+    "surpriseBag": "حقيبة مفاجأة",
     "specificParcel": "طرد محدد",
     "noDescription": "لا يوجد وصف متاح.",
     "reservedSuccess": "تم الحجز بنجاح!",
@@ -321,7 +321,7 @@
     "saving": "جاري الحفظ…",
     "fields": {
       "title": "عنوان القائمة",
-      "titlePlaceholder": "مثال: كيس مفاجأة المساء",
+      "titlePlaceholder": "مثال: حقيبة مفاجأة المساء",
       "type": "نوع القائمة",
       "category": "الفئة",
       "pricing": "السعر (₪)",
@@ -338,7 +338,7 @@
       "optional": "(اختياري)"
     },
     "types": {
-      "MEAL_BAG": "كيس مفاجأة",
+      "MEAL_BAG": "حقيبة مفاجأة",
       "SPECIFIC_PARCEL": "طرد محدد"
     },
     "categories": {
@@ -539,7 +539,7 @@
     "browseStores": "تصفح المحلات",
     "removedToast": "تمت الإزالة من المفضلة",
     "errorToast": "حدث خطأ ما. يرجى المحاولة مجدداً.",
-    "surpriseBag": "كيس مفاجأة",
+    "surpriseBag": "حقيبة مفاجأة",
     "specificParcel": "طرد محدد",
     "soldOut": "نفد المخزون",
     "itemsLeft": "{count} متبقي",
