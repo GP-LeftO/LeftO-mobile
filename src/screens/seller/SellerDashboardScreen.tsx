@@ -4,7 +4,7 @@ import {
   TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Alert,
   KeyboardAvoidingView, Modal, Share, Linking, Switch,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../theme";
@@ -202,7 +202,9 @@ export default function SellerDashboardScreen({
   const [donateSubmitting,  setDonateSubmitting]  = useState(false);
 
   // ── Orders tab state (Active = RESERVED | Cancelled) ──────────────────────
-  const [ordersTab, setOrdersTab] = useState<'active' | 'cancelled'>('active');
+  const [ordersTab,      setOrdersTab]      = useState<'active' | 'cancelled'>('active');
+  const [selectedOrder,  setSelectedOrder]  = useState<SellerOrder | null>(null);
+  const [showQRModal,    setShowQRModal]    = useState(false);
 
   // ── AI Performance state ──────────────────────────────────────────────────
   const [performance, setPerformance] = useState<PerformanceResult | null>(null);
@@ -341,6 +343,25 @@ export default function SellerDashboardScreen({
     fetchListings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, fetchListings]);
+
+  // Poll every 10 s while the QR modal is open so the seller sees the order complete.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showQRModal) return;
+    const id = setInterval(() => { fetchOrders(true); }, 10_000);
+    return () => clearInterval(id);
+  }, [showQRModal]);
+
+  // Close the QR modal automatically when the order moves out of RESERVED.
+  useEffect(() => {
+    if (!showQRModal || !selectedOrder || orders.length === 0) return;
+    const stillActive = orders.find(o => o.id === selectedOrder.id && o.status === 'RESERVED');
+    if (!stillActive) {
+      setShowQRModal(false);
+      setSelectedOrder(null);
+      showToast('تم تأكيد الاستلام بنجاح ✓');
+    }
+  }, [orders, showQRModal, selectedOrder, showToast]);
 
   // Pre-populate settings on first profile load
   useEffect(() => {
@@ -858,9 +879,9 @@ export default function SellerDashboardScreen({
                         key={order.id}
                         order={order}
                         rtl={rtl}
-                        allOrders={orders}
-                        onRefreshOrders={async () => { await fetchOrders(true); }}
-                        onShowToast={showToast}
+                        onPress={ordersTab === 'active'
+                          ? () => { setSelectedOrder(order); setShowQRModal(true); }
+                          : undefined}
                       />
                     ))}
                     {ordersHasMore && ordersTab === 'active' && (
@@ -1274,6 +1295,90 @@ export default function SellerDashboardScreen({
         </>
       )}
 
+      {/* ── QR modal (seller shows to buyer for scan) ── */}
+      <Modal
+        visible={showQRModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => { setShowQRModal(false); setSelectedOrder(null); }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAF8' }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: rtl ? 'row-reverse' : 'row',
+            alignItems: 'center', justifyContent: 'space-between',
+            padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#404040' }}>
+              {rtl ? 'رمز QR للاستلام' : 'QR Code for Pickup'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setShowQRModal(false); setSelectedOrder(null); }}
+              activeOpacity={0.7}
+            >
+              <Feather name="x" size={24} color="#404040" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
+            {/* Order summary */}
+            <View style={{ margin: 16, padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#404040', textAlign: rtl ? 'right' : 'left' }}>
+                {selectedOrder?.listing?.title}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4, textAlign: rtl ? 'right' : 'left' }}>
+                {selectedOrder?.buyer?.name ?? (rtl ? 'مجهول الهوية' : 'Unknown')}
+                {' · ×'}{selectedOrder?.quantity}
+                {selectedOrder?.totalPrice != null ? ` — ${selectedOrder.totalPrice} ₪` : ''}
+              </Text>
+            </View>
+
+            {/* QR Code */}
+            <View style={{ alignItems: 'center', paddingHorizontal: 16 }}>
+              {selectedOrder?.listing?.qrCodeUrl ? (
+                <>
+                  <Image
+                    source={{ uri: selectedOrder.listing.qrCodeUrl }}
+                    style={{ width: 260, height: 260, borderRadius: 8 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 16, paddingHorizontal: 32, lineHeight: 22 }}>
+                    {rtl
+                      ? 'اطلب من المشتري مسح هذا الرمز\nلتأكيد استلام الطلب وإتمام العملية'
+                      : 'Ask the buyer to scan this code\nto confirm order pickup'}
+                  </Text>
+                  <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10, marginTop: 12, marginHorizontal: 16 }}>
+                    <Text style={{ fontSize: 12, color: '#92400E', textAlign: 'center' }}>
+                      ⚠️ {rtl ? 'الرمز صالح لمدة 24 ساعة من وقت النشر' : 'Code valid 24 hours from listing time'}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', padding: 32 }}>
+                  <Feather name="alert-circle" size={48} color="#EF4444" />
+                  <Text style={{ color: '#EF4444', marginTop: 12, textAlign: 'center', fontSize: 14, lineHeight: 22 }}>
+                    {rtl ? 'رمز QR غير متاح\nأعد نشر الإدراج لتوليد رمز جديد' : 'QR code unavailable\nRe-publish the listing to generate a new code'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+
+          {/* Close button */}
+          <View style={{ padding: 16 }}>
+            <TouchableOpacity
+              onPress={() => { setShowQRModal(false); setSelectedOrder(null); }}
+              style={{ backgroundColor: Colors.primaryOrange, borderRadius: 12, padding: 16, alignItems: 'center' }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: Colors.white, fontWeight: 'bold', fontSize: 15 }}>
+                {rtl ? 'إغلاق' : 'Close'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       {/* Toast overlay */}
       {toastMessage && (
         <View style={styles.toastOverlay} pointerEvents="none">
@@ -1301,21 +1406,16 @@ export default function SellerDashboardScreen({
 // ─── SellerOrderCard ──────────────────────────────────────────────────────────
 
 function SellerOrderCard({
-  order, rtl, allOrders, onRefreshOrders, onShowToast,
+  order, rtl, onPress,
 }: {
   order: SellerOrder;
   rtl: boolean;
-  allOrders?: SellerOrder[];
-  onRefreshOrders?: () => Promise<void>;
-  onShowToast?: (msg: string) => void;
+  onPress?: () => void;
 }) {
   const cfg        = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
-  const [countdown,  setCountdown]  = useState<string | null>(null);
-  const [qrVisible,  setQrVisible]  = useState(false);
+  const [countdown, setCountdown] = useState<string | null>(null);
 
-  const isReserved  = order.status === 'RESERVED';
-  const qrCodeUrl   = order.listing?.qrCodeUrl;
-
+  const isReserved   = order.status === 'RESERVED';
   const pickupWindow = order.pickupStart && order.pickupEnd
     ? formatPickup(order.pickupStart, order.pickupEnd)
     : null;
@@ -1342,127 +1442,63 @@ function SellerOrderCard({
     return () => clearInterval(id);
   }, [isReserved, order.expiresAt, order.pickupEnd]);
 
-  // Poll every 10 s while QR modal is open; close + toast when order completes
-  useEffect(() => {
-    if (!qrVisible || !onRefreshOrders) return;
-    const interval = setInterval(async () => {
-      try {
-        await onRefreshOrders();
-        const stillReserved = allOrders?.find(
-          o => o.id === order.id && o.status === 'RESERVED'
-        );
-        if (!stillReserved) {
-          setQrVisible(false);
-          onShowToast?.('تم تأكيد الاستلام بنجاح ✓');
-        }
-      } catch {
-        // non-critical
-      }
-    }, 10_000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrVisible, order.id]);
-
   return (
-    <>
-      <TouchableOpacity
-        style={ocStyles.card}
-        onPress={() => isReserved && setQrVisible(true)}
-        activeOpacity={isReserved ? 0.7 : 1}
-      >
-        {/* Row 1: title + status badge */}
-        <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
-            {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+    <TouchableOpacity
+      style={ocStyles.card}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
+      {/* Row 1: title + status badge */}
+      <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
+          {order.listing?.title ?? (rtl ? "طلب" : "Order")}
+        </Text>
+        <View style={[ocStyles.badge, { backgroundColor: cfg.bg }]}>
+          <Text style={[ocStyles.badgeText, { color: cfg.color }]}>
+            {rtl ? cfg.labelAr : cfg.labelEn}
           </Text>
-          <View style={[ocStyles.badge, { backgroundColor: cfg.bg }]}>
-            <Text style={[ocStyles.badgeText, { color: cfg.color }]}>
-              {rtl ? cfg.labelAr : cfg.labelEn}
-            </Text>
-          </View>
         </View>
+      </View>
 
-        {/* Row 2: buyer name + qty × price + pickup */}
-        <View style={[ocStyles.row2, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-            <Feather name="user" size={12} color="#6B7280" />
-            <Text style={[ocStyles.metaText, { textAlign: rtl ? "right" : "left" }]}>
-              {order.buyer?.name ?? "مجهول الهوية"}
-            </Text>
-          </View>
-          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-            <Feather name="shopping-bag" size={12} color="#6B7280" />
-            <Text style={ocStyles.metaText}>
-              ×{order.quantity}{order.totalPrice != null ? ` — ${order.totalPrice} ₪` : ""}
-            </Text>
-          </View>
-          {pickupWindow && (
-            <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-              <Feather name="clock" size={12} color="#6B7280" />
-              <Text style={ocStyles.metaText}>{pickupWindow}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Live countdown (RESERVED only) */}
-        {countdown && (
-          <Text style={[ocStyles.countdown, { textAlign: rtl ? "right" : "left" }]}>
-            ⏱ {rtl ? `ينتهي خلال: ${countdown}` : `Expires in: ${countdown}`}
+      {/* Row 2: buyer name + qty × price + pickup */}
+      <View style={[ocStyles.row2, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Feather name="user" size={12} color="#6B7280" />
+          <Text style={[ocStyles.metaText, { textAlign: rtl ? "right" : "left" }]}>
+            {order.buyer?.name ?? "مجهول الهوية"}
           </Text>
-        )}
-
-        {/* Tap hint + QR button (RESERVED only) */}
-        {isReserved && (
-          <View style={[ocStyles.showQrBtn, { marginTop: 10 }]}>
-            <Feather name="maximize" size={14} color={Colors.white} />
-            <Text style={ocStyles.showQrBtnText}>{rtl ? "اضغط لعرض QR للمشتري" : "Tap to Show QR"}</Text>
+        </View>
+        <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Feather name="shopping-bag" size={12} color="#6B7280" />
+          <Text style={ocStyles.metaText}>
+            ×{order.quantity}{order.totalPrice != null ? ` — ${order.totalPrice} ₪` : ""}
+          </Text>
+        </View>
+        {pickupWindow && (
+          <View style={[ocStyles.metaItem, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <Feather name="clock" size={12} color="#6B7280" />
+            <Text style={ocStyles.metaText}>{pickupWindow}</Text>
           </View>
         )}
-      </TouchableOpacity>
+      </View>
 
-      {/* QR Code Modal */}
-      <Modal
-        visible={qrVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setQrVisible(false)}
-      >
-        <View style={ocStyles.qrOverlay}>
-          <View style={ocStyles.qrSheet}>
-            <Text style={ocStyles.qrTitle}>{rtl ? "رمز QR للطلب" : "Order QR Code"}</Text>
-            <Text style={ocStyles.qrSub} numberOfLines={1}>{order.buyer?.name ?? ""}</Text>
+      {/* Live countdown (RESERVED only) */}
+      {countdown && (
+        <Text style={[ocStyles.countdown, { textAlign: rtl ? "right" : "left" }]}>
+          ⏱ {rtl ? `ينتهي خلال: ${countdown}` : `Expires in: ${countdown}`}
+        </Text>
+      )}
 
-            {qrCodeUrl ? (
-              <>
-                <Image
-                  source={{ uri: qrCodeUrl }}
-                  style={ocStyles.qrImage}
-                  resizeMode="contain"
-                />
-                <Text style={[ocStyles.qrHint, rtl && { textAlign: "right" as const }]}>
-                  {rtl ? "اعرض هذا الرمز للمشتري للتحقق من طلبه" : "Show this to the buyer to verify their order"}
-                </Text>
-              </>
-            ) : (
-              <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
-                <Feather name="alert-circle" size={48} color="#EF4444" />
-                <Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 14 }}>
-                  {rtl ? "رمز QR غير متاح\nأعد نشر الإدراج لتوليد رمز جديد" : "QR code unavailable\nRe-publish listing to generate a new one"}
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={ocStyles.qrCloseBtn}
-              onPress={() => setQrVisible(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={ocStyles.qrCloseBtnText}>{rtl ? "إغلاق" : "Close"}</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Tap hint — visible on RESERVED cards to signal they are interactive */}
+      {isReserved && (
+        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', marginTop: 8, gap: 4 }}>
+          <Feather name="maximize" size={12} color={Colors.primaryOrange} />
+          <Text style={{ fontSize: 12, color: Colors.primaryOrange }}>
+            {rtl ? 'اضغط لعرض QR للمشتري' : 'Tap to show QR to buyer'}
+          </Text>
         </View>
-      </Modal>
-    </>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -1479,36 +1515,14 @@ const ocStyles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
   },
-  row1: { justifyContent: "space-between", alignItems: "center" },
-  title: { flex: 1, fontSize: 15, fontWeight: "700", color: "#404040", marginEnd: 8 },
-  badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  row1:      { justifyContent: "space-between", alignItems: "center" },
+  title:     { flex: 1, fontSize: 15, fontWeight: "700", color: "#404040", marginEnd: 8 },
+  badge:     { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
   badgeText: { fontSize: 12, fontWeight: "600" },
-  row2: { marginTop: 8, alignItems: "center", flexWrap: "wrap", gap: 12 },
-  metaItem: { alignItems: "center", gap: 4 },
-  metaText: { fontSize: 13, color: "#6B7280" },
+  row2:      { marginTop: 8, alignItems: "center", flexWrap: "wrap", gap: 12 },
+  metaItem:  { alignItems: "center", gap: 4 },
+  metaText:  { fontSize: 13, color: "#6B7280" },
   countdown: { marginTop: 8, fontSize: 12, color: "#EF4444", fontWeight: "600" },
-
-  showQrBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: Colors.primaryOrange, borderRadius: 10,
-    paddingVertical: 9, marginTop: 10,
-  },
-  showQrBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
-
-  qrOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
-  qrSheet: {
-    backgroundColor: Colors.white, borderRadius: 24, padding: 24,
-    width: "86%", alignItems: "center", gap: 12,
-  },
-  qrTitle:    { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
-  qrSub:      { fontSize: 13, color: Colors.grayMedium, maxWidth: 220 },
-  qrImage:    { width: 250, height: 250, borderRadius: 12 },
-  qrHint:     { fontSize: 13, color: Colors.grayMedium, textAlign: "center", lineHeight: 19 },
-  qrCloseBtn: {
-    backgroundColor: Colors.primaryOrange, borderRadius: 14,
-    paddingHorizontal: 40, paddingVertical: 13, marginTop: 4,
-  },
-  qrCloseBtnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
 });
 
 // ─── SellerListingCard ────────────────────────────────────────────────────────
