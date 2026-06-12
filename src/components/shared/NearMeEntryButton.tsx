@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -45,7 +46,7 @@ export default function NearMeEntryButton({ onPress }: NearMeEntryButtonProps) {
         setLoading(false);
         // Only show modal if we can still prompt; otherwise go straight to settings
         if (!canAskAgain) {
-          Linking.openSettings();
+          if (Platform.OS !== 'web') Linking.openSettings();
         } else {
           setShowPermissionModal(true);
         }
@@ -122,7 +123,7 @@ export default function NearMeEntryButton({ onPress }: NearMeEntryButtonProps) {
               style={styles.modalBtn}
               onPress={() => {
                 setShowPermissionModal(false);
-                Linking.openSettings();
+                if (Platform.OS !== 'web') Linking.openSettings();
               }}
               activeOpacity={0.85}
             >
