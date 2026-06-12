@@ -154,8 +154,25 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
               await fetchOrders();
               const profileRes = await api.get("/api/users/me").catch(() => null);
               const updated = profileRes?.data?.data ?? profileRes?.data;
+              const newCount = updated?.cancellationCount ?? (cancellationCount + 1);
               if (updated?.cancellationCount != null) {
                 setCancellationCount(updated.cancellationCount);
+              }
+              const newRemaining = Math.max(0, 5 - newCount);
+              if (newCount >= 5) {
+                Alert.alert(
+                  rtl ? "تم تعليق حسابك" : "Account Suspended",
+                  rtl
+                    ? "لقد تجاوزت الحد المسموح به من الإلغاءات. تم تعليق حسابك."
+                    : "You have reached the cancellation limit. Your account has been suspended."
+                );
+              } else if (newCount >= 3) {
+                Alert.alert(
+                  rtl ? "تحذير" : "Warning",
+                  rtl
+                    ? `لديك الآن ${newCount} إلغاءات. ${newRemaining === 1 ? "إلغاء واحد فقط" : `${newRemaining} إلغاءات`} متبق قبل تعليق حسابك.`
+                    : `You now have ${newCount} cancellation${newCount !== 1 ? "s" : ""}. ${newRemaining === 1 ? "Only 1 more" : `${newRemaining} more`} before your account is suspended.`
+                );
               }
             } catch {
               Alert.alert(
