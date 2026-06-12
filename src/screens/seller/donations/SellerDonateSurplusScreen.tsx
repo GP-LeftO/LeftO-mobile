@@ -77,7 +77,20 @@ export default function SellerDonateSurplusScreen({
         pickupEnd:   pickupEnd.toISOString(),
       });
       onComplete(selectedCharity.orgName);
-    } catch {
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number; data?: unknown }; message?: string };
+      console.error('[Donation] handleSubmit failed:', JSON.stringify({
+        status:  err?.response?.status,
+        data:    err?.response?.data,
+        message: err?.message,
+        payload: {
+          listingId:   listing.id,
+          charityId:   selectedCharity?.id,
+          quantity:    Number(quantity),
+          pickupStart: pickupStart.toISOString(),
+          pickupEnd:   pickupEnd.toISOString(),
+        },
+      }, null, 2));
       setSubmitError(rtl ? "تعذّر إرسال التبرع. يرجى المحاولة مجدداً." : "Could not submit donation. Please try again.");
     } finally {
       setSubmitting(false);

@@ -39,6 +39,7 @@
       "favicon": "./assets/images/logo.png"
     },
     "plugins": [
+      "expo-av",
       "expo-localization",
       [
         "expo-location",

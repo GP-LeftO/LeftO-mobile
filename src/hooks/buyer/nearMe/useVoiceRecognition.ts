@@ -1,94 +1,59 @@
-import { useState, useEffect, useCallback } from 'react';
-import { NativeModules } from 'react-native';
-import Voice, {
-  SpeechResultsEvent,
-  SpeechErrorEvent,
-} from '@react-native-voice/voice';
+import { useState, useRef, useCallback } from 'react';
+import { Audio } from 'expo-av';
+import { sendVoiceMessage } from '../../../services/buyer/support/chatbotService';
 
 export type VoiceState = 'idle' | 'listening' | 'processing';
 
-// NativeModules.Voice is null/stub in Expo Go — Voice requires expo run:android
-const VOICE_AVAILABLE =
-  !!NativeModules.Voice &&
-  typeof NativeModules.Voice.startSpeech === 'function';
-
-export { VOICE_AVAILABLE };
+export const VOICE_AVAILABLE = true;
 
 interface UseVoiceRecognitionOptions {
   onResult: (text: string) => void;
 }
 
-function safeDestroy() {
-  try {
-    Voice.destroy()
-      .then(() => {
-        // removeAllListeners internally sets props on NativeModules.Voice (null in Expo Go).
-        // Wrap in try/catch so the .then() callback never throws an unhandled rejection.
-        try { Voice.removeAllListeners(); } catch { /* noop */ }
-      })
-      .catch(() => { /* noop */ });
-  } catch { /* noop */ }
-}
-
 export function useVoiceRecognition({ onResult }: UseVoiceRecognitionOptions) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [partialResult, setPartialResult] = useState('');
-
-  useEffect(() => {
-    if (!VOICE_AVAILABLE) return;
-
-    try {
-      Voice.onSpeechStart = () => setVoiceState('listening');
-      Voice.onSpeechEnd = () => setVoiceState('processing');
-      Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-        const text = e.value?.[0];
-        if (text) {
-          setPartialResult('');
-          setVoiceState('idle');
-          onResult(text);
-        } else {
-          setVoiceState('idle');
-        }
-      };
-      Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
-        setPartialResult(e.value?.[0] ?? '');
-      };
-      Voice.onSpeechError = (_e: SpeechErrorEvent) => {
-        setVoiceState('idle');
-        setPartialResult('');
-      };
-    } catch {
-      return;
-    }
-
-    return safeDestroy;
-  }, [onResult]);
+  const [partialResult] = useState('');
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const startListening = useCallback(async () => {
-    if (!VOICE_AVAILABLE || voiceState !== 'idle') return;
     try {
-      setPartialResult('');
-      await Voice.start('ar-SA');
-    } catch {
-      setVoiceState('idle');
-    }
-  }, [voiceState]);
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) return;
 
-  const stopListening = useCallback(async () => {
-    if (!VOICE_AVAILABLE) return;
-    try {
-      await Voice.stop();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      recordingRef.current = recording;
+      setVoiceState('listening');
     } catch {
       setVoiceState('idle');
     }
   }, []);
 
-  const toggleListening = useCallback(() => {
-    if (voiceState === 'listening') {
-      stopListening();
-    } else if (voiceState === 'idle') {
-      startListening();
+  const stopListening = useCallback(async () => {
+    try {
+      if (!recordingRef.current) return;
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      setVoiceState('processing');
+
+      if (!uri) { setVoiceState('idle'); return; }
+
+      const { transcript } = await sendVoiceMessage(uri);
+      if (transcript) onResult(transcript);
+    } catch {
+      // reset silently — NearMeScreen handles the empty state
+    } finally {
+      setVoiceState('idle');
     }
+  }, [onResult]);
+
+  const toggleListening = useCallback(() => {
+    if (voiceState === 'listening') stopListening();
+    else if (voiceState === 'idle') startListening();
   }, [voiceState, startListening, stopListening]);
 
   return { voiceState, partialResult, toggleListening };

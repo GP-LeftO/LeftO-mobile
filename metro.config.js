@@ -10,8 +10,7 @@ config.resolver.sourceExts = [...config.resolver.sourceExts, "svg"];
 // Redirect native-only modules to web-compatible shims when bundling for web
 const WEB_MOCKS = {
   "react-native-maps": path.resolve(__dirname, "src/mocks/react-native-maps.ts"),
-  "@react-native-voice/voice": path.resolve(__dirname, "src/mocks/react-native-voice.ts"),
-  "react-native-webview": path.resolve(__dirname, "src/mocks/react-native-webview.tsx"),
+"react-native-webview": path.resolve(__dirname, "src/mocks/react-native-webview.tsx"),
   "@stripe/stripe-react-native": path.resolve(__dirname, "src/mocks/stripe-react-native.ts"),
 };
 

@@ -20,8 +20,22 @@ export interface SellerDonation {
   charity?: { id: string; orgName: string };
 }
 
-export const createSellerDonation = (payload: SellerDonationPayload): Promise<SellerDonation> =>
-  api.post("/api/donations", payload).then((r) => r.data.data);
+export const createSellerDonation = async (payload: SellerDonationPayload): Promise<SellerDonation> => {
+  try {
+    const r = await api.post("/api/donations", payload);
+    return r.data.data;
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number; data?: unknown }; config?: { url?: string; data?: string }; message?: string };
+    console.error('[Donation] createSellerDonation failed:', JSON.stringify({
+      status:      err?.response?.status,
+      data:        err?.response?.data,
+      message:     err?.message,
+      url:         err?.config?.url,
+      requestBody: err?.config?.data,
+    }, null, 2));
+    throw e;
+  }
+};
 
 export const getSellerDonations = (page = 1, limit = 10): Promise<{ donations: SellerDonation[]; pagination: { page: number; totalPages: number } }> =>
   api.get("/api/donations/me", { params: { page, limit } }).then((r) => {
