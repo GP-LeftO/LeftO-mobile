@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import {
   setupNotificationHandler,
   getFcmToken,
@@ -63,6 +63,7 @@ import type { SellerListing } from "./src/services/seller/seller.service";
 import type { KaramPressParams } from "./src/screens/buyer/StoreDetailsScreen";
 import { Colors } from "./src/theme";
 import { useAuth } from "./src/hooks/auth/useAuth";
+import { STRIPE_PUBLISHABLE_KEY, isStripeConfigured } from "./src/config/payments";
 
 // ── Step type ─────────────────────────────────────────────────────────────────
 type AppStep =
@@ -107,16 +108,60 @@ type AppStep =
 
 interface BasicInfo { name: string; email: string; password: string }
 
+// ── Stripe provider — safe dynamic require, falls back to children if unavailable ─
+function SafeStripeProvider({ children }: { children: React.ReactNode }) {
+  if (!isStripeConfigured()) return <>{children}</>;
+  try {
+    const { StripeProvider } = require('@stripe/stripe-react-native');
+    return (
+      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+        {children}
+      </StripeProvider>
+    );
+  } catch (e) {
+    console.warn('[LeftO] Stripe not available:', e);
+    return <>{children}</>;
+  }
+}
+
 // ── Root (provides auth context) ──────────────────────────────────────────────
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: 'red', padding: 40, justifyContent: 'center' }}>
+          <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+            {this.state.error.message}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12, marginTop: 10 }}>
+            {this.state.error.stack}
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 export default function Index() {
   return (
-    <SafeAreaProvider>
-      <AppConfigProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </AppConfigProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeStripeProvider>
+        <SafeAreaProvider>
+          <AppConfigProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </AppConfigProvider>
+        </SafeAreaProvider>
+      </SafeStripeProvider>
+    </ErrorBoundary>
   );
 }
 
