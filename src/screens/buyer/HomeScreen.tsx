@@ -24,6 +24,7 @@ import { t, isRTL } from "../../i18n";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useListings } from "../../hooks/buyer/useListings";
 import { useHomeStats } from "../../hooks/buyer/useHomeStats";
+import { useRescueListings } from "../../hooks/buyer/useRescueListings";
 import ListingCard, { SkeletonCard } from "../../components/buyer/ListingCard";
 import LeftOLogo from "../../components/shared/LeftOLogo";
 import NearMeEntryButton from "../../components/shared/NearMeEntryButton";
@@ -53,6 +54,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
   const { logout, user } = useAuth();
   const { surpriseBags, parcels, popularToday, loading, refreshing, error, onRefresh } = useListings();
   const stats = useHomeStats();
+  const rescue = useRescueListings();
 
   const { isRamadanSeason, isIftarWindow, maghribTime } = useAppConfig();
   const [maghribCountdown, setMaghribCountdown] = useState<string | null>(null);
@@ -262,6 +264,29 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
                     scrollEventThrottle={16}
                   />
                 )
+            )}
+
+            {/* ── Section 4: Rescue Now ── */}
+            {(rescue.loading || rescue.listings.length > 0) && (
+              <>
+                <SectionHeader
+                  title={tr.rescueNow}
+                  rtl={rtl}
+                  seeAllLabel={tr.seeAll}
+                />
+                {rescue.loading ? renderSkeleton() : (
+                  <FlatList
+                    data={rescue.listings}
+                    renderItem={renderCard}
+                    keyExtractor={(item) => `rescue-${item.id}`}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.horizontalList}
+                    ItemSeparatorComponent={() => <View style={styles.cardGap} />}
+                    scrollEventThrottle={16}
+                  />
+                )}
+              </>
             )}
 
             {/* ── Ramadan / Iftar Banner ── */}
