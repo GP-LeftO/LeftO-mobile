@@ -3,7 +3,6 @@ import {
   getKaramBalance,
   toggleParticipation as apiToggleParticipation,
   sponsorMeal as apiSponsorMeal,
-  claimMeal as apiClaimMeal,
 } from '../../services/seller/karam.service';
 import type { KaramTodayBalance } from '../../services/seller/karam.service';
 
@@ -21,7 +20,6 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
   const [loading,             setLoading]             = useState(false);
   const [actionLoading,       setActionLoading]       = useState(false);
   const [sponsorLoading,      setSponsorLoading]      = useState(false);
-  const [claimLoading,        setClaimLoading]        = useState(false);
 
   // Prevents a profile re-fetch that arrives within 2 s of a toggle from
   // clobbering the confirmed toggle state.
@@ -81,33 +79,6 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
     }
   }, [balance, onToast]);
 
-  const claim = useCallback(async () => {
-    console.log('[Karam] claimMeal pressed, balance:', JSON.stringify(balance));
-    if (balance.available <= 0) {
-      onToast?.('لا توجد وجبات متاحة اليوم');
-      return;
-    }
-    const prev = balance;
-    setBalance({ ...balance, claimed: balance.claimed + 1, available: balance.available - 1 });
-    setClaimLoading(true);
-    try {
-      const updated = await apiClaimMeal();
-      console.log('[Karam] claimMeal success:', JSON.stringify(updated));
-      setBalance(updated);
-    } catch (e: unknown) {
-      setBalance(prev);
-      const status = (e as { response?: { status?: number } }).response?.status;
-      console.error('[Karam] claimMeal failed:', JSON.stringify({
-        status,
-        data:    (e as { response?: { data?: unknown } }).response?.data,
-        message: (e as Error).message,
-      }, null, 2));
-      onToast?.(status === 400 ? 'لا توجد وجبات متاحة اليوم' : 'حدث خطأ غير متوقع');
-    } finally {
-      setClaimLoading(false);
-    }
-  }, [balance, onToast]);
-
   const toggleParticipation = useCallback(async (enable: boolean) => {
     justToggledRef.current = true;
     setParticipatesInKaram(enable);
@@ -137,7 +108,7 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
 
   return {
     balance, participatesInKaram,
-    loading, actionLoading, sponsorLoading, claimLoading,
-    sponsor, claim, toggleParticipation,
+    loading, actionLoading, sponsorLoading,
+    loadBalance, sponsor, toggleParticipation,
   };
 }

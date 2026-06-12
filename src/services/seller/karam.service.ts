@@ -24,8 +24,8 @@ export const sponsorMeal = async (): Promise<KaramTodayBalance> => {
   return { sponsored: d?.sponsored ?? 0, claimed: d?.claimed ?? 0, available: d?.available ?? 0 };
 };
 
-export const claimMeal = async (): Promise<KaramTodayBalance> => {
-  const r = await api.post('/api/sellers/me/karam/claim');
+export const scanKaramQr = async (qrToken: string): Promise<KaramTodayBalance> => {
+  const r = await api.post('/api/sellers/me/karam/scan-qr', { qrToken });
   const d = r.data?.data ?? r.data;
   return { sponsored: d?.sponsored ?? 0, claimed: d?.claimed ?? 0, available: d?.available ?? 0 };
 };
