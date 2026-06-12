@@ -23,9 +23,9 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
   const [sponsorLoading,     setSponsorLoading]     = useState(false);
   const [claimLoading,       setClaimLoading]       = useState(false);
 
-  // One-time initialization guard: prevents a re-render of the parent (e.g.
-  // after a profile re-fetch) from clobbering the toggle's confirmed state.
-  const hasInitialized = useRef(false);
+  // Prevents a profile re-fetch that arrives within 2 s of a toggle from
+  // clobbering the confirmed toggle state.
+  const justToggledRef = useRef(false);
 
   const loadBalance = useCallback(async (sid: string) => {
     setLoading(true);
@@ -38,7 +38,6 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
         claimed:   raw.claimed   ?? 0,
         available: raw.available ?? 0,
       });
-      // participatesInKaram intentionally NOT set here — toggle response owns it.
     } catch (e: unknown) {
       console.warn('[Karam] loadBalance failed:', (e as Error).message);
     } finally {
@@ -46,16 +45,19 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
     }
   }, []);
 
-  // Runs once when sellerId becomes available (profile loads async).
+  // Re-sync from API whenever sellerId or participatesInKaram changes,
+  // but skip if a toggle just completed (guard against stale re-fetch).
   useEffect(() => {
-    if (!sellerId || hasInitialized.current) return;
-    hasInitialized.current = true;
-    setParticipatesInKaram(initialParticipates);
-    if (initialParticipates) {
-      void loadBalance(sellerId);
+    if (!sellerId) return;
+    if (justToggledRef.current) {
+      console.log('[Karam] skipping profile reload — toggle in progress');
+      return;
     }
+    console.log('[Karam] loaded from API:', initialParticipates);
+    setParticipatesInKaram(initialParticipates);
+    if (initialParticipates) void loadBalance(sellerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellerId]);
+  }, [sellerId, initialParticipates]);
 
   const sponsor = useCallback(async () => {
     console.log('[Karam] sponsorMeal pressed, balance:', JSON.stringify(balance));
@@ -113,7 +115,10 @@ export function useKaram({ sellerId, initialParticipates = false, onToast }: Use
     try {
       const data = await apiToggleParticipation(enable);
       const confirmed = data?.participatesInKaram ?? enable;
+      justToggledRef.current = true;
       setParticipatesInKaram(confirmed);
+      setTimeout(() => { justToggledRef.current = false; }, 2000);
+      console.log('[Karam] toggle success, new value:', confirmed);
       if (confirmed && sellerId) await loadBalance(sellerId);
       onToast?.(confirmed ? 'تم تفعيل برنامج كرم ✓' : 'تم إيقاف برنامج كرم');
     } catch (e: unknown) {
