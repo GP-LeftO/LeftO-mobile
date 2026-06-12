@@ -43,7 +43,7 @@ import ListingFormScreen          from "./src/screens/seller/listings/ListingFor
 import ForgotPasswordScreen       from "./src/screens/auth/ForgotPasswordScreen";
 import ResetPasswordScreen        from "./src/screens/auth/ResetPasswordScreen";
 import NotificationsScreen        from "./src/screens/shared/NotificationsScreen";
-import QRScanScreen               from "./src/screens/buyer/QRScanScreen";
+import QRScannerScreen            from "./src/screens/buyer/QRScannerScreen";
 import SellerDonateSurplusScreen  from "./src/screens/seller/donations/SellerDonateSurplusScreen";
 import SellerDonationsHistoryScreen from "./src/screens/seller/donations/SellerDonationsHistoryScreen";
 import AdminRedirectScreen        from "./src/screens/admin/AdminRedirectScreen";
@@ -150,6 +150,7 @@ function AppContent() {
   const [openDonationsTab,  setOpenDonationsTab]  = useState(false);
   const [adminUserId,       setAdminUserId]       = useState<string | null>(null);
   const [karamParams,       setKaramParams]       = useState<KaramPressParams | null>(null);
+  const [karamSponsored,    setKaramSponsored]    = useState(0);
 
   const step   = stepHistory[stepHistory.length - 1];
   const goTo   = (s: AppStep) => setStepHistory(prev => [...prev, s]);
@@ -544,7 +545,7 @@ function AppContent() {
 
       {step === "qr-scan" && qrScanParams &&
         screen(
-          <QRScanScreen
+          <QRScannerScreen
             orderId={qrScanParams.orderId}
             orderTitle={qrScanParams.orderTitle}
             onBack={goBack}
@@ -668,6 +669,7 @@ function AppContent() {
             onBack={goBack}
             onCheckout={handleOpenCheckout}
             onKaramPress={handleOpenKaram}
+            karamRefreshKey={karamSponsored}
           />
         )
       }
@@ -680,6 +682,7 @@ function AppContent() {
             sellerName={karamParams.sellerName}
             onBack={goBack}
             onSuccess={() => goTo("karam-success")}
+            onSponsored={() => setKaramSponsored(n => n + 1)}
           />
         )
       }

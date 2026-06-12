@@ -10,7 +10,6 @@ import {
   Alert,
   RefreshControl,
   Modal,
-  Image,
   TextInput,
   KeyboardAvoidingView,
 } from "react-native";
@@ -68,8 +67,6 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [qrModal,       setQrModal]       = useState<{ orderId: string; title: string; qrUrl: string } | null>(null);
-  const [qrFetching,    setQrFetching]    = useState<string | null>(null);
 
   // Review state
   const [reviewOrder,   setReviewOrder]   = useState<Order | null>(null);
@@ -169,21 +166,6 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
     );
   };
 
-  const handleConfirmPickup = async (orderId: string) => {
-    setActionLoading(orderId);
-    try {
-      await api.patch(`/api/orders/${orderId}/received`);
-      await fetchOrders();
-    } catch {
-      Alert.alert(
-        rtl ? "خطأ" : "Error",
-        rtl ? "تعذّر تأكيد الاستلام" : "Could not confirm pickup"
-      );
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const handleOpenReview = (order: Order) => {
     setReviewRatings({ overall: 0, pickup: 0, quality: 0, variety: 0 });
     setReviewComment("");
@@ -211,30 +193,6 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
       Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر إرسال التقييم" : "Could not submit review");
     } finally {
       setReviewSubmitting(false);
-    }
-  };
-
-  const handleShowQR = async (order: Order) => {
-    // Use cached qrCodeUrl if available on listing, otherwise fetch it
-    if (order.listing?.qrCodeUrl) {
-      setQrModal({ orderId: order.id, title: order.listing.title ?? "Order", qrUrl: order.listing.qrCodeUrl });
-      return;
-    }
-    if (!order.listing?.id) return;
-    setQrFetching(order.id);
-    try {
-      const { data } = await api.get(`/api/listings/${order.listing.id}`);
-      const listing = data.data ?? data;
-      const qrUrl = listing?.qrCodeUrl;
-      if (qrUrl) {
-        setQrModal({ orderId: order.id, title: listing?.title ?? "Order", qrUrl });
-      } else {
-        Alert.alert(rtl ? "تنبيه" : "Note", rtl ? "رمز QR غير متاح لهذا الطلب" : "QR code not available for this order");
-      }
-    } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تحميل رمز QR" : "Could not load QR code");
-    } finally {
-      setQrFetching(null);
     }
   };
 
@@ -297,10 +255,7 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
                 order={order}
                 rtl={rtl}
                 actionLoading={actionLoading === order.id}
-                qrFetching={qrFetching === order.id}
                 onCancel={() => handleCancel(order.id)}
-                onConfirmPickup={() => handleConfirmPickup(order.id)}
-                onShowQR={() => handleShowQR(order)}
                 onScanQR={onOpenQRScan ? () => onOpenQRScan({ orderId: order.id, orderTitle: order.listing?.title }) : undefined}
                 onLeaveReview={order.status === "COMPLETED" && !reviewedIds.has(order.id) ? () => handleOpenReview(order) : undefined}
               />
@@ -372,43 +327,17 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* QR Code modal */}
-      <Modal
-        visible={qrModal !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setQrModal(null)}
-      >
-        <View style={styles.qrOverlay}>
-          <View style={styles.qrSheet}>
-            <Text style={styles.qrTitle}>{rtl ? "رمز QR للاستلام" : "Pickup QR Code"}</Text>
-            <Text style={styles.qrSubtitle} numberOfLines={1}>{qrModal?.title}</Text>
-            {qrModal?.qrUrl && (
-              <Image source={{ uri: qrModal.qrUrl }} style={styles.qrImage} resizeMode="contain" />
-            )}
-            <Text style={[styles.qrHint, rtl && { textAlign: "right" as const }]}>
-              {rtl ? "أرِ هذا الرمز للبائع عند استلام طلبك" : "Show this code to the seller when picking up your order"}
-            </Text>
-            <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setQrModal(null)} activeOpacity={0.85}>
-              <Text style={styles.qrCloseBtnText}>{rtl ? "إغلاق" : "Close"}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 function OrderCard({
-  order, rtl, actionLoading, qrFetching, onCancel, onConfirmPickup, onShowQR, onScanQR, onLeaveReview,
+  order, rtl, actionLoading, onCancel, onScanQR, onLeaveReview,
 }: {
   order: Order;
   rtl: boolean;
   actionLoading: boolean;
-  qrFetching: boolean;
   onCancel: () => void;
-  onConfirmPickup: () => void;
-  onShowQR: () => void;
   onScanQR?: () => void;
   onLeaveReview?: () => void;
 }) {
@@ -486,68 +415,45 @@ function OrderCard({
 
       {isReserved && (
         <>
-          {/* QR buttons row */}
-          <View style={[styles.qrButtonsRow, rtl && styles.qrButtonsRowRTL]}>
+          {/* QR scan instruction */}
+          <View style={[styles.scanInstruction, rtl && styles.scanInstructionRTL]}>
+            <Feather name="info" size={13} color="#166534" />
+            <Text style={[styles.scanInstructionText, rtl && styles.rtl]}>
+              {rtl
+                ? "اذهب إلى المتجر واطلب من البائع عرض رمز QR"
+                : "Go to the store and ask the seller to show their QR code"}
+            </Text>
+          </View>
+
+          {/* Primary scan button */}
+          {onScanQR && (
             <TouchableOpacity
-              style={[styles.qrBtn, { flex: 1 }]}
-              onPress={onShowQR}
-              disabled={qrFetching}
+              style={styles.scanBtn}
+              onPress={onScanQR}
+              activeOpacity={0.85}
+            >
+              <Feather name="camera" size={15} color={Colors.white} />
+              <Text style={styles.scanBtnText}>{rtl ? "مسح رمز QR" : "Scan QR Code"}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Cancel button */}
+          <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.cancelBtn, { flex: 1 }]}
+              onPress={onCancel}
+              disabled={actionLoading}
               activeOpacity={0.8}
             >
-              {qrFetching ? (
-                <ActivityIndicator size="small" color={Colors.primaryOrange} />
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#ef4444" />
               ) : (
                 <>
-                  <Feather name="grid" size={14} color={Colors.primaryOrange} />
-                  <Text style={styles.qrBtnText}>{rtl ? "عرض رمز QR" : "Show QR"}</Text>
+                  <Feather name="x-circle" size={14} color="#ef4444" />
+                  <Text style={styles.cancelBtnText}>{rtl ? "إلغاء الطلب" : "Cancel Order"}</Text>
                 </>
               )}
             </TouchableOpacity>
-            {onScanQR && (
-              <TouchableOpacity
-                style={[styles.qrBtn, styles.qrScanBtn, { flex: 1 }]}
-                onPress={onScanQR}
-                activeOpacity={0.8}
-              >
-                <Feather name="camera" size={14} color="#7c3aed" />
-                <Text style={[styles.qrBtnText, { color: "#7c3aed" }]}>{rtl ? "مسح QR" : "Scan QR"}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.cancelBtn]}
-            onPress={onCancel}
-            disabled={actionLoading}
-            activeOpacity={0.8}
-          >
-            {actionLoading ? (
-              <ActivityIndicator size="small" color="#ef4444" />
-            ) : (
-              <>
-                <Feather name="x-circle" size={14} color="#ef4444" />
-                <Text style={styles.cancelBtnText}>{rtl ? "إلغاء" : "Cancel"}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.confirmBtn]}
-            onPress={onConfirmPickup}
-            disabled={actionLoading}
-            activeOpacity={0.8}
-          >
-            {actionLoading ? (
-              <ActivityIndicator size="small" color={Colors.greenMain} />
-            ) : (
-              <>
-                <Feather name="check-circle" size={14} color={Colors.greenMain} />
-                <Text style={styles.confirmBtnText}>
-                  {rtl ? "تأكيد الاستلام" : "Confirm Pickup"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
           </View>
         </>
       )}
@@ -682,36 +588,22 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { borderColor: "#fecaca", backgroundColor: "#fef2f2" },
   cancelBtnText: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
-  confirmBtn: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
-  confirmBtnText: { fontSize: 13, fontWeight: "700", color: Colors.greenMain },
 
-  qrButtonsRow: {
-    flexDirection: "row", gap: 8,
-    marginHorizontal: 16, marginBottom: 8,
+  scanInstruction: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    marginHorizontal: Spacing.md, marginBottom: 8, marginTop: 4,
+    backgroundColor: "#D1FAE5", borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8,
   },
-  qrButtonsRowRTL: { flexDirection: "row-reverse" },
-  qrBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: Colors.orangeLight, borderRadius: 10,
-    paddingVertical: 9,
-  },
-  qrScanBtn: { backgroundColor: "#ede9fe" },
-  qrBtnText: { fontSize: 13, fontWeight: "700", color: Colors.primaryOrange },
+  scanInstructionRTL: { flexDirection: "row-reverse" },
+  scanInstructionText: { flex: 1, fontSize: 12, color: "#166534", lineHeight: 17 },
 
-  qrOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
-  qrSheet: {
-    backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl,
-    width: "86%", alignItems: "center", gap: Spacing.md,
+  scanBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.greenMain, borderRadius: 12,
+    paddingVertical: 11, marginHorizontal: Spacing.md, marginBottom: 8,
   },
-  qrTitle:    { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
-  qrSubtitle: { fontSize: 13, color: Colors.grayMedium, maxWidth: 220 },
-  qrImage:    { width: 220, height: 220, borderRadius: 12 },
-  qrHint:     { fontSize: 13, color: Colors.grayMedium, textAlign: "center", lineHeight: 19 },
-  qrCloseBtn: {
-    backgroundColor: Colors.primaryOrange, borderRadius: 14,
-    paddingHorizontal: 40, paddingVertical: 13, marginTop: 4,
-  },
-  qrCloseBtnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
+  scanBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyIcon: {

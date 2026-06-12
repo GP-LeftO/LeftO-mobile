@@ -16,7 +16,6 @@ import React, { useCallback, useState, useEffect } from "react";
 import {
   StyleSheet, Text, View, ScrollView,
   TouchableOpacity, Platform, FlatList, RefreshControl,
-  Alert, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -30,12 +29,7 @@ import LeftOLogo from "../../components/shared/LeftOLogo";
 import NearMeEntryButton from "../../components/shared/NearMeEntryButton";
 import type { Listing, StoreDetailsParams } from "../../types";
 import type { NearMeCoords } from "../../types/nearMe";
-import {
-  fetchKaramSellers, sponsorKaramMeal,
-  fetchMonthlyWinner, fetchRecommendedListings,
-} from "../../services/shared/community.service";
 import { useAppConfig } from "../../context/AppConfigContext";
-import type { KaramSeller, MonthlyWinner } from "../../services/shared/community.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,13 +54,7 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
   const { surpriseBags, parcels, popularToday, loading, refreshing, error, onRefresh } = useListings();
   const stats = useHomeStats();
 
-  // Community / Karam state
   const { isRamadanSeason, isIftarWindow, maghribTime } = useAppConfig();
-  const [karamSellers,    setKaramSellers]    = useState<KaramSeller[]>([]);
-  const [communityLoading, setCommunityLoading] = useState(true);
-  const [sponsoringId,    setSponsoringId]    = useState<string | null>(null);
-  const [monthlyWinner,   setMonthlyWinner]   = useState<MonthlyWinner | null>(null);
-  const [rescueListings,  setRescueListings]  = useState<Listing[]>([]);
   const [maghribCountdown, setMaghribCountdown] = useState<string | null>(null);
 
   // Update Maghrib countdown every minute
@@ -83,42 +71,6 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
     const id = setInterval(calc, 60_000);
     return () => clearInterval(id);
   }, [maghribTime]);
-
-  const loadCommunity = useCallback(async () => {
-    setCommunityLoading(true);
-    try {
-      const [karam, winner, rescue] = await Promise.allSettled([
-        fetchKaramSellers(),
-        fetchMonthlyWinner(),
-        fetchRecommendedListings(),
-      ]);
-      if (karam.status  === "fulfilled") setKaramSellers(karam.value);
-      if (winner.status === "fulfilled") setMonthlyWinner(winner.value);
-      if (rescue.status === "fulfilled") {
-        setRescueListings(rescue.value.filter((l) => l.rescueBadge != null).slice(0, 6));
-      }
-    } finally {
-      setCommunityLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadCommunity(); }, [loadCommunity]);
-
-  const handleSponsorKaram = async (seller: KaramSeller) => {
-    setSponsoringId(seller.sellerId);
-    try {
-      await sponsorKaramMeal(seller.sellerId);
-      Alert.alert(
-        rtl ? "شكراً لك! 💚" : "Thank you! 💚",
-        rtl ? "لقد مولّت وجبة لشخص محتاج." : "You just sponsored a meal for someone in need."
-      );
-      await loadCommunity();
-    } catch {
-      Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر تمويل الوجبة." : "Could not sponsor. Please try again.");
-    } finally {
-      setSponsoringId(null);
-    }
-  };
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -211,14 +163,6 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
           <NearMeEntryButton onPress={onOpenNearMe} />
         )}
 
-        {/* Monthly winner banner */}
-        {monthlyWinner && (
-          <WinnerBanner winner={monthlyWinner} rtl={rtl} onPress={() => {
-            // Navigate to seller store — pass through onListingPress with sellerId
-            // For now show an alert; full deep-link requires sellerId → listing lookup
-          }} />
-        )}
-
         {/* Impact strip */}
         <View style={styles.impactStrip}>
           <ImpactStat
@@ -251,23 +195,6 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
           </View>
         ) : (
           <>
-            {/* ── Section 0: Rescue Now ── (listings with urgency badges) */}
-            {rescueListings.length > 0 && (
-              <>
-                <SectionHeader title={rtl ? "⚡ أنقذها الآن" : "⚡ Rescue Now"} rtl={rtl} seeAllLabel={tr.seeAll} />
-                <FlatList
-                  data={rescueListings}
-                  renderItem={renderCard}
-                  keyExtractor={(item) => `rescue-${item.id}`}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalList}
-                  ItemSeparatorComponent={() => <View style={styles.cardGap} />}
-                  scrollEventThrottle={16}
-                />
-              </>
-            )}
-
             {/* ── Section 1: Surprise Bags ── */}
             <SectionHeader
               title={tr.surpriseBags}
@@ -353,31 +280,6 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
               </View>
             )}
 
-            {/* ── Section 4: Karam Program (وجبة معلقة) ── */}
-            {(communityLoading || karamSellers.length > 0) && (
-              <>
-                <SectionHeader title={rtl ? "برنامج كرم 💚" : "Karam Program 💚"} rtl={rtl} seeAllLabel={tr.seeAll} />
-                {communityLoading ? renderSkeleton() : (
-                  <FlatList
-                    data={karamSellers}
-                    keyExtractor={(item) => `karam-${item.sellerId}`}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.horizontalList}
-                    ItemSeparatorComponent={() => <View style={styles.cardGap} />}
-                    scrollEventThrottle={16}
-                    renderItem={({ item }) => (
-                      <KaramCard
-                        seller={item}
-                        rtl={rtl}
-                        onSponsor={handleSponsorKaram}
-                        sponsoringId={sponsoringId}
-                      />
-                    )}
-                  />
-                )}
-              </>
-            )}
           </>
         )}
       </ScrollView>
@@ -387,28 +289,6 @@ export default function HomeScreen({ onLogout, onListingPress, onSearchPress, on
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-function formatMonth(ym: string): string {
-  const [year, m] = ym.split("-");
-  return `${ARABIC_MONTHS[parseInt(m, 10) - 1]} ${year}`;
-}
-
-function WinnerBanner({ winner, rtl, onPress }: { winner: MonthlyWinner; rtl: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.winnerBanner} activeOpacity={0.85} onPress={onPress}>
-      <View style={[{ flex: 1 }]}>
-        <Text style={[styles.winnerBannerTitle, rtl && { textAlign: "right" }]}>
-          🏆 {rtl ? `بائع ${formatMonth(winner.month)}` : `Seller of ${formatMonth(winner.month)}`}
-        </Text>
-        <Text style={[styles.winnerBannerName, rtl && { textAlign: "right" }]} numberOfLines={1}>
-          {winner.name}  ⭐ {winner.rating.toFixed(1)}
-        </Text>
-      </View>
-      <Feather name="chevron-left" size={18} color="#fff" style={rtl ? { transform: [{ rotate: "180deg" }] } : undefined} />
-    </TouchableOpacity>
-  );
-}
 
 function ImpactStat({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
@@ -437,41 +317,6 @@ function EmptySection({ label }: { label: string }) {
   return (
     <View style={styles.emptySection}>
       <Text style={styles.emptyLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function KaramCard({
-  seller, rtl, onSponsor, sponsoringId,
-}: { seller: KaramSeller; rtl: boolean; onSponsor: (s: KaramSeller) => void; sponsoringId: string | null }) {
-  const isSponsoring = sponsoringId === seller.sellerId;
-  const available = seller.today?.available ?? 0;
-  return (
-    <View style={styles.communityCard}>
-      <View style={styles.communityCardTop}>
-        <View style={styles.communityFreeBadge}>
-          <Text style={styles.communityFreeBadgeText}>{rtl ? "كرم" : "Karam"}</Text>
-        </View>
-        <Text style={[styles.communityCardTitle, rtl && styles.rtl]} numberOfLines={2}>
-          {seller.businessName}
-        </Text>
-        <Text style={[styles.communityCardSub, rtl && styles.rtl]}>
-          {rtl ? `متاح: ${available} وجبة` : `${available} meal${available !== 1 ? "s" : ""} available`}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={[styles.communityClaimBtn, (isSponsoring || available === 0) && { opacity: 0.5 }]}
-        onPress={() => onSponsor(seller)}
-        disabled={isSponsoring || available === 0}
-        activeOpacity={0.85}
-      >
-        {isSponsoring
-          ? <ActivityIndicator size="small" color={Colors.white} />
-          : <Text style={styles.communityClaimBtnText}>
-              {available === 0 ? (rtl ? "نفدت" : "None left") : (rtl ? "مول وجبة 💚" : "Sponsor 💚")}
-            </Text>
-        }
-      </TouchableOpacity>
     </View>
   );
 }
@@ -580,52 +425,6 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
-  // Community card
-  communityCard: {
-    width: 160, backgroundColor: Colors.white, borderRadius: 18,
-    padding: Spacing.md, gap: 10,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
-  communityCardTop: { gap: 4 },
-  communityFreeBadge: {
-    backgroundColor: Colors.greenLight, borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start",
-  },
-  communityFreeBadgeText: { fontSize: 10, fontWeight: "800", color: Colors.greenMain },
-  communityCardTitle: { fontSize: 13, fontWeight: "700", color: Colors.grayDark, lineHeight: 17 },
-  communityCardSub: { fontSize: 11, color: Colors.grayMedium },
-  communityClaimBtn: {
-    backgroundColor: Colors.greenMain, borderRadius: 10,
-    paddingVertical: 8, alignItems: "center",
-  },
-  communityClaimBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
-
-  // Suspended meals header (with Share button)
-  suspendedHeader: {
-    flexDirection: "row", alignItems: "center",
-    justifyContent: "space-between",
-  },
-  postMealBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: Colors.greenMain, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 7,
-  },
-  postMealBtnText: { fontSize: 12, fontWeight: "700", color: Colors.white },
-
-  // Monthly winner banner
-  winnerBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#D97706",
-    borderRadius: 14,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    marginBottom: 4,
-  },
-  winnerBannerTitle: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
-  winnerBannerName:  { fontSize: 15, fontWeight: "800", color: "#fff" },
-
   // Ramadan banner
   ramadanBanner: {
     backgroundColor: "#7c3aed", borderRadius: 14,
@@ -635,31 +434,4 @@ const styles = StyleSheet.create({
   ramadanBannerText: { fontSize: 14, fontWeight: "700", color: Colors.white },
   ramadanCountdown: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  modalSheet: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: Spacing.xl, gap: Spacing.md,
-    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12, shadowRadius: 16, elevation: 20,
-  },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
-  modalField: { gap: 6 },
-  modalFieldLabel: { fontSize: 13, fontWeight: "700", color: Colors.grayDark },
-  modalInput: {
-    backgroundColor: Colors.white, borderRadius: 12,
-    borderWidth: 1.5, borderColor: Colors.grayLight,
-    paddingHorizontal: Spacing.md, height: 46,
-    fontSize: 14, color: Colors.grayDark,
-  },
-  rtlInput: { textAlign: "right" },
-  modalRow: { flexDirection: "row", gap: 10 },
-  postSubmitBtn: {
-    backgroundColor: Colors.greenMain, borderRadius: 14,
-    paddingVertical: 14, alignItems: "center", justifyContent: "center",
-    flexDirection: "row", gap: 8,
-  },
-  postSubmitBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 });
