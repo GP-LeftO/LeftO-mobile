@@ -1,4 +1,4 @@
-// Web push via Firebase Cloud Messaging (Web). Mirrors the native service API.
+// Web push via Firebase Cloud Messaging (Web). Mirrors the native + new named exports.
 // Registers the FCM service worker, obtains a web FCM token, and posts it to the
 // SAME backend endpoint the mobile app uses (PUT /api/auth/fcm-token).
 import { initializeApp, getApps } from "firebase/app";
@@ -43,4 +43,18 @@ export async function clearPushToken(): Promise<void> {
   } catch {
     // Non-critical
   }
+}
+
+// ── Stubs for exports used by App.tsx on native (no-ops on web) ──────────────
+
+export const isExpoGo = false;
+
+export async function setupNotificationHandler(): Promise<void> {}
+
+export async function getFcmToken(): Promise<string | null> {
+  return registerForPushNotifications();
+}
+
+export function addNotificationResponseListener(_handler: (response: unknown) => void): null {
+  return null;
 }
