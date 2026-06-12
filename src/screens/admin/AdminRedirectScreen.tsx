@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { isRTL } from '../../i18n';
 import { Colors } from '../../theme';
 
-const ADMIN_URL = 'https://lefto-admin.vercel.app';
+const ADMIN_URL = 'https://left-o-mobile-q1zi.vercel.app/';
 
 interface Props {
   onLogout: () => void;
