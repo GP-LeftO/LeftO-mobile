@@ -52,7 +52,7 @@
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.lefto.com",
-          "enableGooglePay": true
+          "enableGooglePay": false
         }
       ],
       [
