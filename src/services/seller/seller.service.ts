@@ -118,6 +118,7 @@ export interface SellerOrder {
   quantity?: number;
   createdAt?: string;
   expiresAt?: string;
+  qrCodeUrl?: string;
   listing?: { id?: string; title?: string; pickupStart?: string; pickupEnd?: string };
   buyer?: { id?: string; name?: string; phone?: string };
 }
