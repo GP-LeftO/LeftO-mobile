@@ -854,7 +854,14 @@ export default function SellerDashboardScreen({
                 ) : (
                   <>
                     {displayOrders.map((order) => (
-                      <SellerOrderCard key={order.id} order={order} rtl={rtl} />
+                      <SellerOrderCard
+                        key={order.id}
+                        order={order}
+                        rtl={rtl}
+                        allOrders={orders}
+                        onRefreshOrders={async () => { await fetchOrders(true); }}
+                        onShowToast={showToast}
+                      />
                     ))}
                     {ordersHasMore && ordersTab === 'active' && (
                       <TouchableOpacity
@@ -1293,7 +1300,15 @@ export default function SellerDashboardScreen({
 
 // ─── SellerOrderCard ──────────────────────────────────────────────────────────
 
-function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
+function SellerOrderCard({
+  order, rtl, allOrders, onRefreshOrders, onShowToast,
+}: {
+  order: SellerOrder;
+  rtl: boolean;
+  allOrders?: SellerOrder[];
+  onRefreshOrders?: () => Promise<void>;
+  onShowToast?: (msg: string) => void;
+}) {
   const cfg        = ORDER_STATUS_CONFIG[order.status] ?? ORDER_STATUS_CONFIG.CANCELLED;
   const [countdown,  setCountdown]  = useState<string | null>(null);
   const [qrVisible,  setQrVisible]  = useState(false);
@@ -1327,9 +1342,34 @@ function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
     return () => clearInterval(id);
   }, [isReserved, order.expiresAt, order.pickupEnd]);
 
+  // Poll every 10 s while QR modal is open; close + toast when order completes
+  useEffect(() => {
+    if (!qrVisible || !onRefreshOrders) return;
+    const interval = setInterval(async () => {
+      try {
+        await onRefreshOrders();
+        const stillReserved = allOrders?.find(
+          o => o.id === order.id && o.status === 'RESERVED'
+        );
+        if (!stillReserved) {
+          setQrVisible(false);
+          onShowToast?.('تم تأكيد الاستلام بنجاح ✓');
+        }
+      } catch {
+        // non-critical
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrVisible, order.id]);
+
   return (
     <>
-      <View style={ocStyles.card}>
+      <TouchableOpacity
+        style={ocStyles.card}
+        onPress={() => isReserved && setQrVisible(true)}
+        activeOpacity={isReserved ? 0.7 : 1}
+      >
         {/* Row 1: title + status badge */}
         <View style={[ocStyles.row1, { flexDirection: rtl ? "row-reverse" : "row" }]}>
           <Text style={[ocStyles.title, { textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
@@ -1371,18 +1411,14 @@ function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
           </Text>
         )}
 
-        {/* Show QR button (RESERVED + has qrCodeUrl) */}
-        {isReserved && qrCodeUrl && (
-          <TouchableOpacity
-            style={ocStyles.showQrBtn}
-            onPress={() => setQrVisible(true)}
-            activeOpacity={0.85}
-          >
+        {/* Tap hint + QR button (RESERVED only) */}
+        {isReserved && (
+          <View style={[ocStyles.showQrBtn, { marginTop: 10 }]}>
             <Feather name="maximize" size={14} color={Colors.white} />
-            <Text style={ocStyles.showQrBtnText}>{rtl ? "عرض رمز QR" : "Show QR Code"}</Text>
-          </TouchableOpacity>
+            <Text style={ocStyles.showQrBtnText}>{rtl ? "اضغط لعرض QR للمشتري" : "Tap to Show QR"}</Text>
+          </View>
         )}
-      </View>
+      </TouchableOpacity>
 
       {/* QR Code Modal */}
       <Modal
@@ -1395,14 +1431,27 @@ function SellerOrderCard({ order, rtl }: { order: SellerOrder; rtl: boolean }) {
           <View style={ocStyles.qrSheet}>
             <Text style={ocStyles.qrTitle}>{rtl ? "رمز QR للطلب" : "Order QR Code"}</Text>
             <Text style={ocStyles.qrSub} numberOfLines={1}>{order.buyer?.name ?? ""}</Text>
-            <Image
-              source={{ uri: qrCodeUrl! }}
-              style={ocStyles.qrImage}
-              resizeMode="contain"
-            />
-            <Text style={[ocStyles.qrHint, rtl && { textAlign: "right" as const }]}>
-              {rtl ? "اعرض هذا الرمز للمشتري للتحقق من طلبه" : "Show this to the buyer to verify their order"}
-            </Text>
+
+            {qrCodeUrl ? (
+              <>
+                <Image
+                  source={{ uri: qrCodeUrl }}
+                  style={ocStyles.qrImage}
+                  resizeMode="contain"
+                />
+                <Text style={[ocStyles.qrHint, rtl && { textAlign: "right" as const }]}>
+                  {rtl ? "اعرض هذا الرمز للمشتري للتحقق من طلبه" : "Show this to the buyer to verify their order"}
+                </Text>
+              </>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
+                <Feather name="alert-circle" size={48} color="#EF4444" />
+                <Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 14 }}>
+                  {rtl ? "رمز QR غير متاح\nأعد نشر الإدراج لتوليد رمز جديد" : "QR code unavailable\nRe-publish listing to generate a new one"}
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity
               style={ocStyles.qrCloseBtn}
               onPress={() => setQrVisible(false)}
