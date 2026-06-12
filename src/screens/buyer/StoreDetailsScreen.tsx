@@ -575,24 +575,14 @@ export default function StoreDetailsScreen({
             <Text style={styles.soldOutCtaText}>{tr.soldOut}</Text>
           </View>
         ) : (
-          <View style={styles.ctaStack}>
-            <TouchableOpacity
-              style={styles.reserveBtn}
-              activeOpacity={0.85}
-              onPress={() => onCheckout(buildCheckoutParams())}
-            >
-              <Feather name="check-circle" size={19} color={Colors.white} />
-              <Text style={styles.reserveBtnText}>{tr.reserve}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.donateBtn}
-              activeOpacity={0.85}
-              onPress={() => onCheckout(buildCheckoutParams())}
-            >
-              <Feather name="gift" size={17} color={Colors.greenMain} />
-              <Text style={styles.donateBtnText}>{tr.donate}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.reserveBtn}
+            activeOpacity={0.85}
+            onPress={() => onCheckout(buildCheckoutParams())}
+          >
+            <Feather name="check-circle" size={19} color={Colors.white} />
+            <Text style={styles.reserveBtnText}>{tr.reserve}</Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>
