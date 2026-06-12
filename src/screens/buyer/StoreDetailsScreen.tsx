@@ -23,6 +23,8 @@ import { t, isRTL } from "../../i18n";
 import { useStoreDetails } from "../../hooks/buyer/useStoreDetails";
 import { useSellerReviews } from "../../hooks/buyer/useSellerReviews";
 import { useKaram } from "../../hooks/buyer/useKaram";
+import { requestKaramQr } from "../../services/buyer/karam.service";
+import type { KaramQrResult } from "../../services/buyer/karam.service";
 import ReviewCard from "../../components/buyer/profile/ReviewCard";
 import { getPublicPerformance } from "../../services/seller/listingAI.service";
 import { reportListing, type ReportReason } from "../../services/buyer/report.service";
@@ -130,6 +132,8 @@ export default function StoreDetailsScreen({
 
   const [heroImageError, setHeroImageError] = useState(false);
   const [performance,    setPerformance]    = useState<Omit<PerformanceResult, 'stats'> | null>(null);
+  const [karamQr,        setKaramQr]        = useState<KaramQrResult | null>(null);
+  const [karamQrLoading, setKaramQrLoading] = useState(false);
   const [reportOpen,     setReportOpen]     = useState(false);
   const [reportReason,   setReportReason]   = useState<ReportReason | null>(null);
   const [reportDetails,  setReportDetails]  = useState("");
@@ -153,6 +157,21 @@ export default function StoreDetailsScreen({
     if (karamRefreshKey && sellerId) loadBalance(sellerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [karamRefreshKey]);
+
+  const handleKaramClaim = async () => {
+    setKaramQrLoading(true);
+    try {
+      const result = await requestKaramQr(sellerId);
+      setKaramQr(result);
+    } catch {
+      Alert.alert(
+        rtl ? 'خطأ' : 'Error',
+        rtl ? 'لا توجد وجبات متاحة أو حدث خطأ' : 'No meals available or an error occurred'
+      );
+    } finally {
+      setKaramQrLoading(false);
+    }
+  };
 
   // ── Error ────────────────────────────────────────────────────────────────────
   if (error) {
@@ -409,6 +428,8 @@ export default function StoreDetailsScreen({
                 listingId,
                 sellerName: seller?.businessName ?? listing.seller?.businessName ?? '',
               })}
+              onClaim={handleKaramClaim}
+              claimLoading={karamQrLoading}
               rtl={rtl}
             />
           )}
@@ -506,6 +527,35 @@ export default function StoreDetailsScreen({
 
         </View>
       </ScrollView>
+
+      {/* ── Karam QR modal ── */}
+      <Modal visible={!!karamQr} transparent animationType="fade" onRequestClose={() => setKaramQr(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: 24, alignItems: 'center', gap: 16, width: 300, marginHorizontal: 32 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.grayDark, textAlign: 'center' }}>
+              {rtl ? 'أرِ البائع هذا الرمز' : 'Show this code to the seller'}
+            </Text>
+            {karamQr && (
+              <Image
+                source={{ uri: karamQr.qrCodeUrl }}
+                style={{ width: 220, height: 220 }}
+                resizeMode="contain"
+              />
+            )}
+            <Text style={{ fontSize: 12, color: Colors.grayMedium, textAlign: 'center', lineHeight: 18 }}>
+              {rtl ? 'صالح لمدة ساعتين · مخصص لهذا المتجر فقط' : 'Valid for 2 hours · For this store only'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setKaramQr(null)}
+              style={{ paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.grayMedium }}>
+                {rtl ? 'إغلاق' : 'Close'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Report modal ── */}
       <Modal visible={reportOpen} transparent animationType="slide" onRequestClose={() => setReportOpen(false)}>
@@ -654,13 +704,15 @@ function PublicPerformanceCard({ perf, rtl }: { perf: Omit<PerformanceResult, 's
 // ─── Karam Card ───────────────────────────────────────────────────────────────
 
 interface KaramCardProps {
-  balance:   { sponsored: number; claimed: number; available: number } | null;
-  loading:   boolean;
-  onSponsor: () => void;
-  rtl:       boolean;
+  balance:      { sponsored: number; claimed: number; available: number } | null;
+  loading:      boolean;
+  onSponsor:    () => void;
+  onClaim?:     () => void;
+  claimLoading?: boolean;
+  rtl:          boolean;
 }
 
-function KaramCard({ balance, loading, onSponsor, rtl }: KaramCardProps) {
+function KaramCard({ balance, loading, onSponsor, onClaim, claimLoading, rtl }: KaramCardProps) {
   return (
     <View style={karamStyles.card}>
       <View style={[karamStyles.headerRow, rtl && { flexDirection: "row-reverse" }]}>
@@ -711,6 +763,22 @@ function KaramCard({ balance, loading, onSponsor, rtl }: KaramCardProps) {
           {rtl ? "تبرع بوجبة 💚" : "Sponsor a meal 💚"}
         </Text>
       </TouchableOpacity>
+
+      {balance && balance.available > 0 && onClaim && (
+        <TouchableOpacity
+          style={[karamStyles.btn, karamStyles.btnClaim, claimLoading && { opacity: 0.6 }]}
+          onPress={onClaim}
+          disabled={claimLoading}
+          activeOpacity={0.85}
+        >
+          {claimLoading
+            ? <ActivityIndicator size="small" color={Colors.greenMain} />
+            : <Text style={[karamStyles.btnText, { color: Colors.greenMain }]}>
+                {rtl ? "احصل على وجبة مجانية 🤲" : "Claim free meal 🤲"}
+              </Text>
+          }
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -744,6 +812,11 @@ const karamStyles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: "center",
+  },
+  btnClaim: {
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.greenMain,
   },
   btnText: { fontSize: 15, fontWeight: "800", color: Colors.white },
 });

@@ -16,6 +16,8 @@ import {
   deleteListing, getMySellerDonations,
 } from "../../services/seller/seller.service";
 import { useKaram } from "../../hooks/seller/useKaram";
+import { scanKaramQr } from "../../services/seller/karam.service";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
 import type { SellerListing, SellerDonation } from "../../services/seller/seller.service";
 import { getMyPerformance } from "../../services/seller/listingAI.service";
@@ -231,6 +233,37 @@ export default function SellerDashboardScreen({
     initialParticipates: profile?.participatesInKaram ?? false,
     onToast: showToast,
   });
+
+  // ── Karam QR scanner state ────────────────────────────────────────────────
+  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const [karamScanVisible,    setKaramScanVisible]    = useState(false);
+  const [karamScanning,       setKaramScanning]       = useState(true);
+  const [karamScanSubmitting, setKaramScanSubmitting] = useState(false);
+  const [karamScanError,      setKaramScanError]      = useState<string | null>(null);
+
+  const handleKaramQrScanned = useCallback(async ({ data }: { data: string }) => {
+    if (!karamScanning || karamScanSubmitting) return;
+    setKaramScanning(false);
+    setKaramScanSubmitting(true);
+    setKaramScanError(null);
+    try {
+      const updated = await scanKaramQr(data);
+      karam.loadBalance(profile?.id ?? '');
+      // optimistic balance update from response
+      void updated;
+      setKaramScanVisible(false);
+      showToast('تم تأكيد الوجبة المجانية ✓');
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } }).response?.status;
+      setKaramScanError(
+        status === 403
+          ? 'هذا الرمز مخصص لمتجر آخر'
+          : 'رمز غير صالح أو منتهي الصلاحية'
+      );
+    } finally {
+      setKaramScanSubmitting(false);
+    }
+  }, [karamScanning, karamScanSubmitting, profile?.id, karam, showToast]);
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
@@ -733,21 +766,21 @@ export default function SellerDashboardScreen({
                       <TouchableOpacity
                         style={[
                           styles.karamBtn, styles.karamBtnClaim,
-                          (karam.balance.available === 0 || karam.claimLoading) && { opacity: 0.4 },
+                          karam.balance.available === 0 && { opacity: 0.4 },
                         ]}
-                        onPress={karam.claim}
-                        disabled={karam.balance.available === 0 || karam.claimLoading}
+                        onPress={async () => {
+                          if (!camPermission?.granted) await requestCamPermission();
+                          setKaramScanning(true);
+                          setKaramScanError(null);
+                          setKaramScanVisible(true);
+                        }}
+                        disabled={karam.balance.available === 0}
                         activeOpacity={0.85}
                       >
-                        {karam.claimLoading
-                          ? <ActivityIndicator size="small" color={Colors.greenMain} />
-                          : (
-                            <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
-                              <Feather name="check-circle" size={14} color={Colors.greenMain} />
-                              <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>وجبة مُستلمة</Text>
-                            </View>
-                          )
-                        }
+                        <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                          <Feather name="camera" size={14} color={Colors.greenMain} />
+                          <Text style={[styles.karamBtnText, { color: Colors.greenMain }]}>مسح QR كرم</Text>
+                        </View>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1294,6 +1327,63 @@ export default function SellerDashboardScreen({
           )}
         </>
       )}
+
+      {/* ── Karam QR scanner modal (seller scans buyer's phone) ── */}
+      <Modal visible={karamScanVisible} animationType="slide" transparent={false} onRequestClose={() => setKaramScanVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#0D0D0D' }}>
+          <View style={{ flexDirection: rtl ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.xl, paddingTop: 56, paddingBottom: Spacing.md }}>
+            <TouchableOpacity onPress={() => setKaramScanVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name={rtl ? 'arrow-right' : 'arrow-left'} size={20} color={Colors.white} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.white }}>مسح QR كرم 🤲</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View style={{ marginHorizontal: Spacing.xl, marginBottom: Spacing.sm, backgroundColor: '#D1FAE5', borderRadius: 12, paddingHorizontal: Spacing.md, paddingVertical: 10, flexDirection: rtl ? 'row-reverse' : 'row', gap: 8 }}>
+            <Feather name="info" size={14} color="#166534" />
+            <Text style={{ flex: 1, fontSize: 13, color: '#166534', lineHeight: 18 }}>اطلب من المستفيد إظهار رمز QR كرم على هاتفه</Text>
+          </View>
+
+          <View style={{ flex: 1, marginHorizontal: Spacing.xl, marginBottom: Spacing.xl, borderRadius: 20, overflow: 'hidden', backgroundColor: '#1C1C1C' }}>
+            {karamScanning && !karamScanSubmitting && camPermission?.granted && (
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                onBarcodeScanned={handleKaramQrScanned}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              />
+            )}
+            {karamScanSubmitting && (
+              <View style={{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)', gap: 12 }}>
+                <ActivityIndicator size="large" color={Colors.white} />
+                <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '700' }}>جارٍ التحقق…</Text>
+              </View>
+            )}
+            {!camPermission?.granted && (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: Spacing.xl }}>
+                <Feather name="camera-off" size={48} color={Colors.grayMedium} />
+                <Text style={{ fontSize: 15, color: Colors.white, textAlign: 'center' }}>يتطلب إذن الكاميرا</Text>
+                <TouchableOpacity onPress={requestCamPermission} style={{ backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 28 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.white }}>السماح بالوصول</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {karamScanError && (
+            <View style={{ marginHorizontal: Spacing.xl, marginBottom: Spacing.xl, backgroundColor: '#fef2f2', borderRadius: 16, padding: Spacing.lg, alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: '#fecaca' }}>
+              <Feather name="x-circle" size={20} color="#ef4444" />
+              <Text style={{ fontSize: 14, color: '#ef4444', textAlign: 'center', fontWeight: '600' }}>{karamScanError}</Text>
+              <TouchableOpacity
+                onPress={() => { setKaramScanError(null); setKaramScanning(true); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryOrange, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}
+              >
+                <Feather name="refresh-cw" size={14} color={Colors.white} />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.white }}>مسح مرة أخرى</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
 
       {/* ── QR modal (seller shows to buyer for scan) ── */}
       <Modal
