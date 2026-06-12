@@ -39,7 +39,6 @@ export interface SellerListing {
   expiryDate?: string | null;
   freshnessBadge?: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote?: string;
-  description?: string;
   photoUrl?: string;
   status?: string;
   qrCodeUrl?: string;
@@ -59,7 +58,6 @@ export interface ListingFormData {
   pickupEnd: string;
   freshnessBadge: "eat_today" | "fresh_tonight" | "good_1_2_days";
   allergenNote?: string;
-  description?: string;
   photoUrl?: string;
   expiryDate?: string;
   isPriceDecaying?: boolean;
@@ -71,10 +69,9 @@ export interface ListingFormData {
 export interface RegisterSellerParams {
   businessName: string;
   businessType: "RESTAURANT" | "MARKET" | "BAKERY" | "GROCERY";
-  registrationNumber?: string;
+  registrationNumber: string;
   location: { latitude: number; longitude: number; address?: string };
   description?: string;
-  registrationNumber: string;
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };
   documentUrls?: string[];
 }
@@ -104,7 +101,7 @@ export const createListing = (data: ListingFormData): Promise<SellerListing> =>
   api.post("/api/listings", data).then((r) => r.data.data);
 
 export const updateListing = (id: string, data: ListingFormData): Promise<SellerListing> =>
-  api.put(`/api/listings/${id}`, data).then((r) => r.data.data);
+  api.patch(`/api/listings/${id}`, data).then((r) => r.data.data);
 
 export const deleteListing = (id: string): Promise<void> =>
   api.delete(`/api/listings/${id}`).then(() => undefined);
