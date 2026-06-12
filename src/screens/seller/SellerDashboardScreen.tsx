@@ -1946,10 +1946,10 @@ function SellerLocationDisplay({
     const url =
       Platform.OS === "ios"
         ? `maps:0,0?q=${location.latitude},${location.longitude}`
-        : `geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}`;
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://maps.google.com/?q=${location.latitude},${location.longitude}`);
-    });
+        : Platform.OS === "android"
+          ? `geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}`
+          : `https://maps.google.com/?q=${location.latitude},${location.longitude}`;
+    Linking.openURL(url).catch(() => {});
   };
 
   if (!location) {

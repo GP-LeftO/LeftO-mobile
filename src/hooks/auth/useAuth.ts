@@ -168,6 +168,9 @@ export function useAuth() {
     charityStatus:   ctx.charityStatus,
     hasSeller:       ctx.hasSeller,
 
+    // ── Profile
+    updateUser:      ctx.updateUser,
+
     // ── Role switching
     switchRoleToken: ctx.switchRoleToken,
     setHasSeller:    ctx.setHasSeller,

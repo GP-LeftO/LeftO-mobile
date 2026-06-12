@@ -198,7 +198,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
     });
   };
 
-  const { user, logout, sellerStatus } = useAuth();
+  const { user, logout, sellerStatus, updateUser } = useAuth();
   const {
     profile,
     completedOrders,
@@ -253,6 +253,13 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
         name:  editName.trim()  || undefined,
         email: editEmail.trim() || undefined,
       });
+      if (user) {
+        updateUser({
+          ...user,
+          ...(editName.trim()  && { name:  editName.trim()  }),
+          ...(editEmail.trim() && { email: editEmail.trim() }),
+        });
+      }
       setPersonalMsg(rtl ? "تم الحفظ!" : "Saved!");
       await onRefresh();
       setTimeout(() => { setPersonalMsg(""); setActiveSheet(null); }, 1500);
@@ -551,12 +558,16 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
               if (item.id === "pickup")        { setActiveSheet("pickup"); return; }
               if (item.id === "terms")         { setActiveSheet("terms"); return; }
               if (item.id === "rate") {
-                const url = Platform.OS === "android"
-                  ? "market://details?id=com.lefto.app"
-                  : "https://apps.apple.com/app/lefto/id000000000";
-                Linking.canOpenURL(url)
-                  .then((can) => Linking.openURL(can ? url : "https://lefto.app"))
-                  .catch(() => {});
+                if (Platform.OS === "web") {
+                  Linking.openURL("https://lefto-mobil.vercel.app").catch(() => {});
+                } else {
+                  const url = Platform.OS === "android"
+                    ? "market://details?id=com.lefto.app"
+                    : "https://apps.apple.com/app/lefto/id000000000";
+                  Linking.canOpenURL(url)
+                    .then((can) => Linking.openURL(can ? url : "https://lefto-mobil.vercel.app"))
+                    .catch(() => {});
+                }
               }
             };
             return (

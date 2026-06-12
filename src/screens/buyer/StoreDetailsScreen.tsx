@@ -245,7 +245,9 @@ export default function StoreDetailsScreen({
     if (!hasCoords) return;
     const url = Platform.OS === "ios"
       ? `maps:0,0?q=${sellerLat},${sellerLng}`
-      : `geo:${sellerLat},${sellerLng}?q=${sellerLat},${sellerLng}`;
+      : Platform.OS === "android"
+        ? `geo:${sellerLat},${sellerLng}?q=${sellerLat},${sellerLng}`
+        : `https://maps.google.com/?q=${sellerLat},${sellerLng}`;
     Linking.openURL(url).catch(() => {});
   };
 
