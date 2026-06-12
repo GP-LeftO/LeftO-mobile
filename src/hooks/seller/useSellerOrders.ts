@@ -33,6 +33,7 @@ export function useSellerOrders() {
       const { data } = await api.get("/api/sellers/me/orders", {
         params: { page: nextPage, limit: 10 },
       });
+      if (__DEV__) console.log('[SellerOrders] raw response:', JSON.stringify(data).slice(0, 800));
       const payload    = data.data ?? data;
       const items: SellerOrder[] = payload?.orders ?? payload?.data ?? (Array.isArray(payload) ? payload : []);
       const pagination = payload?.pagination;
