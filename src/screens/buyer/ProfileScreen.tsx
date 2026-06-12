@@ -261,7 +261,6 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
         });
       }
       setPersonalMsg(rtl ? "تم الحفظ!" : "Saved!");
-      await onRefresh();
       setTimeout(() => { setPersonalMsg(""); setActiveSheet(null); }, 1500);
     } catch {
       setPersonalMsg(rtl ? "تعذّر الحفظ. يرجى المحاولة مجدداً." : "Could not save. Please try again.");
@@ -270,7 +269,7 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
     }
   };
 
-  const displayName = profile?.name ?? user?.name;
+  const displayName = user?.name ?? profile?.name;
   const initials = displayName
     ? displayName.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")
     : "?";

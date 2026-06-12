@@ -66,7 +66,15 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionLoading,     setActionLoading]     = useState<string | null>(null);
+  const [cancellationCount, setCancellationCount] = useState(0);
+
+  useEffect(() => {
+    api.get("/api/users/me").then(r => {
+      const p = r.data?.data ?? r.data;
+      setCancellationCount(p?.cancellationCount ?? 0);
+    }).catch(() => {});
+  }, []);
 
   // Review state
   const [reviewOrder,   setReviewOrder]   = useState<Order | null>(null);
@@ -116,41 +124,38 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   const handleCancel = async (orderId: string) => {
-    const confirmMsg = rtl
-      ? "هل أنت متأكد أنك تريد إلغاء هذا الطلب؟"
-      : "Are you sure you want to cancel this order?";
-    const confirmLabel = rtl ? "تأكيد الإلغاء" : "Yes, Cancel";
-    const cancelLabel = rtl ? "لا" : "No";
+    const used      = cancellationCount;
+    const remaining = Math.max(0, 5 - used);
+
+    const warningLine = rtl
+      ? used >= 4
+        ? `\n\n⚠️ تحذير: هذا هو آخر إلغاء مسموح به قبل تعليق الحساب!`
+        : used >= 3
+          ? `\n\n⚠️ لديك ${used} إلغاءات — ${remaining} إلغاء متبقي فقط قبل تعليق الحساب.`
+          : ""
+      : used >= 4
+        ? `\n\n⚠️ Warning: this is your last allowed cancellation before your account is suspended!`
+        : used >= 3
+          ? `\n\n⚠️ You have ${used} cancellations — only ${remaining} left before your account is suspended.`
+          : "";
 
     Alert.alert(
       rtl ? "إلغاء الطلب" : "Cancel Order",
-      confirmMsg,
+      (rtl ? "هل أنت متأكد أنك تريد إلغاء هذا الطلب؟" : "Are you sure you want to cancel this order?") + warningLine,
       [
-        { text: cancelLabel, style: "cancel" },
+        { text: rtl ? "لا" : "No", style: "cancel" },
         {
-          text: confirmLabel,
+          text: rtl ? "تأكيد الإلغاء" : "Yes, Cancel",
           style: "destructive",
           onPress: async () => {
             setActionLoading(orderId);
             try {
               await api.patch(`/api/orders/${orderId}/cancel`);
               await fetchOrders();
-              // Fetch updated profile to read current cancellation count
-              try {
-                const profileRes = await api.get("/api/users/me");
-                const profile = profileRes.data?.data ?? profileRes.data;
-                const count: number = profile?.cancellationCount ?? 0;
-                const remaining = Math.max(0, 5 - count);
-                if (count >= 3) {
-                  Alert.alert(
-                    rtl ? "تنبيه" : "Warning",
-                    rtl
-                      ? `تم الإلغاء. لديك ${count} إلغاءات — ${remaining} إلغاء متبقي قبل تعليق الحساب.`
-                      : `Cancelled. You have ${count} cancellations — ${remaining} left before your account is suspended.`
-                  );
-                }
-              } catch {
-                // Non-critical — profile fetch failure doesn't affect the cancel
+              const profileRes = await api.get("/api/users/me").catch(() => null);
+              const updated = profileRes?.data?.data ?? profileRes?.data;
+              if (updated?.cancellationCount != null) {
+                setCancellationCount(updated.cancellationCount);
               }
             } catch {
               Alert.alert(

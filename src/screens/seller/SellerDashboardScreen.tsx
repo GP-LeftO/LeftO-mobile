@@ -1425,10 +1425,10 @@ export default function SellerDashboardScreen({
 
             {/* QR Code */}
             <View style={{ alignItems: 'center', paddingHorizontal: 16 }}>
-              {selectedOrder?.listing?.qrCodeUrl ? (
+              {selectedOrder?.qrCodeUrl ? (
                 <>
                   <Image
-                    source={{ uri: selectedOrder.listing.qrCodeUrl }}
+                    source={{ uri: selectedOrder.qrCodeUrl }}
                     style={{ width: 260, height: 260, borderRadius: 8 }}
                     resizeMode="contain"
                   />
