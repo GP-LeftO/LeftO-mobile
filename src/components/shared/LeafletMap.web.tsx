@@ -1,5 +1,5 @@
 import React from "react";
-import { WebView } from "react-native-webview";
+import { View } from "react-native";
 
 interface LeafletMapProps {
   latitude:  number;
@@ -19,15 +19,12 @@ L.marker([${latitude},${longitude}]).addTo(map);
 </script></body></html>`;
 
   return (
-    <WebView
-      style={{ flex: 1 }}
-      source={{ html, baseUrl: "https://openstreetmap.org" }}
-      javaScriptEnabled
-      originWhitelist={["*"]}
-      scrollEnabled={false}
-      allowUniversalAccessFromFileURLs
-      allowFileAccessFromFileURLs
-      mixedContentMode="always"
-    />
+    <View style={{ flex: 1 }}>
+      {React.createElement("iframe", {
+        srcDoc: html,
+        style: { width: "100%", height: "100%", border: "none", display: "block" },
+        title: "map",
+      })}
+    </View>
   );
 }

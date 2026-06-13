@@ -52,12 +52,15 @@ const LeafletBrowseMap = forwardRef<WebView, Props>(function LeafletBrowseMap(
     <WebView
       ref={ref}
       style={StyleSheet.absoluteFill}
-      source={{ html }}
+      source={{ html, baseUrl: "https://openstreetmap.org" }}
       javaScriptEnabled
       originWhitelist={["*"]}
       onMessage={handleMessage}
       onLoad={() => { setLoaded(true); prevSel.current = null; }}
       scrollEnabled={false}
+      allowUniversalAccessFromFileURLs
+      allowFileAccessFromFileURLs
+      mixedContentMode="always"
     />
   );
 });
