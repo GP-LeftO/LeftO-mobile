@@ -46,7 +46,16 @@ export const getListingById = async (id: string): Promise<ListingDetail> => {
 
 export const getSellerById = async (id: string): Promise<SellerDetail> => {
   try {
-    return await api.get(`/api/sellers/${id}`).then((r) => r.data.data ?? r.data);
+    const raw = await api.get(`/api/sellers/${id}`).then((r) => r.data.data ?? r.data);
+    // API returns latitude/longitude/address as flat fields; normalise into location object
+    if (!raw.location && (raw.latitude != null || raw.longitude != null || raw.address)) {
+      raw.location = {
+        latitude:  raw.latitude,
+        longitude: raw.longitude,
+        address:   raw.address,
+      };
+    }
+    return raw as SellerDetail;
   } catch (err) {
     if (__DEV__) return { ...MOCK_SELLER, id };
     throw err;
