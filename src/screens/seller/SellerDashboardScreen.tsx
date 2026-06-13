@@ -74,6 +74,7 @@ interface SellerDashboardScreenProps {
   onCreateListing?: () => void;
   onEditListing?: (listing: SellerListing) => void;
   onDonateFromListing?: (listing: SellerListing) => void;
+  onOpenNotifications?: () => void;
   refreshKey?: number;
   openDonationsTab?: boolean;
 }
@@ -148,6 +149,7 @@ export default function SellerDashboardScreen({
   onCreateListing,
   onEditListing,
   onDonateFromListing,
+  onOpenNotifications,
   refreshKey,
   openDonationsTab,
 }: SellerDashboardScreenProps) {
@@ -650,9 +652,16 @@ export default function SellerDashboardScreen({
             </View>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
-          <Feather name="log-out" size={18} color={Colors.grayMedium} />
-        </TouchableOpacity>
+        <View style={[styles.headerRight, rtl && { flexDirection: "row-reverse" as const }]}>
+          {!!onOpenNotifications && (
+            <TouchableOpacity style={styles.logoutBtn} onPress={onOpenNotifications} activeOpacity={0.8}>
+              <Feather name="bell" size={18} color={Colors.grayMedium} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+            <Feather name="log-out" size={18} color={Colors.grayMedium} />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       {/* ── Tab bar ── */}
@@ -2295,6 +2304,7 @@ const styles = StyleSheet.create({
   },
   verifiedText: { fontSize: 11, fontWeight: "700", color: Colors.greenMain },
   bizType: { fontSize: 12, color: Colors.grayMedium, fontWeight: "500" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   logoutBtn: {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grayLight,

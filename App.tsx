@@ -645,6 +645,7 @@ function AppContent() {
         screen(
           <SellerDashboardScreen
             onLogout={handleLogout}
+            onOpenNotifications={() => goTo("notifications")}
             refreshKey={dashboardRefreshKey}
             openDonationsTab={openDonationsTab}
             onCreateListing={() => {
