@@ -79,6 +79,10 @@ export interface CharitySummary {
   basket: BasketCategory[];
 }
 
+export function getMyCharityProfile(): Promise<{ id: string }> {
+  return api.get("/api/charities/me").then(r => r.data?.data ?? r.data);
+}
+
 export function getMyBasket(): Promise<BasketCategory[]> {
   return api.get("/api/charities/me/basket").then(r => {
     const d = r.data?.data ?? r.data;

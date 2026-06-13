@@ -46,3 +46,21 @@ export interface MonthlyWinner {
 
 export const getMonthlyWinner = () =>
   api.get<{ data: { winner: MonthlyWinner | null } }>('/api/stats/monthly-winner');
+
+export interface CharityTrustBreakdown {
+  volume:        number;
+  proofRate:     number;
+  rating:        number;
+  responseSpeed: number;
+}
+
+export interface CharityTrustScore {
+  trustScore:     number;
+  breakdown:      CharityTrustBreakdown;
+  totalDonations: number;
+  confirmedCount: number;
+  avgRating:      number;
+}
+
+export const getCharityTrustScore = (charityId: string) =>
+  api.get<{ data: CharityTrustScore }>(`/api/stats/charities/${charityId}/trust`);

@@ -30,6 +30,8 @@ import type {
 import DonationIncomingCard from "../../components/charity/DonationIncomingCard";
 import ProofUploadModal from "../../components/charity/ProofUploadModal";
 import type { CardTab } from "../../components/charity/DonationIncomingCard";
+import { useCharityTrustScore } from "../../hooks/charity/useCharityTrustScore";
+import type { CharityTrustScore } from "../../services/buyer/stats.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +95,8 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
     confirmWithProof,
     rateSeller,
   } = useCharityDonations();
+
+  const { trust, loading: trustLoading } = useCharityTrustScore();
 
   const [activeTab,    setActiveTab]    = useState<ActiveTab>("incoming");
   const [proofModalId, setProofModalId] = useState<string | null>(null);
@@ -296,6 +300,11 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.basketContent}
         >
+          {/* Trust Score Card */}
+          {!trustLoading && trust && (
+            <TrustScoreCard trust={trust} rtl={rtl} />
+          )}
+
           <Text style={[styles.basketTitle, { textAlign: rtl ? "right" : "left" }]}>
             احتياجات الطعام
           </Text>
@@ -419,6 +428,125 @@ export default function CharityDashboardScreen({ onLogout }: Props) {
     </View>
   );
 }
+
+// ─── TrustScoreCard ──────────────────────────────────────────────────────────
+
+const TRUST_DIMS: { key: keyof CharityTrustScore["breakdown"]; labelAr: string; max: number; icon: string }[] = [
+  { key: "proofRate",     labelAr: "نسبة رفع الإثبات", max: 35, icon: "📋" },
+  { key: "rating",        labelAr: "تقييم البائعين",    max: 30, icon: "⭐" },
+  { key: "volume",        labelAr: "حجم التبرعات",      max: 25, icon: "📦" },
+  { key: "responseSpeed", labelAr: "سرعة الاستجابة",   max: 10, icon: "⚡" },
+];
+
+function TrustScoreCard({ trust, rtl }: { trust: CharityTrustScore; rtl: boolean }) {
+  const score = trust.trustScore;
+  const barColor =
+    score >= 70 ? Colors.greenMain :
+    score >= 40 ? Colors.primaryOrange :
+    "#ef4444";
+  const label =
+    score >= 70 ? "موثوقة جداً ✅" :
+    score >= 40 ? "جيدة 👍" :
+    "تحتاج تحسين ⚠️";
+
+  return (
+    <View style={trustStyles.card}>
+      {/* Header */}
+      <View style={[trustStyles.headerRow, rtl && { flexDirection: "row-reverse" as const }]}>
+        <View style={trustStyles.iconWrap}>
+          <Text style={{ fontSize: 18 }}>🛡️</Text>
+        </View>
+        <View style={{ flex: 1, gap: 1 }}>
+          <Text style={[trustStyles.title, rtl && { textAlign: "right" as const }]}>
+            {rtl ? "درجة الثقة" : "Trust Score"}
+          </Text>
+          <Text style={[trustStyles.subtitle, rtl && { textAlign: "right" as const }]}>
+            {rtl ? "مبنية على أداء جمعيتك في المنصة" : "Based on your platform activity"}
+          </Text>
+        </View>
+        <View style={[trustStyles.scoreBadge, { backgroundColor: barColor + "18" }]}>
+          <Text style={[trustStyles.scoreNum, { color: barColor }]}>{score}</Text>
+          <Text style={[trustStyles.scoreMax, { color: barColor }]}>/100</Text>
+        </View>
+      </View>
+
+      {/* Overall bar */}
+      <View style={trustStyles.barBg}>
+        <View style={[trustStyles.barFill, { width: `${score}%` as any, backgroundColor: barColor }]} />
+      </View>
+      <Text style={[trustStyles.labelText, { color: barColor }, rtl && { textAlign: "right" as const }]}>
+        {label}
+      </Text>
+
+      {/* Dimension breakdown */}
+      <View style={trustStyles.dimsGrid}>
+        {TRUST_DIMS.map((dim) => {
+          const val = trust.breakdown[dim.key];
+          const pct = Math.round((val / dim.max) * 100);
+          const dimColor = pct >= 70 ? Colors.greenMain : pct >= 40 ? Colors.primaryOrange : "#ef4444";
+          return (
+            <View key={dim.key} style={trustStyles.dimCard}>
+              <Text style={trustStyles.dimIcon}>{dim.icon}</Text>
+              <Text style={[trustStyles.dimLabel, rtl && { textAlign: "right" as const }]} numberOfLines={2}>
+                {dim.labelAr}
+              </Text>
+              <View style={trustStyles.dimBarBg}>
+                <View style={[trustStyles.dimBarFill, { width: `${pct}%` as any, backgroundColor: dimColor }]} />
+              </View>
+              <Text style={[trustStyles.dimScore, { color: dimColor }]}>
+                {val}<Text style={trustStyles.dimMax}>/{dim.max}</Text>
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Footer context */}
+      <View style={[trustStyles.footer, rtl && { flexDirection: "row-reverse" as const }]}>
+        <Text style={[trustStyles.footerText, rtl && { textAlign: "right" as const }]}>
+          {rtl
+            ? `إجمالي التبرعات: ${trust.totalDonations} · المكتملة: ${trust.confirmedCount} · التقييم: ${trust.avgRating > 0 ? trust.avgRating.toFixed(1) : "—"}/5`
+            : `Total: ${trust.totalDonations} donations · Confirmed: ${trust.confirmedCount} · Rating: ${trust.avgRating > 0 ? trust.avgRating.toFixed(1) : "—"}/5`
+          }
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const trustStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white, borderRadius: 20,
+    borderWidth: 1.5, borderColor: "#e0e7ff",
+    padding: Spacing.md, gap: 10, marginBottom: 4,
+  },
+  headerRow:  { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconWrap:   { width: 42, height: 42, borderRadius: 12, backgroundColor: "#eef2ff", alignItems: "center", justifyContent: "center" },
+  title:      { fontSize: 15, fontWeight: "800", color: Colors.grayDark },
+  subtitle:   { fontSize: 12, color: Colors.grayMedium },
+  scoreBadge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center" },
+  scoreNum:   { fontSize: 22, fontWeight: "800" },
+  scoreMax:   { fontSize: 11, fontWeight: "600" },
+
+  barBg:   { height: 8, backgroundColor: Colors.grayLight, borderRadius: 4, overflow: "hidden" },
+  barFill: { height: 8, borderRadius: 4 },
+  labelText: { fontSize: 12, fontWeight: "700", marginTop: -4 },
+
+  dimsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dimCard: {
+    flex: 1, minWidth: "45%", backgroundColor: Colors.background,
+    borderRadius: 14, padding: 10, gap: 5,
+  },
+  dimIcon:    { fontSize: 18 },
+  dimLabel:   { fontSize: 11, fontWeight: "600", color: Colors.grayDark, lineHeight: 15 },
+  dimBarBg:   { height: 5, backgroundColor: Colors.grayLight, borderRadius: 3, overflow: "hidden" },
+  dimBarFill: { height: 5, borderRadius: 3 },
+  dimScore:   { fontSize: 14, fontWeight: "800" },
+  dimMax:     { fontSize: 10, fontWeight: "400", color: Colors.grayMedium },
+
+  footer:     { borderTopWidth: 1, borderTopColor: Colors.grayLight, paddingTop: 8, marginTop: 2 },
+  footerText: { fontSize: 11, color: Colors.grayMedium },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
