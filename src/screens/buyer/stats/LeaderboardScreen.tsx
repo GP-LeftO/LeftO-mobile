@@ -144,9 +144,9 @@ export default function LeaderboardScreen({ onClose }: Props) {
             </View>
           )}
 
-          {/* ── Section label for sellers leaderboard ── */}
+          {/* ── Section label: weekly leaderboard ── */}
           <Text style={[styles.sectionLabel, rtl && styles.rtl]}>
-            المتصدر في إنقاذ الوجبات (إجمالي)
+            {rtl ? "أبطال الأسبوع في إنقاذ الطعام 🌱" : "Weekly Food Rescue Heroes 🌱"}
           </Text>
 
           {/* ── Tabs ── */}

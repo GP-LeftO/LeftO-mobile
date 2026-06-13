@@ -16,6 +16,7 @@ import {
   deleteListing, getMySellerDonations,
 } from "../../services/seller/seller.service";
 import { useKaram } from "../../hooks/seller/useKaram";
+import { useMonthlyWinner } from "../../hooks/buyer/useMonthlyWinner";
 import { scanKaramQr } from "../../services/seller/karam.service";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSellerOrders } from "../../hooks/seller/useSellerOrders";
@@ -233,6 +234,10 @@ export default function SellerDashboardScreen({
     initialParticipates: profile?.participatesInKaram ?? false,
     onToast: showToast,
   });
+
+  // ── Monthly winner ────────────────────────────────────────────────────────
+  const { winner: monthlyWinner, loading: winnerLoading } = useMonthlyWinner();
+  const isMonthlyWinner = !winnerLoading && !!monthlyWinner && !!profile?.id && monthlyWinner.sellerId === profile.id;
 
   // ── Karam QR scanner state ────────────────────────────────────────────────
   const [camPermission, requestCamPermission] = useCameraPermissions();
@@ -690,6 +695,23 @@ export default function SellerDashboardScreen({
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { fetchProfile(true); fetchDonations(); }} tintColor={Colors.primaryOrange} />}
             >
               <Animated.View entering={FadeInDown.delay(50).duration(400).springify()} style={styles.tabPane}>
+                {/* ── Monthly winner banner ── */}
+                {isMonthlyWinner && (
+                  <View style={[styles.mwBanner, rtl && { flexDirection: "row-reverse" as const }]}>
+                    <Text style={styles.mwEmoji}>🏅</Text>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={[styles.mwTitle, rtl && styles.rtl]}>
+                        {rtl ? "أنت بائع الشهر!" : "You're Seller of the Month!"}
+                      </Text>
+                      <Text style={[styles.mwSub, rtl && styles.rtl]}>
+                        {rtl ? "الأعلى تقييماً هذا الشهر 🌟" : "Highest rated this month 🌟"}
+                      </Text>
+                      {!!monthlyWinner?.month && (
+                        <Text style={[styles.mwMonth, rtl && styles.rtl]}>{monthlyWinner.month}</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
                 <View style={styles.statsGrid}>
                   {STATS.map((stat, i) => (
                     <View key={i} style={styles.statCard}>
@@ -2183,6 +2205,19 @@ const perfStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   rtl: { textAlign: "right" },
+
+  // ── Monthly winner banner (overview tab) ───────────────────────────────────
+  mwBanner: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: "#fffbeb", borderRadius: 20,
+    borderWidth: 1.5, borderColor: "#f59e0b",
+    paddingVertical: 14, paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  mwEmoji:  { fontSize: 34 },
+  mwTitle:  { fontSize: 16, fontWeight: "800", color: "#92400e" },
+  mwSub:    { fontSize: 13, color: "#b45309" },
+  mwMonth:  { fontSize: 11, color: "#d97706", fontWeight: "600", marginTop: 2 },
 
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
