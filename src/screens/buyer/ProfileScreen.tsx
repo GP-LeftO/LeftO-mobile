@@ -442,6 +442,37 @@ export default function ProfileScreen({ onLogout, onOpenChatbot, onNavigateToSel
             ))}
           </View>
 
+          {/* Cancellation count progress */}
+          {!loading && profile != null && (
+            <View style={[styles.cancelCountCard, rtl && styles.rowReverse]}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <View style={[styles.cancelCountRow, rtl && styles.rowReverse]}>
+                  <Feather name="x-circle" size={14} color={
+                    (profile.cancellationCount ?? 0) >= 5 ? "#ef4444" :
+                    (profile.cancellationCount ?? 0) >= 3 ? "#f59e0b" : Colors.grayMedium
+                  } />
+                  <Text style={[styles.cancelCountLabel, rtl && styles.rtl]}>
+                    {rtl ? "إلغاءاتك" : "Your Cancellations"}
+                  </Text>
+                  <Text style={[styles.cancelCountValue, {
+                    color: (profile.cancellationCount ?? 0) >= 5 ? "#ef4444" :
+                           (profile.cancellationCount ?? 0) >= 3 ? "#f59e0b" : Colors.grayDark,
+                  }]}>
+                    {profile.cancellationCount ?? 0} / 5
+                  </Text>
+                </View>
+                <View style={styles.cancelBar}>
+                  <View style={[styles.cancelBarFill, {
+                    width: `${Math.min(100, ((profile.cancellationCount ?? 0) / 5) * 100)}%` as unknown as number,
+                    backgroundColor:
+                      (profile.cancellationCount ?? 0) >= 5 ? "#ef4444" :
+                      (profile.cancellationCount ?? 0) >= 3 ? "#f59e0b" : Colors.greenMain,
+                  }]} />
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Impact certificate download */}
           <View style={certStyles.card}>
             <View style={[certStyles.headerRow, rtl && styles.rowReverse]}>
@@ -1182,6 +1213,23 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#fcd34d",
   },
   warnBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
+
+  // Cancellation count progress
+  cancelCountCard: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.white, borderRadius: 16,
+    paddingHorizontal: Spacing.md, paddingVertical: 12,
+    marginHorizontal: Spacing.xl, marginBottom: Spacing.sm,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+  },
+  cancelCountRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cancelCountLabel: { flex: 1, fontSize: 13, color: Colors.grayMedium, fontWeight: "600" },
+  cancelCountValue: { fontSize: 13, fontWeight: "800" },
+  cancelBar: {
+    height: 6, borderRadius: 3, backgroundColor: Colors.grayLight, overflow: "hidden",
+  },
+  cancelBarFill: { height: 6, borderRadius: 3 },
 
   // Dual role seller buttons
   sellerBtn: {

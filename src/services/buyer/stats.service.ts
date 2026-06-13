@@ -36,3 +36,13 @@ export interface HeatSpot {
 
 export const getHeatmap = () =>
   api.get<{ data: HeatSpot[] }>('/api/stats/heatmap');
+
+export interface MonthlyWinner {
+  sellerId: string;
+  name:     string;
+  rating:   number;
+  month:    string;
+}
+
+export const getMonthlyWinner = () =>
+  api.get<{ data: { winner: MonthlyWinner | null } }>('/api/stats/monthly-winner');

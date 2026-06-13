@@ -8,6 +8,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing } from "../../../theme";
 import { isRTL } from "../../../i18n";
 import { useLeaderboard } from "../../../hooks/buyer/useLeaderboard";
+import { useMonthlyWinner } from "../../../hooks/buyer/useMonthlyWinner";
 import { useAuth } from "../../../hooks/auth/useAuth";
 import type { LeaderboardBuyer, LeaderboardSeller } from "../../../services/buyer/stats.service";
 
@@ -31,48 +32,34 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 type Tab = "buyers" | "sellers";
 
 function RankCell({ rank }: { rank: number }) {
-  if (rank <= 3) {
-    return <Text style={styles.medal}>{MEDALS[rank - 1]}</Text>;
-  }
+  if (rank <= 3) return <Text style={styles.medal}>{MEDALS[rank - 1]}</Text>;
   return <Text style={styles.rankNum}>{rank}</Text>;
 }
 
-function BuyerRow({
-  item, isMe, rtl,
-}: { item: LeaderboardBuyer; isMe: boolean; rtl: boolean }) {
+function BuyerRow({ item, isMe, rtl }: { item: LeaderboardBuyer; isMe: boolean; rtl: boolean }) {
   const co2 = item.co2SavedKg >= 1
     ? `${item.co2SavedKg.toFixed(1)} كغ`
     : `${Math.round(item.co2SavedKg * 1000)} غ`;
-
-  const badgeEmojis = item.badges
-    .slice(0, 3)
-    .map(b => BADGE_EMOJI[b] ?? "🎖️")
-    .join(" ");
-
+  const badgeEmojis = item.badges.slice(0, 3).map(b => BADGE_EMOJI[b] ?? "🎖️").join(" ");
   return (
     <View style={[styles.row, isMe && styles.rowMe, rtl && styles.rowRtl]}>
       <RankCell rank={item.rank} />
-      <View style={[styles.rowBody, rtl && { alignItems: "flex-end" }]}>
+      <View style={[styles.rowBody, rtl && { alignItems: "flex-end" as const }]}>
         <Text style={[styles.rowName, rtl && styles.rtl]} numberOfLines={1}>
-          {item.name}
-          {isMe ? "  (أنت)" : ""}
+          {item.name}{isMe ? "  (أنت)" : ""}
         </Text>
-        {badgeEmojis ? (
-          <Text style={styles.rowBadges}>{badgeEmojis}</Text>
-        ) : null}
+        {!!badgeEmojis && <Text style={styles.rowBadges}>{badgeEmojis}</Text>}
       </View>
       <Text style={[styles.co2, isMe && { color: Colors.primaryOrange }]}>{co2}</Text>
     </View>
   );
 }
 
-function SellerRow({
-  item, rtl,
-}: { item: LeaderboardSeller; rtl: boolean }) {
+function SellerRow({ item, rtl }: { item: LeaderboardSeller; rtl: boolean }) {
   return (
     <View style={[styles.row, rtl && styles.rowRtl]}>
       <RankCell rank={item.rank} />
-      <View style={[styles.rowBody, rtl && { alignItems: "flex-end" }]}>
+      <View style={[styles.rowBody, rtl && { alignItems: "flex-end" as const }]}>
         <Text style={[styles.rowName, rtl && styles.rtl]} numberOfLines={1}>
           {item.businessName}
         </Text>
@@ -80,10 +67,22 @@ function SellerRow({
           {item.totalDonations} تبرع • ⭐ {item.rating?.toFixed(1) ?? "—"}
         </Text>
       </View>
-      <View style={[styles.mealsWrap]}>
+      <View style={styles.mealsWrap}>
         <Text style={styles.mealsValue}>{item.mealsRescued}</Text>
         <Text style={styles.mealsLabel}>وجبة</Text>
       </View>
+    </View>
+  );
+}
+
+function StarRow({ rating }: { rating: number }) {
+  const full = Math.round(rating);
+  return (
+    <View style={styles.winnerStars}>
+      {[1,2,3,4,5].map(s => (
+        <Feather key={s} name="star" size={14}
+          color={s <= full ? "#f59e0b" : Colors.grayLight} />
+      ))}
     </View>
   );
 }
@@ -93,10 +92,13 @@ export default function LeaderboardScreen({ onClose }: Props) {
   const rtl    = isRTL();
   const { user } = useAuth();
   const { data, loading, error, refresh } = useLeaderboard();
+  const { winner, loading: winnerLoading } = useMonthlyWinner();
   const [tab, setTab] = useState<Tab>("buyers");
 
   const buyers  = data?.buyers  ?? [];
   const sellers = data?.sellers ?? [];
+
+  const handleRefresh = () => { refresh(); };
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "ios" ? insets.top : 0 }]}>
@@ -105,34 +107,8 @@ export default function LeaderboardScreen({ onClose }: Props) {
         <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
           <Feather name="x" size={22} color={Colors.grayDark} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, rtl && styles.rtl]}>
-          أبطال إنقاذ الطعام 🏆
-        </Text>
+        <Text style={[styles.headerTitle, rtl && styles.rtl]}>أبطال إنقاذ الطعام 🏆</Text>
         <View style={{ width: 40 }} />
-      </View>
-
-      <Text style={[styles.subTitle, rtl && styles.rtl]}>هذا الأسبوع</Text>
-
-      {/* Tabs */}
-      <View style={[styles.tabBar, rtl && styles.rowRtl]}>
-        <TouchableOpacity
-          style={[styles.tab, tab === "buyers" && styles.tabActive]}
-          onPress={() => setTab("buyers")}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.tabText, tab === "buyers" && styles.tabTextActive]}>
-            المشترون 🌱
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === "sellers" && styles.tabActive]}
-          onPress={() => setTab("sellers")}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.tabText, tab === "sellers" && styles.tabTextActive]}>
-            البائعون 🏪
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -151,32 +127,63 @@ export default function LeaderboardScreen({ onClose }: Props) {
         <ScrollView
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.primaryOrange} />}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor={Colors.primaryOrange} />}
         >
-          {tab === "buyers" ? (
-            buyers.length === 0 ? (
-              <Text style={[styles.emptyText, rtl && styles.rtl]}>لا توجد بيانات بعد</Text>
-            ) : (
-              buyers.map(b => (
-                <BuyerRow
-                  key={b.id}
-                  item={b}
-                  isMe={b.id === user?.id}
-                  rtl={rtl}
-                />
-              ))
-            )
-          ) : (
-            sellers.length === 0 ? (
-              <Text style={[styles.emptyText, rtl && styles.rtl]}>لا توجد بيانات بعد</Text>
-            ) : (
-              sellers.map(s => (
-                <SellerRow key={s.id} item={s} rtl={rtl} />
-              ))
-            )
+          {/* ── Monthly winner banner ── */}
+          {!winnerLoading && winner && (
+            <View style={[styles.winnerCard, rtl && { alignItems: "flex-end" as const }]}>
+              <View style={[styles.winnerBadgeRow, rtl && styles.rowRtl]}>
+                <View style={styles.winnerBadge}>
+                  <Text style={styles.winnerBadgeText}>بائع الشهر (أعلى تقييم هذا الشهر)</Text>
+                </View>
+              </View>
+              <Text style={styles.winnerEmoji}>🏅</Text>
+              <Text style={[styles.winnerName, rtl && styles.rtl]}>{winner.name}</Text>
+              <StarRow rating={winner.rating} />
+              <Text style={styles.winnerMonth}>{winner.month}</Text>
+            </View>
           )}
 
-          {/* Legend */}
+          {/* ── Section label for sellers leaderboard ── */}
+          <Text style={[styles.sectionLabel, rtl && styles.rtl]}>
+            المتصدر في إنقاذ الوجبات (إجمالي)
+          </Text>
+
+          {/* ── Tabs ── */}
+          <View style={[styles.tabBar, rtl && styles.rowRtl]}>
+            <TouchableOpacity
+              style={[styles.tab, tab === "buyers" && styles.tabActive]}
+              onPress={() => setTab("buyers")}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabText, tab === "buyers" && styles.tabTextActive]}>
+                المشترون 🌱
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, tab === "sellers" && styles.tabActive]}
+              onPress={() => setTab("sellers")}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabText, tab === "sellers" && styles.tabTextActive]}>
+                البائعون 🏪
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {tab === "buyers" ? (
+            buyers.length === 0
+              ? <Text style={[styles.emptyText, rtl && styles.rtl]}>لا توجد بيانات بعد</Text>
+              : buyers.map(b => (
+                  <BuyerRow key={b.id} item={b} isMe={b.id === user?.id} rtl={rtl} />
+                ))
+          ) : (
+            sellers.length === 0
+              ? <Text style={[styles.emptyText, rtl && styles.rtl]}>لا توجد بيانات بعد</Text>
+              : sellers.map(s => <SellerRow key={s.id} item={s} rtl={rtl} />)
+          )}
+
+          {/* Badge legend */}
           <View style={styles.legend}>
             <Text style={[styles.legendTitle, rtl && styles.rtl]}>دلالة الشارات</Text>
             <View style={[styles.legendGrid, rtl && { flexDirection: "row-reverse" as const }]}>
@@ -207,19 +214,45 @@ const styles = StyleSheet.create({
   },
   closeBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 17, fontWeight: "800", color: Colors.grayDark },
-  subTitle: { textAlign: "center", fontSize: 13, color: Colors.grayMedium, marginTop: 6, marginBottom: 4 },
+
+  // ── Monthly winner card ──
+  winnerCard: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#f59e0b",
+    padding: Spacing.lg,
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  winnerBadgeRow: { flexDirection: "row" },
+  winnerBadge: {
+    backgroundColor: "#f59e0b",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  winnerBadgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  winnerEmoji: { fontSize: 36, marginTop: 4 },
+  winnerName: { fontSize: 18, fontWeight: "800", color: Colors.grayDark, textAlign: "center" },
+  winnerStars: { flexDirection: "row", gap: 3 },
+  winnerMonth: { fontSize: 12, color: Colors.grayMedium, marginTop: 2 },
+
+  sectionLabel: {
+    fontSize: 12, fontWeight: "700", color: Colors.grayMedium,
+    textAlign: "center", marginBottom: 4, marginTop: 8,
+    letterSpacing: 0.2,
+  },
 
   tabBar: {
     flexDirection: "row",
-    marginHorizontal: Spacing.md,
     marginVertical: Spacing.sm,
     backgroundColor: Colors.grayLight + "55",
     borderRadius: 14,
     padding: 3,
   },
-  tab: {
-    flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 12,
-  },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 12 },
   tabActive: { backgroundColor: Colors.white, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   tabText: { fontSize: 14, fontWeight: "600", color: Colors.grayMedium },
   tabTextActive: { color: Colors.primaryOrange, fontWeight: "800" },
@@ -231,12 +264,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md,
     shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  rowMe: {
-    backgroundColor: Colors.primaryOrange + "15",
-    borderWidth: 1.5, borderColor: Colors.primaryOrange,
-  },
+  rowMe: { backgroundColor: Colors.primaryOrange + "15", borderWidth: 1.5, borderColor: Colors.primaryOrange },
 
-  medal: { fontSize: 22, width: 32, textAlign: "center" },
+  medal:   { fontSize: 22, width: 32, textAlign: "center" },
   rankNum: { fontSize: 16, fontWeight: "800", color: Colors.grayMedium, width: 32, textAlign: "center" },
 
   rowBody: { flex: 1, gap: 2 },

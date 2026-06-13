@@ -34,6 +34,7 @@ interface Order {
   status: ApiOrderStatus;
   totalPrice?: number;
   createdAt?: string;
+  review?: { id: string } | null;
   listing?: {
     id?: string;
     title?: string;
@@ -47,10 +48,10 @@ interface Order {
 }
 
 const STATUS_LABELS: Record<ApiOrderStatus, { en: string; ar: string; color: string }> = {
-  RESERVED:  { en: "Reserved",       ar: "محجوز",        color: Colors.primaryOrange },
-  COMPLETED: { en: "Picked up",      ar: "تم الاستلام",   color: Colors.greenMain },
-  CANCELLED: { en: "Cancelled",      ar: "ملغى",          color: "#ef4444" },
-  DONATED:   { en: "Donated",        ar: "تم التبرع",     color: "#8b5cf6" },
+  RESERVED:  { en: "Reserved",    ar: "محجوز",       color: Colors.primaryOrange },
+  COMPLETED: { en: "Picked up",   ar: "تم الاستلام",  color: Colors.greenMain },
+  CANCELLED: { en: "Cancelled",   ar: "ملغى",         color: "#ef4444" },
+  DONATED:   { en: "Donated",     ar: "تم التبرع",    color: "#8b5cf6" },
 };
 
 interface OrdersScreenProps {
@@ -68,6 +69,8 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   const [fetchError, setFetchError] = useState("");
   const [actionLoading,     setActionLoading]     = useState<string | null>(null);
   const [cancellationCount, setCancellationCount] = useState(0);
+  // shown after a cancel if the server marks the account as blocked
+  const [blockedModalVisible, setBlockedModalVisible] = useState(false);
 
   useEffect(() => {
     api.get("/api/users/me").then(r => {
@@ -77,11 +80,12 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
   }, []);
 
   // Review state
-  const [reviewOrder,   setReviewOrder]   = useState<Order | null>(null);
-  const [reviewedIds,   setReviewedIds]   = useState<Set<string>>(new Set());
-  const [reviewRatings, setReviewRatings] = useState({ overall: 0, pickup: 0, quality: 0, variety: 0 });
-  const [reviewComment, setReviewComment] = useState("");
+  const [reviewOrder,      setReviewOrder]      = useState<Order | null>(null);
+  const [reviewRatings,    setReviewRatings]    = useState({ overall: 0, pickup: 0, quality: 0, variety: 0 });
+  const [reviewComment,    setReviewComment]    = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  // tracks IDs reviewed THIS session (in case API hasn't refreshed yet)
+  const [sessionReviewedIds, setSessionReviewedIds] = useState<Set<string>>(new Set());
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -98,22 +102,18 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
     };
     try {
       if (tab.apiStatus.length === 1) {
-        const { data } = await api.get("/api/orders/me", {
-          params: { status: tab.apiStatus[0] },
-        });
+        const { data } = await api.get("/api/orders/me", { params: { status: tab.apiStatus[0] } });
         setOrders(parsePayload(data));
       } else {
         const results = await Promise.all(
           tab.apiStatus.map((s) => api.get("/api/orders/me", { params: { status: s } }))
         );
-        const merged = results.flatMap(({ data }) => parsePayload(data));
-        setOrders(merged);
+        setOrders(results.flatMap(({ data }) => parsePayload(data)));
       }
     } catch {
-      setFetchError(
-        rtl
-          ? "تعذّر تحميل الطلبات. يرجى المحاولة مجدداً"
-          : "Could not load orders. Please try again."
+      setFetchError(rtl
+        ? "تعذّر تحميل الطلبات. يرجى المحاولة مجدداً"
+        : "Could not load orders. Please try again."
       );
     } finally {
       setLoading(false);
@@ -127,48 +127,44 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
     const used      = cancellationCount;
     const remaining = Math.max(0, 5 - used);
 
-    const warningLine = rtl
-      ? used >= 4
-        ? `\n\n⚠️ تحذير: هذا هو آخر إلغاء مسموح به قبل تعليق الحساب!`
-        : used >= 3
-          ? `\n\n⚠️ لديك ${used} إلغاءات — ${remaining} إلغاء متبقي فقط قبل تعليق الحساب.`
-          : ""
-      : used >= 4
-        ? `\n\n⚠️ Warning: this is your last allowed cancellation before your account is suspended!`
-        : used >= 3
-          ? `\n\n⚠️ You have ${used} cancellations — only ${remaining} left before your account is suspended.`
-          : "";
+    const warningLine = used >= 4
+      ? `\n\n⚠️ ${rtl ? "تحذير: هذا هو آخر إلغاء مسموح به قبل تعليق الحساب!" : "Warning: this is your last allowed cancellation before your account is suspended!"}`
+      : used >= 3
+      ? `\n\n⚠️ ${rtl ? `لديك ${used} إلغاءات — ${remaining} إلغاء متبقي فقط قبل تعليق الحساب.` : `You have ${used} cancellations — only ${remaining} left before your account is suspended.`}`
+      : "";
 
     Alert.alert(
       rtl ? "إلغاء الطلب" : "Cancel Order",
-      (rtl ? "هل أنت متأكد أنك تريد إلغاء هذا الطلب؟" : "Are you sure you want to cancel this order?") + warningLine,
+      (rtl
+        ? "هل أنت متأكد أنك تريد إلغاء هذا الطلب؟ الإلغاء المتكرر قد يؤدي إلى تعليق حسابك."
+        : "Are you sure you want to cancel this order? Repeated cancellations may lead to account suspension."
+      ) + warningLine,
       [
-        { text: rtl ? "لا" : "No", style: "cancel" },
+        { text: rtl ? "لا، ارجع" : "No, Go Back", style: "cancel" },
         {
-          text: rtl ? "تأكيد الإلغاء" : "Yes, Cancel",
+          text: rtl ? "نعم، ألغِ" : "Yes, Cancel",
           style: "destructive",
           onPress: async () => {
             setActionLoading(orderId);
             try {
-              await api.patch(`/api/orders/${orderId}/cancel`);
+              const res = await api.patch(`/api/orders/${orderId}/cancel`);
+              // read isBlocked + cancellationCount directly from the cancel response
+              const payload = res.data?.data ?? res.data;
+              const newCount: number  = payload?.cancellationCount ?? cancellationCount + 1;
+              const isBlocked: boolean = payload?.isBlocked ?? false;
+
+              setCancellationCount(newCount);
               await fetchOrders();
-              const profileRes = await api.get("/api/users/me").catch(() => null);
-              const updated = profileRes?.data?.data ?? profileRes?.data;
-              const newCount: number = updated?.cancellationCount ?? 0;
-              const newRemaining = Math.max(0, 5 - newCount);
-              if (newCount >= 5) {
-                Alert.alert(
-                  rtl ? "تم تعليق حسابك" : "Account Suspended",
-                  rtl
-                    ? "لقد تجاوزت الحد المسموح به من الإلغاءات. تم تعليق حسابك."
-                    : "You have reached the cancellation limit. Your account has been suspended."
-                );
+
+              if (isBlocked) {
+                setBlockedModalVisible(true);
               } else if (newCount >= 3) {
+                const newRemaining = Math.max(0, 5 - newCount);
                 Alert.alert(
                   rtl ? "تحذير" : "Warning",
                   rtl
-                    ? `لديك الآن ${newCount} إلغاءات. ${newRemaining === 1 ? "إلغاء واحد فقط" : `${newRemaining} إلغاءات`} متبق قبل تعليق حسابك.`
-                    : `You now have ${newCount} cancellation${newCount !== 1 ? "s" : ""}. ${newRemaining === 1 ? "Only 1 more" : `${newRemaining} more`} before your account is suspended.`
+                    ? `تحذير: لديك ${newCount} إلغاءات. عند 5 إلغاءات سيتم تعليق حسابك. (متبقي: ${newRemaining})`
+                    : `Warning: you have ${newCount} cancellation${newCount !== 1 ? "s" : ""}. At 5 your account will be suspended. (${newRemaining} remaining)`
                 );
               }
             } catch {
@@ -198,22 +194,26 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
     setReviewSubmitting(true);
     try {
       await submitReview({
-        orderId: reviewOrder.id,
+        orderId:       reviewOrder.id,
         sellerId,
-        ratingOverall:  reviewRatings.overall,
-        ratingPickup:   reviewRatings.pickup,
-        ratingQuality:  reviewRatings.quality,
-        ratingVariety:  reviewRatings.variety,
-        comment: reviewComment.trim() || undefined,
+        ratingOverall: reviewRatings.overall,
+        ratingPickup:  reviewRatings.pickup,
+        ratingQuality: reviewRatings.quality,
+        ratingVariety: reviewRatings.variety,
+        comment:       reviewComment.trim() || undefined,
       });
-      setReviewedIds((prev) => new Set([...prev, reviewOrder.id]));
+      setSessionReviewedIds((prev) => new Set([...prev, reviewOrder.id]));
       setReviewOrder(null);
+      fetchOrders(); // refresh so order.review is populated
     } catch {
       Alert.alert(rtl ? "خطأ" : "Error", rtl ? "تعذّر إرسال التقييم" : "Could not submit review");
     } finally {
       setReviewSubmitting(false);
     }
   };
+
+  const isReviewed = (order: Order) =>
+    order.review !== null && order.review !== undefined || sessionReviewedIds.has(order.id);
 
   return (
     <View style={styles.container}>
@@ -274,16 +274,45 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
                 order={order}
                 rtl={rtl}
                 actionLoading={actionLoading === order.id}
+                reviewed={isReviewed(order)}
                 onCancel={() => handleCancel(order.id)}
-                onScanQR={onOpenQRScan ? () => onOpenQRScan({ orderId: order.id, orderTitle: order.listing?.title }) : undefined}
-                onLeaveReview={order.status === "COMPLETED" && !reviewedIds.has(order.id) ? () => handleOpenReview(order) : undefined}
+                onScanQR={onOpenQRScan
+                  ? () => onOpenQRScan({ orderId: order.id, orderTitle: order.listing?.title })
+                  : undefined}
+                onLeaveReview={order.status === "COMPLETED" && !isReviewed(order)
+                  ? () => handleOpenReview(order)
+                  : undefined}
               />
             ))
           )}
         </ScrollView>
       )}
 
-      {/* Review modal */}
+      {/* ── Account blocked modal ── */}
+      <Modal visible={blockedModalVisible} transparent animationType="fade">
+        <View style={blockedStyles.overlay}>
+          <View style={blockedStyles.card}>
+            <Feather name="slash" size={44} color="#ef4444" />
+            <Text style={[blockedStyles.title, rtl && styles.rtl]}>
+              {rtl ? "تم تعليق حسابك" : "Account Suspended"}
+            </Text>
+            <Text style={[blockedStyles.body, rtl && styles.rtl]}>
+              {rtl
+                ? "تم تعليق حسابك بسبب إلغاء الحجوزات بشكل متكرر. تواصل مع الإدارة لإلغاء التعليق."
+                : "Your account has been suspended due to repeated order cancellations. Contact support to restore access."}
+            </Text>
+            <TouchableOpacity
+              style={blockedStyles.btn}
+              onPress={() => setBlockedModalVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={blockedStyles.btnText}>{rtl ? "حسناً" : "OK"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Review modal ── */}
       <Modal visible={!!reviewOrder} transparent animationType="slide" onRequestClose={() => setReviewOrder(null)}>
         <KeyboardAvoidingView style={reviewStyles.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <TouchableOpacity style={reviewStyles.backdrop} activeOpacity={1} onPress={() => setReviewOrder(null)} />
@@ -311,8 +340,16 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
                   </Text>
                   <View style={reviewStyles.starsRow}>
                     {[1,2,3,4,5].map((s) => (
-                      <TouchableOpacity key={s} onPress={() => setReviewRatings((p) => ({ ...p, [key]: s }))} activeOpacity={0.7}>
-                        <Feather name="star" size={26} color={s <= reviewRatings[key] ? Colors.primaryOrange : Colors.grayLight} />
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => setReviewRatings((p) => ({ ...p, [key]: s }))}
+                        activeOpacity={0.7}
+                      >
+                        <Feather
+                          name="star"
+                          size={26}
+                          color={s <= reviewRatings[key] ? Colors.primaryOrange : Colors.grayLight}
+                        />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -328,10 +365,14 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
+                maxLength={500}
               />
 
               <TouchableOpacity
-                style={[reviewStyles.submitBtn, (reviewRatings.overall === 0 || reviewSubmitting) && reviewStyles.submitBtnDisabled]}
+                style={[
+                  reviewStyles.submitBtn,
+                  (reviewRatings.overall === 0 || reviewSubmitting) && reviewStyles.submitBtnDisabled,
+                ]}
                 onPress={handleSubmitReview}
                 disabled={reviewRatings.overall === 0 || reviewSubmitting}
                 activeOpacity={0.85}
@@ -345,22 +386,24 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
     </View>
   );
 }
 
+// ─── OrderCard ────────────────────────────────────────────────────────────────
+
 function OrderCard({
-  order, rtl, actionLoading, onCancel, onScanQR, onLeaveReview,
+  order, rtl, actionLoading, reviewed, onCancel, onScanQR, onLeaveReview,
 }: {
   order: Order;
   rtl: boolean;
   actionLoading: boolean;
+  reviewed: boolean;
   onCancel: () => void;
   onScanQR?: () => void;
   onLeaveReview?: () => void;
 }) {
-  const statusInfo = STATUS_LABELS[order.status] ?? { en: order.status, ar: order.status, color: Colors.grayMedium };
+  const statusInfo  = STATUS_LABELS[order.status] ?? { en: order.status, ar: order.status, color: Colors.grayMedium };
   const statusLabel = rtl ? statusInfo.ar : statusInfo.en;
 
   const pickupWindow =
@@ -369,38 +412,28 @@ function OrderCard({
       : null;
 
   const dateLabel = order.createdAt
-    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", {
-        day: "numeric", month: "short",
-      })
+    ? new Date(order.createdAt).toLocaleDateString(rtl ? "ar-PS" : "en-GB", { day: "numeric", month: "short" })
     : null;
 
   const priceDisplay =
-    order.totalPrice != null
-      ? `₪${order.totalPrice}`
-      : order.listing?.price != null
-      ? `₪${order.listing.price}`
-      : "—";
+    order.totalPrice != null  ? `₪${order.totalPrice}`  :
+    order.listing?.price != null ? `₪${order.listing.price}` : "—";
 
-  const isDonated = order.status === "DONATED";
+  const isDonated  = order.status === "DONATED";
   const isReserved = order.status === "RESERVED";
+  const isCompleted = order.status === "COMPLETED";
 
   return (
     <View style={styles.card}>
       <View style={[styles.cardInner, rtl && styles.cardInnerRTL]}>
         <View style={styles.cardLeft}>
           <View style={styles.storeIcon}>
-            <Feather
-              name={isDonated ? "gift" : "shopping-bag"}
-              size={20}
-              color={Colors.primaryOrange}
-            />
+            <Feather name={isDonated ? "gift" : "shopping-bag"} size={20} color={Colors.primaryOrange} />
           </View>
         </View>
         <View style={styles.cardBody}>
           <Text style={[styles.storeName, rtl && styles.rtl]} numberOfLines={1}>
-            {order.listing?.seller?.businessName ??
-              order.listing?.title ??
-              (rtl ? "متجر" : "Store")}
+            {order.listing?.seller?.businessName ?? order.listing?.title ?? (rtl ? "متجر" : "Store")}
           </Text>
           {order.listing?.title && (
             <Text style={[styles.orderType, rtl && styles.rtl]} numberOfLines={1}>
@@ -434,7 +467,6 @@ function OrderCard({
 
       {isReserved && (
         <>
-          {/* QR scan instruction */}
           <View style={[styles.scanInstruction, rtl && styles.scanInstructionRTL]}>
             <Feather name="info" size={13} color="#166534" />
             <Text style={[styles.scanInstructionText, rtl && styles.rtl]}>
@@ -443,20 +475,12 @@ function OrderCard({
                 : "Go to the store and ask the seller to show their QR code"}
             </Text>
           </View>
-
-          {/* Primary scan button */}
           {onScanQR && (
-            <TouchableOpacity
-              style={styles.scanBtn}
-              onPress={onScanQR}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={styles.scanBtn} onPress={onScanQR} activeOpacity={0.85}>
               <Feather name="camera" size={15} color={Colors.white} />
               <Text style={styles.scanBtnText}>{rtl ? "مسح رمز QR" : "Scan QR Code"}</Text>
             </TouchableOpacity>
           )}
-
-          {/* Cancel button */}
           <View style={[styles.actionsRow, rtl && styles.actionsRowRTL]}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.cancelBtn, { flex: 1 }]}
@@ -477,48 +501,48 @@ function OrderCard({
         </>
       )}
 
-      {onLeaveReview && (
-        <TouchableOpacity style={[styles.reviewBtn, rtl && { flexDirection: "row-reverse" as const }]} onPress={onLeaveReview} activeOpacity={0.8}>
-          <Feather name="star" size={14} color={Colors.white} />
-          <Text style={styles.reviewBtnText}>{rtl ? "اترك تقييماً" : "Leave Review"}</Text>
-        </TouchableOpacity>
+      {isCompleted && (
+        reviewed ? (
+          <View style={[styles.reviewedBadge, rtl && { flexDirection: "row-reverse" as const }]}>
+            <Feather name="check-circle" size={14} color={Colors.greenMain} />
+            <Text style={styles.reviewedText}>{rtl ? "تم التقييم ✓" : "Reviewed ✓"}</Text>
+          </View>
+        ) : onLeaveReview ? (
+          <TouchableOpacity
+            style={[styles.reviewBtn, rtl && { flexDirection: "row-reverse" as const }]}
+            onPress={onLeaveReview}
+            activeOpacity={0.8}
+          >
+            <Feather name="star" size={14} color={Colors.white} />
+            <Text style={styles.reviewBtnText}>{rtl ? "اترك تقييماً" : "Leave Review"}</Text>
+          </TouchableOpacity>
+        ) : null
       )}
     </View>
   );
 }
 
+// ─── EmptyState ───────────────────────────────────────────────────────────────
+
 function EmptyState({ tab, rtl }: { tab: TabKey; rtl: boolean }) {
   const msgs: Record<TabKey, { icon: string; titleEn: string; titleAr: string; subEn: string; subAr: string }> = {
-    active:    {
-      icon: "shopping-bag",
-      titleEn: "No active orders",           titleAr: "لا توجد طلبات نشطة",
-      subEn:   "Browse stores and reserve a bag to get started",
-      subAr:   "تصفح المتاجر واحجز حقيبة للبدء",
-    },
-    completed: {
-      icon: "check-circle",
-      titleEn: "No completed orders yet",    titleAr: "لا توجد طلبات مكتملة",
-      subEn:   "Your past pickups will appear here",
-      subAr:   "ستظهر هنا طلباتك السابقة",
-    },
-    cancelled: {
-      icon: "x-circle",
-      titleEn: "No cancelled orders",        titleAr: "لا توجد طلبات ملغاة",
-      subEn:   "Cancelled orders will appear here",
-      subAr:   "ستظهر هنا الطلبات الملغاة",
-    },
+    active:    { icon: "shopping-bag", titleEn: "No active orders",         titleAr: "لا توجد طلبات نشطة",    subEn: "Browse stores and reserve a bag to get started",  subAr: "تصفح المتاجر واحجز حقيبة للبدء" },
+    completed: { icon: "check-circle", titleEn: "No completed orders yet",  titleAr: "لا توجد طلبات مكتملة",  subEn: "Your past pickups will appear here",               subAr: "ستظهر هنا طلباتك السابقة" },
+    cancelled: { icon: "x-circle",     titleEn: "No cancelled orders",      titleAr: "لا توجد طلبات ملغاة",   subEn: "Cancelled orders will appear here",                subAr: "ستظهر هنا الطلبات الملغاة" },
   };
   const m = msgs[tab];
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Feather name={m.icon as any} size={32} color={Colors.primaryOrange} />
+        <Feather name={m.icon as "shopping-bag"} size={32} color={Colors.primaryOrange} />
       </View>
       <Text style={[styles.emptyTitle, rtl && styles.rtl]}>{rtl ? m.titleAr : m.titleEn}</Text>
-      <Text style={[styles.emptySub, rtl && styles.rtl]}>{rtl ? m.subAr : m.subEn}</Text>
+      <Text style={[styles.emptySub,   rtl && styles.rtl]}>{rtl ? m.subAr   : m.subEn}</Text>
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -547,37 +571,20 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14, color: Colors.grayMedium },
   errorWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: Spacing.xl },
   errorText: { fontSize: 14, color: Colors.grayMedium, textAlign: "center", lineHeight: 20 },
-  retryBtn: {
-    backgroundColor: Colors.primaryOrange, borderRadius: 14,
-    paddingHorizontal: 24, paddingVertical: 10,
-  },
+  retryBtn: { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 10 },
   retryBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
   scroll: { padding: Spacing.xl, gap: Spacing.md, paddingBottom: 100 },
 
   card: {
-    backgroundColor: Colors.white,
-    borderRadius: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    overflow: "hidden",
+    backgroundColor: Colors.white, borderRadius: 18,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, overflow: "hidden",
   },
-  cardInner: {
-    flexDirection: "row",
-    padding: Spacing.md,
-    gap: Spacing.md,
-    alignItems: "center",
-  },
+  cardInner: { flexDirection: "row", padding: Spacing.md, gap: Spacing.md, alignItems: "center" },
   cardInnerRTL: { flexDirection: "row-reverse" },
   cardLeft: {},
-  storeIcon: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: Colors.orangeLight,
-    alignItems: "center", justifyContent: "center",
-  },
+  storeIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center" },
   cardBody: { flex: 1, gap: 3 },
   storeName: { fontSize: 15, fontWeight: "700", color: Colors.grayDark },
   orderType: { fontSize: 12, color: Colors.grayMedium },
@@ -593,86 +600,51 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { fontSize: 11, fontWeight: "700" },
 
-  actionsRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
+  actionsRow: { flexDirection: "row", gap: 8, paddingHorizontal: Spacing.md, paddingBottom: Spacing.md },
   actionsRowRTL: { flexDirection: "row-reverse" },
-  actionBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, borderRadius: 12, paddingVertical: 10,
-    borderWidth: 1.5,
-  },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, paddingVertical: 10, borderWidth: 1.5 },
   cancelBtn: { borderColor: "#fecaca", backgroundColor: "#fef2f2" },
   cancelBtnText: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
 
-  scanInstruction: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    marginHorizontal: Spacing.md, marginBottom: 8, marginTop: 4,
-    backgroundColor: "#D1FAE5", borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 8,
-  },
+  scanInstruction: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: Spacing.md, marginBottom: 8, marginTop: 4, backgroundColor: "#D1FAE5", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   scanInstructionRTL: { flexDirection: "row-reverse" },
   scanInstructionText: { flex: 1, fontSize: 12, color: "#166534", lineHeight: 17 },
-
-  scanBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.greenMain, borderRadius: 12,
-    paddingVertical: 11, marginHorizontal: Spacing.md, marginBottom: 8,
-  },
+  scanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.greenMain, borderRadius: 12, paddingVertical: 11, marginHorizontal: Spacing.md, marginBottom: 8 },
   scanBtnText: { fontSize: 14, fontWeight: "700", color: Colors.white },
 
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyIcon: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: Colors.orangeLight,
-    alignItems: "center", justifyContent: "center",
-  },
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: Colors.orangeLight, alignItems: "center", justifyContent: "center" },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.grayDark },
   emptySub: { fontSize: 14, color: Colors.grayMedium, textAlign: "center", maxWidth: 240, lineHeight: 20 },
 
-  reviewBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: Colors.primaryOrange, borderRadius: 10,
-    paddingVertical: 9, marginHorizontal: 16, marginBottom: 8,
-  },
+  reviewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.primaryOrange, borderRadius: 10, paddingVertical: 9, marginHorizontal: 16, marginBottom: 8 },
   reviewBtnText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+
+  reviewedBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, marginHorizontal: 16, marginBottom: 8 },
+  reviewedText: { fontSize: 13, fontWeight: "600", color: Colors.greenMain },
+});
+
+const blockedStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: Spacing.xl },
+  card: { backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, alignItems: "center", gap: 14, width: "100%", maxWidth: 360 },
+  title: { fontSize: 20, fontWeight: "800", color: "#ef4444", textAlign: "center" },
+  body:  { fontSize: 14, color: Colors.grayMedium, textAlign: "center", lineHeight: 22 },
+  btn:   { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12, marginTop: 4 },
+  btnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
 });
 
 const reviewStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)" },
-  sheet: {
-    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.xl, paddingBottom: 40, paddingTop: Spacing.sm,
-    maxHeight: "88%",
-  },
-  handle: {
-    alignSelf: "center", width: 40, height: 4, borderRadius: 2,
-    backgroundColor: Colors.grayLight, marginBottom: Spacing.md,
-  },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginBottom: Spacing.lg,
-  },
+  sheet: { backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.xl, paddingBottom: 40, paddingTop: Spacing.sm, maxHeight: "88%" },
+  handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.grayLight, marginBottom: Spacing.md },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.lg },
   title: { fontSize: 18, fontWeight: "800", color: Colors.grayDark },
-  ratingRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
+  ratingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md },
   ratingLabel: { fontSize: 15, fontWeight: "500", color: Colors.grayDark },
   starsRow: { flexDirection: "row", gap: 6 },
-  commentInput: {
-    backgroundColor: Colors.grayLight, borderRadius: 12,
-    padding: Spacing.md, fontSize: 14, color: Colors.grayDark,
-    minHeight: 80, marginBottom: Spacing.lg,
-  },
-  submitBtn: {
-    backgroundColor: Colors.primaryOrange, borderRadius: 14,
-    paddingVertical: 14, alignItems: "center", marginBottom: Spacing.sm,
-  },
+  commentInput: { backgroundColor: Colors.grayLight, borderRadius: 12, padding: Spacing.md, fontSize: 14, color: Colors.grayDark, minHeight: 80, marginBottom: Spacing.lg },
+  submitBtn: { backgroundColor: Colors.primaryOrange, borderRadius: 14, paddingVertical: 14, alignItems: "center", marginBottom: Spacing.sm },
   submitBtnDisabled: { opacity: 0.45 },
   submitBtnText: { fontSize: 15, fontWeight: "700", color: Colors.white },
 });
