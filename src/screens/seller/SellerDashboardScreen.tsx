@@ -1167,6 +1167,46 @@ export default function SellerDashboardScreen({
                     </View>
                   )}
 
+                  {/* ── Weekly AI sentiment insight ── */}
+                  {performance?.weeklyInsight && (
+                    <View style={styles.insightCard}>
+                      <View style={[styles.insightHeader, rtl && { flexDirection: "row-reverse" as const }]}>
+                        <View style={styles.insightIconWrap}>
+                          <Feather name="cpu" size={16} color="#7c3aed" />
+                        </View>
+                        <View style={{ flex: 1, gap: 1 }}>
+                          <Text style={[styles.insightTitle, rtl && styles.rtl]}>
+                            {rtl ? "ملخص تقييماتك هذا الشهر" : "Monthly Review Summary"}
+                          </Text>
+                          {!!performance.weeklyInsightUpdatedAt && (
+                            <Text style={[styles.insightDate, rtl && styles.rtl]}>
+                              {rtl ? "آخر تحديث: " : "Updated: "}
+                              {new Date(performance.weeklyInsightUpdatedAt).toLocaleDateString(
+                                rtl ? "ar-EG" : "en-GB",
+                                { day: "numeric", month: "long" }
+                              )}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      {performance.weeklyInsight.split("|").map((part, i) => {
+                        const isStrength = part.trim().startsWith("💪");
+                        return (
+                          <View
+                            key={i}
+                            style={[
+                              styles.insightRow,
+                              { backgroundColor: isStrength ? "#d1fae5" : "#fff7ed" },
+                              rtl && { flexDirection: "row-reverse" as const },
+                            ]}
+                          >
+                            <Text style={[styles.insightRowText, rtl && styles.rtl]}>{part.trim()}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
                   <SettingsField
                     label={rtl ? "اسم المتجر" : "Store Name"}
                     value={settingsForm.businessName}
@@ -2205,6 +2245,22 @@ const perfStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   rtl: { textAlign: "right" },
+
+  // ── Weekly AI insight card (settings tab) ─────────────────────────────────
+  insightCard: {
+    backgroundColor: Colors.white, borderRadius: 18,
+    borderWidth: 1.5, borderColor: "#ddd6fe",
+    padding: Spacing.md, gap: 10,
+  },
+  insightHeader:  { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  insightIconWrap: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "#ede9fe", alignItems: "center", justifyContent: "center",
+  },
+  insightTitle:   { fontSize: 14, fontWeight: "800", color: "#5b21b6" },
+  insightDate:    { fontSize: 11, color: Colors.grayMedium },
+  insightRow:     { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  insightRowText: { fontSize: 13, color: Colors.grayDark, lineHeight: 20 },
 
   // ── Monthly winner banner (overview tab) ───────────────────────────────────
   mwBanner: {

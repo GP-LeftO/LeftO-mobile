@@ -15,25 +15,26 @@ import type { AppNotification, NotificationType } from "../../services/shared/no
 
 interface NotificationsScreenProps {
   onBack: () => void;
+  onOpenStore?: (sellerId: string) => void;
 }
 
 const TYPE_ICON: Record<NotificationType, { icon: keyof typeof Feather.glyphMap; color: string; bg: string }> = {
-  ORDER_RESERVED:            { icon: "shopping-bag", color: Colors.primaryOrange, bg: Colors.orangeLight },
-  ORDER_COMPLETED:           { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  ORDER_CANCELLED:           { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
-  DONATION_RECEIVED:         { icon: "gift",          color: "#8b5cf6",            bg: "#ede9fe" },
-  DONATION_CONFIRMED:        { icon: "heart",         color: Colors.greenMain,     bg: Colors.greenLight },
-  SELLER_APPROVED:           { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  SELLER_REJECTED:           { icon: "x-circle",      color: "#ef4444",            bg: "#fef2f2" },
-  CHARITY_APPROVED:          { icon: "check-circle",  color: Colors.greenMain,     bg: Colors.greenLight },
-  NEW_LISTING_FROM_FAVORITE: { icon: "star",          color: Colors.primaryOrange, bg: Colors.orangeLight },
-  LISTING_EXPIRING_SOON:     { icon: "clock",         color: "#f59e0b",            bg: "#fffbeb" },
-  WASTE_PATTERN_ALERT:       { icon: "alert-triangle", color: "#f59e0b",           bg: "#fffbeb" },
-  DEAL_WINDOW_TIP:           { icon: "zap",           color: Colors.primaryOrange, bg: Colors.orangeLight },
-  ACCOUNT_BLOCKED:           { icon: "slash",         color: "#ef4444",            bg: "#fef2f2" },
-  LISTING_REPORTED:          { icon: "flag",          color: "#f59e0b",            bg: "#fffbeb" },
-  LISTING_REMOVED:           { icon: "trash-2",       color: "#ef4444",            bg: "#fef2f2" },
-  SYSTEM:                    { icon: "bell",          color: Colors.grayMedium,    bg: Colors.grayLight },
+  ORDER_RESERVED:            { icon: "shopping-bag",   color: Colors.primaryOrange, bg: Colors.orangeLight },
+  ORDER_COMPLETED:           { icon: "check-circle",   color: Colors.greenMain,     bg: Colors.greenLight  },
+  ORDER_CANCELLED:           { icon: "x-circle",       color: "#ef4444",            bg: "#fef2f2"          },
+  DONATION_RECEIVED:         { icon: "gift",           color: "#8b5cf6",            bg: "#ede9fe"          },
+  DONATION_CONFIRMED:        { icon: "heart",          color: Colors.greenMain,     bg: Colors.greenLight  },
+  SELLER_APPROVED:           { icon: "check-circle",   color: Colors.greenMain,     bg: Colors.greenLight  },
+  SELLER_REJECTED:           { icon: "x-circle",       color: "#ef4444",            bg: "#fef2f2"          },
+  CHARITY_APPROVED:          { icon: "check-circle",   color: Colors.greenMain,     bg: Colors.greenLight  },
+  NEW_LISTING_FROM_FAVORITE: { icon: "star",           color: Colors.primaryOrange, bg: Colors.orangeLight },
+  LISTING_EXPIRING_SOON:     { icon: "clock",          color: "#f59e0b",            bg: "#fffbeb"          },
+  WASTE_PATTERN_ALERT:       { icon: "alert-triangle", color: "#d97706",            bg: "#fffbeb"          },
+  DEAL_WINDOW_TIP:           { icon: "zap",            color: "#0284c7",            bg: "#e0f2fe"          },
+  ACCOUNT_BLOCKED:           { icon: "slash",          color: "#ef4444",            bg: "#fef2f2"          },
+  LISTING_REPORTED:          { icon: "flag",           color: "#f59e0b",            bg: "#fffbeb"          },
+  LISTING_REMOVED:           { icon: "trash-2",        color: "#ef4444",            bg: "#fef2f2"          },
+  SYSTEM:                    { icon: "bell",           color: Colors.grayMedium,    bg: Colors.grayLight   },
 };
 
 function timeAgo(iso: string, rtl: boolean): string {
@@ -47,7 +48,7 @@ function timeAgo(iso: string, rtl: boolean): string {
   return rtl ? `منذ ${days} يوم` : `${days}d ago`;
 }
 
-export default function NotificationsScreen({ onBack }: NotificationsScreenProps) {
+export default function NotificationsScreen({ onBack, onOpenStore }: NotificationsScreenProps) {
   const insets = useSafeAreaInsets();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -89,17 +90,36 @@ export default function NotificationsScreen({ onBack }: NotificationsScreenProps
 
   const renderItem = ({ item, index }: { item: AppNotification; index: number }) => {
     const cfg = TYPE_ICON[item.type] ?? TYPE_ICON.SYSTEM;
+    const isWasteAlert  = item.type === "WASTE_PATTERN_ALERT";
+    const isDealTip     = item.type === "DEAL_WINDOW_TIP";
+    const dealSellerId  = isDealTip ? String(item.data?.sellerId ?? "") : "";
     return (
       <Animated.View entering={FadeInDown.delay(index * 40).duration(350).springify()}>
-        <View style={[styles.notifCard, !item.isRead && styles.notifCardUnread, rtl && styles.notifCardRTL]}>
+        <View style={[
+          styles.notifCard,
+          !item.isRead && styles.notifCardUnread,
+          isWasteAlert && styles.notifCardWaste,
+          isDealTip    && styles.notifCardDeal,
+          rtl          && styles.notifCardRTL,
+        ]}>
           {!item.isRead && <View style={styles.unreadDot} />}
           <View style={[styles.notifIcon, { backgroundColor: cfg.bg }]}>
             <Feather name={cfg.icon} size={18} color={cfg.color} />
           </View>
           <View style={styles.notifBody}>
-            <Text style={[styles.notifTitle, rtl && styles.rtl]} numberOfLines={1}>{item.title}</Text>
-            <Text style={[styles.notifMsg, rtl && styles.rtl]} numberOfLines={2}>{item.body}</Text>
+            <Text style={[styles.notifTitle, rtl && styles.rtl]} numberOfLines={2}>{item.title}</Text>
+            <Text style={[styles.notifMsg,  rtl && styles.rtl]} numberOfLines={3}>{item.body}</Text>
             <Text style={[styles.notifTime, rtl && styles.rtl]}>{timeAgo(item.createdAt, rtl)}</Text>
+            {isDealTip && !!dealSellerId && !!onOpenStore && (
+              <TouchableOpacity
+                style={[styles.dealBtn, rtl && { alignSelf: "flex-start" as const }]}
+                onPress={() => onOpenStore(dealSellerId)}
+                activeOpacity={0.8}
+              >
+                <Feather name="shopping-bag" size={13} color="#0284c7" />
+                <Text style={styles.dealBtnText}>{rtl ? "تصفح العروض" : "Browse Deals"}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Animated.View>
@@ -216,10 +236,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
     position: "relative",
   },
-  notifCardRTL: { flexDirection: "row-reverse" },
-  notifCardUnread: {
-    borderLeftWidth: 3, borderLeftColor: Colors.primaryOrange,
+  notifCardRTL:   { flexDirection: "row-reverse" },
+  notifCardUnread: { borderLeftWidth: 3, borderLeftColor: Colors.primaryOrange },
+  notifCardWaste:  { borderLeftWidth: 3, borderLeftColor: "#d97706", backgroundColor: "#fffdf5" },
+  notifCardDeal:   { borderLeftWidth: 3, borderLeftColor: "#0284c7", backgroundColor: "#f0f9ff" },
+
+  dealBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-end",
+    marginTop: 6, backgroundColor: "#e0f2fe",
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
   },
+  dealBtnText: { fontSize: 12, fontWeight: "700", color: "#0284c7" },
   unreadDot: {
     position: "absolute", top: 10, right: 10,
     width: 8, height: 8, borderRadius: 4,

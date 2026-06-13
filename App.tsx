@@ -585,7 +585,15 @@ function AppContent() {
       }
 
       {step === "notifications" &&
-        screen(<NotificationsScreen onBack={goBack} />)
+        screen(
+          <NotificationsScreen
+            onBack={goBack}
+            onOpenStore={(sellerId) => {
+              setStoreParams({ sellerId, listingId: "" });
+              goTo("store-details");
+            }}
+          />
+        )
       }
 
       {step === "qr-scan" && qrScanParams &&
