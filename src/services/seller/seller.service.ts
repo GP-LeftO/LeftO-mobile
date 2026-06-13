@@ -69,7 +69,7 @@ export interface ListingFormData {
 export interface RegisterSellerParams {
   businessName: string;
   businessType: "RESTAURANT" | "MARKET" | "BAKERY" | "GROCERY";
-  registrationNumber: string;
+  registrationNumber?: string;
   location: { latitude: number; longitude: number; address?: string };
   description?: string;
   contactInfo?: { phone?: string; website?: string; socialMedia?: string };

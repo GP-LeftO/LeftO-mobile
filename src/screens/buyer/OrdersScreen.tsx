@@ -154,10 +154,7 @@ export default function OrdersScreen({ onOpenQRScan }: OrdersScreenProps = {}) {
               await fetchOrders();
               const profileRes = await api.get("/api/users/me").catch(() => null);
               const updated = profileRes?.data?.data ?? profileRes?.data;
-              const newCount = updated?.cancellationCount ?? (cancellationCount + 1);
-              if (updated?.cancellationCount != null) {
-                setCancellationCount(updated.cancellationCount);
-              }
+              const newCount: number = updated?.cancellationCount ?? 0;
               const newRemaining = Math.max(0, 5 - newCount);
               if (newCount >= 5) {
                 Alert.alert(
